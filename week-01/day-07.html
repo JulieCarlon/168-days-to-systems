@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 07 · 同步原语 + IPC + Week 01 复盘</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  h4 { font-size: 15px; margin-top: 18px; color: #555; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .connect h3 { margin-top: 18px; color: var(--accent); }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+  .recap {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 18px 0;
+  }
+  .recap h3 { margin-top: 0; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 07 · 同步原语 + IPC + Week 01 综合复盘</h1>
+  <div class="meta">Week 01 · 周日 · 2026-05-17 · 综合：把整周打通 + 下周预告 · 预计 4 小时</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：周一到周四我们把<span class="key">进程、线程、调度、内存</span>讲完了，周五动手摸了 <code>top/strace/perf</code>，周六啃了 Linux 权限与提权。今天我们补上整周最大的一块拼图——<span class="key">并发协作机制</span>：当多个执行流（线程、进程）想共用一份数据时，它们怎么"不打架"？同步原语解决线程内部的争抢，IPC 解决进程之间的通信，信号则是异步事件的传递通道。学完今天，你应该能回答四个问题：（1）为什么 Python 多线程读字典也可能炸？（2）vLLM 的多 GPU 进程通过什么把 KV cache 共享？（3）一个死锁需要哪四个必要条件同时成立？（4）Agent 沙箱用什么机制把子进程"按下去"？此外，最后一段把整个 Week 01 拉成一张图，并给出 Week 02（虚拟内存）的 preview。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">为什么需要同步：竞争条件的本质</a></li>
+  <li><a href="#s2">同步原语全家福：mutex / spinlock / rwlock / semaphore / condvar</a></li>
+  <li><a href="#s3">原子操作与 CAS：硬件提供的最小同步单元</a></li>
+  <li><a href="#s4">死锁的四个必要条件（与破解策略）</a></li>
+  <li><a href="#s5">IPC 六大件：pipe / FIFO / 消息队列 / 共享内存 / 信号量 / socket</a></li>
+  <li><a href="#s6">信号 signal：异步事件的"轻量级中断"</a></li>
+  <li><a href="#s7">案例研读：vLLM 是怎么用共享内存协调多 GPU 的</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#recap">Week 01 综合复盘</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+  <li><a href="#next">Week 02 预告：虚拟内存</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 为什么需要同步：竞争条件的本质</h2>
+
+<p>来看一段你以为"显然没问题"的 Python 代码：</p>
+
+<pre><code>import threading
+
+counter = 0
+
+def add():
+    global counter
+    for _ in range(1_000_000):
+        counter += 1
+
+t1 = threading.Thread(target=add)
+t2 = threading.Thread(target=add)
+t1.start(); t2.start()
+t1.join();  t2.join()
+print(counter)   # 你期望 2_000_000，但很多次跑只会得到 1_374_812、1_902_447……</code></pre>
+
+<p>问题出在 <code>counter += 1</code>。这一行在 CPython 字节码里其实是三步：</p>
+
+<div class="ascii">  LOAD_GLOBAL counter      # 把 counter 当前值读进寄存器/栈顶
+  LOAD_CONST  1
+  BINARY_ADD               # 计算新值
+  STORE_GLOBAL counter     # 把新值写回 counter</div>
+
+<p>线程 A 读到 <code>counter=100</code>，准备写回 101；恰好此刻线程 B 也读到 100，也准备写回 101。最终 counter=101——这次更新<strong>丢了一次</strong>。这就是<span class="term">竞争条件（race condition）</span>：执行结果依赖于两个或更多线程的相对调度顺序。</p>
+
+<p class="note">很多人会问："Python 不是有 GIL 吗？"GIL 只保证<strong>一个字节码指令</strong>内部不被打断，不保证<strong>多个字节码组成的复合操作</strong>是原子的。<code>+=</code> 是 4 条字节码，所以可以被打断。这也是为什么 <code>list.append()</code>（C 实现里只有一次原子操作）在 GIL 下安全，但 <code>list[i] += 1</code>（要 LOAD_SUBSCR + BINARY_ADD + STORE_SUBSCR）不安全。</p>
+
+<p>所有同步原语的目标只有一个：<span class="key">把一段「不希望被打断」的代码——临界区（critical section）——保护起来，让它在任何时刻最多被一个线程执行</span>。这种性质叫互斥（mutual exclusion）。</p>
+
+<h2 id="s2">2. 同步原语全家福</h2>
+
+<h3>2.1 Mutex（互斥锁）</h3>
+
+<p>最朴素的工具。同一时刻只有一个线程能"持有"锁，其余线程<strong>阻塞</strong>等待。在 Linux 里，pthread mutex 由 <span class="term">futex</span>（fast userspace mutex）实现：<strong>没人争抢时整个加锁解锁在用户态完成，零 syscall</strong>；一旦有人需要排队，才陷入内核挂起。这个"快路径在用户态、慢路径在内核态"的设计是现代锁性能的核心。</p>
+
+<pre><code>import threading
+lock = threading.Lock()
+counter = 0
+
+def add():
+    global counter
+    for _ in range(1_000_000):
+        with lock:           # 进入临界区
+            counter += 1     # 现在是原子的</code></pre>
+
+<h3>2.2 Spinlock（自旋锁）</h3>
+
+<p>不阻塞，原地"自旋"忙等：</p>
+
+<pre><code>while (!atomic_compare_exchange(&amp;lock, 0, 1)) {
+    /* 什么都不干，CPU 空转 */
+}</code></pre>
+
+<p>看起来很傻，但<strong>极短的临界区</strong>（比如十几条指令）下，自旋反而比 mutex 快——因为 mutex 的休眠/唤醒至少要两次上下文切换（几微秒），而 spinlock 可能只浪费几十纳秒。Linux 内核里中断处理、调度器自身用的全是 spinlock，不能在中断上下文里"睡觉"。<span class="key">用户空间几乎不需要 spinlock</span>，除非你在写 lock-free 数据结构。</p>
+
+<h3>2.3 RWLock（读写锁）</h3>
+
+<p>读操作可以并发，写操作必须独占。适合"读多写少"场景。注意陷阱：</p>
+
+<ul>
+  <li><strong>写者饥饿</strong>：如果读者不断进来，写者可能永远拿不到锁。多数实现（如 pthread）默认<strong>读者优先</strong>，要显式选写者优先策略。</li>
+  <li><strong>升级死锁</strong>：持读锁的同时想升级到写锁，几乎所有 RWLock 都不支持，必须先释放读锁再争抢写锁，期间可能被别人插队。</li>
+</ul>
+
+<h3>2.4 Semaphore（信号量）</h3>
+
+<p>本质是一个<strong>非负计数器</strong>，提供两个原子操作：<code>P/wait</code>（计数 -1，若 &lt;0 则阻塞）和 <code>V/post</code>（计数 +1，若有人等就唤醒）。Mutex 是 semaphore 的特例（初始值 1）。Semaphore 真正的杀手锏是<strong>限流</strong>——比如限制最多 8 个线程并发访问数据库：</p>
+
+<pre><code>sema = threading.Semaphore(8)
+def query():
+    with sema:
+        run_db_query()   # 最多 8 个并发</code></pre>
+
+<h3>2.5 Condition Variable（条件变量）</h3>
+
+<p>解决"等待某个条件成立"的问题。<strong>必须配合 mutex 使用</strong>。经典生产者-消费者模板：</p>
+
+<pre><code>cond = threading.Condition()
+queue = []
+
+def producer():
+    with cond:
+        queue.append(item)
+        cond.notify()         # 唤醒一个 consumer
+
+def consumer():
+    with cond:
+        while not queue:      # 注意必须是 while 不是 if（防止虚假唤醒）
+            cond.wait()       # 自动释放锁并睡，被唤醒后重新拿锁
+        item = queue.pop(0)</code></pre>
+
+<p class="note"><strong>为什么是 while 不是 if？</strong>POSIX 允许 <code>cond.wait()</code> 出现"虚假唤醒"（spurious wakeup）：没人 notify，它也可能自己醒。即使没有虚假唤醒，被唤醒到拿到锁之间，状态也可能被其他 consumer 改掉。所以醒来必须<strong>重新检查条件</strong>。</p>
+
+<h3>对比小表</h3>
+
+<table>
+<tr><th>原语</th><th>语义</th><th>等待方式</th><th>典型场景</th></tr>
+<tr><td>Mutex</td><td>1 个槽位</td><td>阻塞/睡</td><td>保护共享变量</td></tr>
+<tr><td>Spinlock</td><td>1 个槽位</td><td>忙等</td><td>内核短临界区</td></tr>
+<tr><td>RWLock</td><td>多读单写</td><td>阻塞</td><td>缓存、配置表</td></tr>
+<tr><td>Semaphore</td><td>N 个槽位</td><td>阻塞</td><td>限流、资源池</td></tr>
+<tr><td>CondVar</td><td>等待状态变化</td><td>阻塞</td><td>队列、事件通知</td></tr>
+</table>
+
+<h2 id="s3">3. 原子操作与 CAS：硬件提供的最小同步单元</h2>
+
+<p>所有上层同步原语的地基都是<span class="term">原子操作（atomic operation）</span>——一条 CPU 指令完成读+改+写，过程中不会被其他核心看到中间状态。最重要的原子原语是 <span class="term">CAS（Compare-And-Swap）</span>：</p>
+
+<pre><code>// 伪代码：原子地执行下面整块
+bool CAS(int *ptr, int expected, int new_val) {
+    if (*ptr == expected) {
+        *ptr = new_val;
+        return true;
+    }
+    return false;
+}</code></pre>
+
+<p>在 x86 上对应 <code>LOCK CMPXCHG</code> 指令；ARM 上对应 <code>LDREX/STREX</code> 对（Load-Exclusive / Store-Exclusive）。所有 mutex/spinlock 都是用 CAS 实现的最外层入口。</p>
+
+<p>CAS 还撑起了<span class="term">无锁数据结构（lock-free data structure）</span>。例子：原子计数器</p>
+
+<pre><code>do {
+    old = counter;
+    new = old + 1;
+} while (!CAS(&amp;counter, old, new));</code></pre>
+
+<p>不需要锁，多线程竞争激烈时第二次循环就可能成功。代价是 <span class="term">ABA 问题</span>：在你 CAS 之间，值从 A 变 B 又变回 A，CAS 会"误判"。一般用版本号或 <code>tagged pointer</code> 解决。</p>
+
+<p>在 Python 里，标准库的 <code>queue.Queue</code> 用的是 Lock + Condition；高性能场景可以用 <code>multiprocessing.Value</code>（共享内存 + ctypes 原子操作）或第三方 <code>atomics</code> 库。</p>
+
+<h2 id="s4">4. 死锁的四个必要条件（Coffman 条件）</h2>
+
+<p>1971 年 Coffman 证明：死锁发生当且仅当下面四个条件<strong>同时</strong>成立——</p>
+
+<ol>
+  <li><strong>互斥（Mutual Exclusion）</strong>：资源同时只能被一个线程持有。</li>
+  <li><strong>持有并等待（Hold and Wait）</strong>：线程持有资源 R1，同时等待 R2。</li>
+  <li><strong>不可剥夺（No Preemption）</strong>：资源不能被强制收回，只能由持有者主动释放。</li>
+  <li><strong>循环等待（Circular Wait）</strong>：存在线程环 T1→T2→...→Tn→T1，每个等待下一个持有的资源。</li>
+</ol>
+
+<p>破解任意一条即可。工程上最常用的是<strong>破解条件 4：所有线程按全局固定顺序加锁</strong>。比如转账：</p>
+
+<pre><code>def transfer(a, b, amount):
+    # 不管 a 转 b 还是 b 转 a，都按 id 小的先加锁
+    first, second = (a, b) if id(a) &lt; id(b) else (b, a)
+    with first.lock:
+        with second.lock:
+            a.balance -= amount
+            b.balance += amount</code></pre>
+
+<p>另一个常用招是<strong>给锁加超时</strong>（破解条件 3 的变种）：拿不到就回滚释放已持有的锁，回退一段随机时间重试，类似以太网 CSMA/CD 的 backoff。Python 的 <code>lock.acquire(timeout=...)</code> 就是干这个。</p>
+
+<div class="note"><strong>诊断技巧：</strong>Linux 上死锁的进程通常处于 <code>D</code> 状态（不可中断睡眠）或长时间 <code>S</code>。<code>cat /proc/&lt;pid&gt;/wchan</code> 看它在内核哪里阻塞，<code>cat /proc/&lt;pid&gt;/stack</code>（需要 root）看完整调用栈。Python 程序用 <code>py-spy dump --pid &lt;pid&gt;</code> 直接打印所有线程的 Python 栈。</div>
+
+<h2 id="s5">5. IPC 六大件</h2>
+
+<p>线程同步解决的是"<strong>同一进程</strong>内部的协作"，IPC（Inter-Process Communication）解决的是"<strong>跨进程</strong>的协作"。Linux 提供六大件，理解它们的差异比记住 API 重要：</p>
+
+<table>
+<tr><th>机制</th><th>方向</th><th>容量</th><th>速度</th><th>典型场景</th></tr>
+<tr><td>匿名管道 pipe</td><td>单向</td><td>~64KB</td><td>★★★</td><td>父子进程，<code>ls | wc</code></td></tr>
+<tr><td>命名管道 FIFO</td><td>单向</td><td>~64KB</td><td>★★★</td><td>无亲缘进程，文件系统中可见</td></tr>
+<tr><td>消息队列 mq</td><td>双向有结构</td><td>内核可配</td><td>★★</td><td>需要消息边界与优先级</td></tr>
+<tr><td>共享内存 shm</td><td>双向</td><td>受限于 RAM</td><td>★★★★★</td><td>大数据零拷贝，需要外加同步</td></tr>
+<tr><td>信号量 sem</td><td>同步原语</td><td>—</td><td>★★★</td><td>给共享内存配套</td></tr>
+<tr><td>socket（UDS）</td><td>双向</td><td>大</td><td>★★★</td><td>跨主机/容器都通用</td></tr>
+</table>
+
+<h3>5.1 匿名管道——shell 管道的本质</h3>
+
+<p>你每天用的 <code>cat foo | grep bar | wc -l</code> 背后就是匿名管道。shell 先 <code>pipe()</code> 拿到一对 fd（读端 + 写端），<code>fork()</code> 三个子进程，每个子进程用 <code>dup2()</code> 把对应 fd 重定向到 stdin/stdout，再 <code>exec()</code>。</p>
+
+<pre><code># 用 Python 演示
+import os
+r, w = os.pipe()
+if os.fork() == 0:
+    os.close(r)
+    os.write(w, b"hello from child")
+    os._exit(0)
+os.close(w)
+print(os.read(r, 1024))   # b'hello from child'</code></pre>
+
+<h3>5.2 共享内存——最快也最危险</h3>
+
+<p>两个进程 <code>mmap</code> 同一块物理内存，从此对它的读写就是普通内存访问，<strong>不走内核、不复制</strong>。这是大数据 IPC 的唯一可选项。代价：<strong>没有任何同步保证</strong>，你必须自己用 semaphore/mutex 配套保护，否则就是 race condition。</p>
+
+<pre><code>from multiprocessing import shared_memory
+import numpy as np
+
+# 进程 A 创建
+shm = shared_memory.SharedMemory(create=True, size=4*1024*1024, name="kv_cache")
+arr = np.ndarray((1024, 1024), dtype=np.float32, buffer=shm.buf)
+
+# 进程 B 直接打开同一块
+shm2 = shared_memory.SharedMemory(name="kv_cache")
+arr2 = np.ndarray((1024, 1024), dtype=np.float32, buffer=shm2.buf)
+# arr2 修改，arr 立即看到</code></pre>
+
+<h3>5.3 Unix Domain Socket（UDS）</h3>
+
+<p>语法和网络 socket 一模一样，但在同一台机器上走的是内核内存拷贝，<strong>比 TCP loopback 还快</strong>（因为省了协议栈）。Docker daemon (<code>/var/run/docker.sock</code>)、systemd、Kubernetes kubelet 都用 UDS 暴露 API。<span class="key">UDS 还可以传文件描述符</span>——这是 nginx master-worker、container runtime 移交 socket 的核心技巧。</p>
+
+<h2 id="s6">6. 信号 signal——异步事件的"轻量级中断"</h2>
+
+<p>信号是 OS 给进程的<strong>异步通知</strong>。它打断进程当前执行，跳到信号处理函数，完事再回到原代码。你按 <code>Ctrl-C</code> 触发的就是 <code>SIGINT</code>。</p>
+
+<h3>常用信号速查</h3>
+
+<table>
+<tr><th>信号</th><th>编号</th><th>默认行为</th><th>含义</th><th>能否捕获</th></tr>
+<tr><td>SIGHUP</td><td>1</td><td>终止</td><td>终端挂断，常被复用为"重读配置"</td><td>能</td></tr>
+<tr><td>SIGINT</td><td>2</td><td>终止</td><td>Ctrl-C</td><td>能</td></tr>
+<tr><td>SIGKILL</td><td>9</td><td>立即杀死</td><td>不可拦截、不可忽略</td><td><strong>不能</strong></td></tr>
+<tr><td>SIGTERM</td><td>15</td><td>终止</td><td><code>kill</code> 默认信号，礼貌地请求退出</td><td>能</td></tr>
+<tr><td>SIGSTOP</td><td>19</td><td>暂停</td><td>不可拦截，配合 SIGCONT 恢复</td><td><strong>不能</strong></td></tr>
+<tr><td>SIGCHLD</td><td>17</td><td>忽略</td><td>子进程退出，父进程要 wait 回收</td><td>能</td></tr>
+<tr><td>SIGSEGV</td><td>11</td><td>core dump</td><td>段错误，访问非法地址</td><td>能（但很少做）</td></tr>
+<tr><td>SIGPIPE</td><td>13</td><td>终止</td><td>写一个没读端的 pipe/socket</td><td>能</td></tr>
+</table>
+
+<p><strong>信号的最大陷阱：信号处理函数是 async-signal-safe 的。</strong>你不能在里面调 <code>printf</code>、<code>malloc</code>、获取任何锁——会死锁。安全的做法是<strong>只写一个 flag</strong>，主循环检查 flag 后再做事，或者用 <code>signalfd</code>/<code>self-pipe trick</code> 把信号转成可读事件，融入主 event loop。</p>
+
+<pre><code>import signal, sys
+
+stop = False
+def handler(signum, frame):
+    global stop
+    stop = True              # 只设标志，不做事
+signal.signal(signal.SIGTERM, handler)
+signal.signal(signal.SIGINT, handler)
+
+while not stop:
+    do_one_iteration()
+graceful_shutdown()</code></pre>
+
+<p>K8s 滚动更新就靠这个：<code>kubelet</code> 先发 <code>SIGTERM</code> 给容器进程，等 <code>terminationGracePeriodSeconds</code>（默认 30s）让你优雅退出，超时不退再发 <code>SIGKILL</code>。这也是为什么生产服务必须捕获 SIGTERM 做收尾——否则正在处理的请求会被硬切断。</p>
+
+<h2 id="s7">7. 案例研读：vLLM 怎么用共享内存协调多 GPU</h2>
+
+<p>把今天学的东西串起来。vLLM 在 tensor-parallel 模式下，要把一个 LLM 模型切到 N 张 GPU 上，每张 GPU 由一个独立 Python 进程驱动（受 GIL 限制，多进程而非多线程）。这些进程之间有大量协调需求：</p>
+
+<div class="ascii">                    ┌─────────────────────────┐
+                    │   vLLM Engine 主进程     │
+                    │  调度器 + tokenizer      │
+                    └────────┬────────────────┘
+                             │ 共享内存：请求队列、prompt token
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         ┌────────┐     ┌────────┐     ┌────────┐
+         │ Worker │     │ Worker │     │ Worker │
+         │ GPU 0  │     │ GPU 1  │     │ GPU 2  │
+         └────────┘     └────────┘     └────────┘
+              │              │              │
+              └──── NCCL AllReduce ─────────┘   (跨 GPU 同步激活值)</div>
+
+<p>具体用到的机制：</p>
+
+<ul>
+  <li><strong>multiprocessing.shared_memory</strong>——主进程把请求 batch 写入共享内存，worker 直接读，<span class="key">避免 pickle 序列化几十 MB 的 token tensor</span>。</li>
+  <li><strong>信号量 / Event</strong>——主进程通知 worker"新 batch 到了"，worker 处理完通知主进程"结果好了"。</li>
+  <li><strong>Unix Domain Socket</strong>——OpenAI 兼容 API server 与 engine 进程之间用 UDS 通信，比 TCP 更快也更安全（不监听网络端口）。</li>
+  <li><strong>SIGTERM 处理</strong>——优雅停机时主进程发 SIGTERM 给 worker，worker 先完成当前 token 的 forward 再退出，避免 GPU 显存悬挂。</li>
+  <li><strong>spinlock 思想</strong>——continuous batching 的调度循环就是一个紧密 spinning 的事件循环，不睡眠以最小化 TTFT（time to first token）。</li>
+</ul>
+
+<p>如果你能看懂 vLLM 的 <code>vllm/executor/multiproc_worker_utils.py</code>，你就已经把今天的内容打通到工业级实践了。</p>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<h3>① Agent 工具调用的并发踩坑</h3>
+<p>LangChain/AutoGPT 把 LLM 输出的 tool call 并发执行（比如同时查 5 个搜索 API），如果几个工具共享一个数据库连接池或一个文件句柄，竞争条件就来了。最近一类 bug 是<strong>共享 Python dict 作为 memory</strong>，多个 tool 同时写导致状态丢失——表现成"Agent 偶尔忘记上一步说过什么"，难以复现。修复方法：每个工具调用独立 worker，或加 asyncio.Lock。</p>
+
+<h3>② 共享 KV cache 的隔离风险</h3>
+<p>vLLM 的 prefix caching 把不同用户的 prompt 前缀缓存在共享显存中。如果实现不当（比如 cache key 没绑定 user_id），用户 A 可以构造 prompt 故意撞缓存命中用户 B 的内容前缀——<strong>侧信道泄露</strong>。设计多租户推理服务时，prefix cache 必须按租户分桶，或者关掉。</p>
+
+<h3>③ Agent 沙箱用信号管控</h3>
+<p>给 LLM 跑代码的沙箱（OpenInterpreter、e2b、Daytona、Modal）都基于<strong>信号 + 资源限制</strong>构建：SIGALRM 超时杀死、SIGXCPU 限制 CPU 时间、setrlimit 限制内存/fd 数。但攻击者可以让 Python 子进程<strong>注册自己的 SIGALRM handler 吞掉信号</strong>，或者 fork 出孙进程让 alarm 不生效。所以生产沙箱必须用 cgroup（不可绕过的硬限制，Week 09 会讲）+ 不可捕获的 SIGKILL 兜底。</p>
+
+<h3>④ 共享内存做模型权重热加载</h3>
+<p>Triton Inference Server、vLLM 在多 worker 之间用共享内存放模型权重，避免每个 worker 都加载一份 70GB 的 Llama-70B。安全上要注意：<strong>共享内存段在 <code>/dev/shm</code> 下默认对同 UID 用户可读</strong>，多租户机器上别人能直接 dump 你的权重。生产环境要么单租户独占节点，要么用带访问控制的 hugepage + IPC namespace 隔离。</p>
+
+<h3>⑤ Race condition 是经典 TOCTOU 提权</h3>
+<p>昨天讲的 SUID 程序如果在"检查权限"和"打开文件"之间被攻击者偷偷把文件 symlink 改向 <code>/etc/shadow</code>，就构成 <strong>TOCTOU（Time-of-check to time-of-use）</strong> 漏洞——本质就是竞争条件被利用。Linux 提供 <code>openat(..., O_NOFOLLOW)</code> + <code>fstat</code>（拿到 fd 后再检查）来消除窗口。AI 工具读 prompt 引用的本地文件时也常踩这个坑。</p>
+</div>
+
+<h2 id="recap">📚 Week 01 综合复盘</h2>
+
+<div class="recap">
+<h3>这一周你学了什么</h3>
+<ul>
+  <li><strong>Day 01 大图</strong>：4 层架构（硬件→内核→库→应用）、syscall 是跨越特权的唯一通道、进程 = 地址空间 + PCB + 资源。</li>
+  <li><strong>Day 02 进程</strong>：task_struct、R/S/D/T/Z 五态、fork COW、exec 替换代码段、wait 回收僵尸、orphan 由 init/systemd 接管。</li>
+  <li><strong>Day 03 线程与 GIL</strong>：用户/内核/混合线程、NPTL 通过 clone() 实现 1:1、TLS、GIL 限制 CPU 并行但不影响 IO 并发、协程是用户态调度。</li>
+  <li><strong>Day 04 调度</strong>：抢占式、CFS 用红黑树按 vruntime 排序、nice 影响 weight、realtime 类、CPU 亲和性、load average 是 R+D 队列长度。</li>
+  <li><strong>Day 05 lab</strong>：top/htop 读字段、ps -ef 全格式、strace 跟 syscall、perf stat 看 cache/分支、time 拆三段。</li>
+  <li><strong>Day 06 安全</strong>：rwx-ugo、SUID/SGID/Sticky、sudoers 配置、capabilities 细粒度、PAM 模块栈、GTFOBins 提权路径。</li>
+  <li><strong>Day 07（今天）</strong>：同步原语全家桶、CAS 原子、死锁四条件、6 大 IPC、信号机制、vLLM 案例。</li>
+</ul>
+
+<h3>把它们串成一张图</h3>
+
+<div class="ascii">              ┌──────────────────────────────────────┐
+              │   你的 AI 工作负载（Python/PyTorch）    │
+              └──────────┬───────────────────────────────┘
+                         │
+              ┌──────────▼──────────┐
+              │  线程 / 进程（Day 2-3） │
+              │  CPython 进程 + GIL    │
+              └─┬─────────┬───────────┘
+   ┌────────────┘         └────────────┐
+   ▼                                   ▼
+┌────────────┐                  ┌────────────┐
+│ 同步（D7）  │                   │  调度（D4） │
+│ mutex/CAS  │                  │  CFS 红黑树 │
+└────┬───────┘                  └─────┬──────┘
+     │                                │
+     ▼                                ▼
+┌─────────────────────────────────────────────┐
+│           内核态 syscall 接口（Day 1）         │
+│  fork/exec/wait, read/write, mmap, signal   │
+└──┬─────────┬───────────────┬────────────────┘
+   ▼         ▼               ▼
+┌──────┐ ┌──────┐       ┌─────────┐
+│ IPC  │ │ 文件  │       │ 权限/cap │
+│ (D7) │ │ /proc│       │  (D6)   │
+└──────┘ └──────┘       └─────────┘</div>
+
+<h3>本周回答得了的 10 个问题（自测）</h3>
+<ol>
+  <li>用户态和内核态有什么区别？syscall 是怎么切换的？</li>
+  <li>为什么 <code>fork()</code> 复制一份完整地址空间却几乎不耗时间？（答：COW）</li>
+  <li>僵尸进程是怎么产生的？怎么避免？</li>
+  <li>Python 的 GIL 到底锁了什么？为什么 IO 密集任务多线程仍然有效？</li>
+  <li>Linux 调度器怎么决定下一个跑的进程？vruntime 是什么？</li>
+  <li>load average 1.0 在 4 核机器上是高是低？</li>
+  <li>SUID 位为什么会成为提权漏洞？怎么发现可疑的 SUID 文件？</li>
+  <li>capabilities 比 root 全权限好在哪里？</li>
+  <li>死锁的 4 个必要条件是哪些？工程上一般破哪一条？</li>
+  <li>SIGKILL 和 SIGTERM 的区别？为什么生产服务一定要处理 SIGTERM？</li>
+</ol>
+
+<h3>常用命令 cheat sheet（一周提炼）</h3>
+<pre><code># 进程
+ps -ef                    # 所有进程全格式
+ps -eLf                   # 看线程
+pstree -p                 # 树状关系
+top / htop                # 实时
+pidstat -t -p &lt;pid&gt; 1     # 单进程明细
+
+# 调度与性能
+uptime                    # load average
+mpstat -P ALL 1           # 每核 CPU
+perf stat -e cache-misses,branches ./prog
+perf top                  # 热点函数
+taskset -c 0-3 ./prog     # CPU 亲和性
+
+# 跟踪
+strace -f -e openat python a.py
+ltrace -e malloc ./prog
+py-spy dump --pid &lt;pid&gt;
+
+# 权限
+ls -l / stat /etc/shadow
+getcap -r /usr/bin 2&gt;/dev/null
+sudo -l
+find / -perm -4000 2&gt;/dev/null   # 全 SUID 文件
+
+# IPC
+ipcs -m / -s / -q           # System V IPC
+ls -la /dev/shm/            # POSIX shm
+lsof -U                     # Unix sockets
+
+# 信号
+kill -l                     # 信号列表
+kill -SIGTERM &lt;pid&gt;
+cat /proc/&lt;pid&gt;/status | grep Sig    # 看进程信号 mask</code></pre>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手：写一个"安全"的多线程计数器</strong></p>
+<p>用 Python <code>threading</code> 模拟 10 个线程，各自给 counter 加 100000 次。先不加锁跑一遍，记下错误结果与"丢失更新数"；再加 <code>Lock</code>、再换 <code>multiprocessing.Value('i')</code> + <code>get_lock()</code> 各跑一遍。对比三种方法的<strong>耗时</strong>，思考为什么 multiprocessing 共享内存 + 进程锁会比纯多线程慢一个数量级。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察：抓 nginx 是怎么 graceful reload 的</strong></p>
+<p>用 docker 跑一个 nginx：<code>docker run -d --name nx -p 8080:80 nginx</code>。在另一个终端 <code>docker exec -it nx sh -c 'while true; do echo "config_v1"; sleep 1; done'</code>。给 nginx 主进程发 <code>SIGHUP</code>（<code>docker exec nx kill -HUP 1</code>）。再用 <code>docker exec nx ps -ef</code> 看进程变化——你会看到新 worker 起来、旧 worker 在等连接结束后退出。理解 SIGHUP 是怎么被复用成"重载配置"的。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考：Agent 安全设计题</strong></p>
+<p>设想你给公司做一个 Code-Interpreter 类产品：让用户 prompt 触发 LLM 写 Python 代码并运行。请只用今天学的概念，列出至少 5 个安全风险并对应给出缓解。提示：考虑（a）多用户共享进程的 race condition；（b）子进程信号绕过；（c）shared_memory 跨用户泄露；（d）IPC socket 权限；（e）僵尸进程堆积耗尽 PID 池。</p>
+</div>
+
+<h2 id="next">Week 02 预告：<strong>虚拟内存</strong>（OS 的另一座大山）</h2>
+
+<div class="next">
+<p><strong>Day 08 (Mon)</strong> 虚拟内存与页表：内存层级延迟金字塔、物理 vs 虚拟、MMU、多级页表、TLB、大页、<code>/proc/meminfo</code>。<br>
+<strong>Day 09 (Tue)</strong> 内存分配器：buddy / slab / <code>brk</code> vs <code>mmap</code> / ptmalloc / jemalloc / tcmalloc、内存碎片、OOM killer。<br>
+<strong>Day 10 (Wed)</strong> 虚拟内存进阶：page fault 三类、COW 原理细节、mmap 完全解析、swap、page cache、madvise、mlock。<br>
+<strong>Day 11 (Thu)</strong> I/O 模型谱系：5 种 IO 模型、select/poll、epoll 内部（LT vs ET）、kqueue、Reactor vs Proactor、io_uring、aio。<br>
+<strong>Day 12 (Fri 🔧)</strong> 内存与 I/O 动手：Python selectors 写 epoll 回声、mmap 加速大文件、<code>/proc/maps</code> &amp; <code>smaps</code>、vmstat、free、valgrind。<br>
+<strong>Day 13 (Sat 🔐)</strong> 系统调用追踪与 eBPF 入门：strace 深入、ltrace、ftrace、eBPF 概念、bpftrace、bcc 工具、监控可疑 exec。<br>
+<strong>Day 14 (Sun 🌐)</strong> 文件系统 + 零拷贝 + 周复盘：VFS、inode/dentry、ext4 xfs btrfs、IO scheduler、sendfile/splice、fsync、O_DIRECT、大模型 checkpoint 加速。</p>
+
+<p>下周的核心收获预期：你将<span class="key">真正搞懂"内存"两个字</span>——为什么 <code>top</code> 里 RSS 和 VIRT 差那么远、为什么 LLM 推理是 memory-bound、epoll 为什么比 select 快几个数量级、sendfile 为什么能让文件下载快一倍。这是 Phase 1 的另一座大山，啃完之后你看 vLLM / PyTorch 源码会有完全不同的视角。周末好好休息，周一见。</p>
+</div>
+
+</body>
+</html>
