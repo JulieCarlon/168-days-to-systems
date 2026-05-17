@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>从算法到工程 · 168 天系统底层补完计划</title>
+<meta name="description" content="为 AI 算法工程师量身打造的 6 个月系统底层补完计划。每日教材级密度 HTML 内容，覆盖 OS / 网络 / 硬件 / 容器 / 服务化 / 数据库 / 分布式 + 全程安全主线。">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-2: #ea580c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --sec-bg: #fff7ed;
+    --sec-border: #fdba74;
+    --done-bg: #ecfdf5;
+    --done-border: #6ee7b7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    margin: 0;
+    padding: 0;
+  }
+  .container { max-width: 1080px; margin: 0 auto; padding: 48px 32px 80px; }
+  .hero { text-align: center; padding: 32px 16px 24px; }
+  .hero h1 { font-size: 36px; margin: 0 0 8px; color: var(--accent); letter-spacing: -1px; }
+  .hero .subtitle { font-size: 17px; color: var(--muted); max-width: 640px; margin: 12px auto 24px; }
+  .hero .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; margin-bottom: 8px; }
+  .pill { display: inline-block; padding: 4px 12px; background: var(--accent-soft); color: var(--accent); border-radius: 16px; font-size: 12px; margin: 0 4px; font-weight: 500; }
+  .progress {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 24px auto 36px;
+    max-width: 640px;
+    text-align: left;
+  }
+  .progress-bar { background: var(--code-bg); height: 12px; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  .progress-bar-fill { background: linear-gradient(90deg, var(--accent-2), var(--accent)); height: 100%; transition: width 0.4s ease; }
+  .progress-text { font-size: 14px; color: var(--muted); display: flex; justify-content: space-between; }
+  .progress-text strong { color: var(--accent); font-size: 16px; }
+
+  h2 {
+    font-size: 22px;
+    margin-top: 56px;
+    margin-bottom: 16px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  .selling {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 20px 0 32px;
+  }
+  .selling-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px 22px;
+  }
+  .selling-card h3 { margin: 0 0 8px; color: var(--accent); font-size: 16px; }
+  .selling-card p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+  .phases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 16px 0 24px; }
+  .phase {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px 22px;
+  }
+  .phase-num { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+  .phase-title { font-size: 18px; color: var(--accent); margin: 4px 0 6px; font-weight: 600; }
+  .phase-weeks { font-size: 13px; color: var(--muted); }
+
+  .week-list {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin: 16px 0;
+    overflow: hidden;
+  }
+  .week-row {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 90px 1fr 1fr 150px;
+    gap: 16px;
+    align-items: center;
+    font-size: 14px;
+  }
+  .week-row:last-child { border-bottom: none; }
+  .week-row:hover { background: var(--code-bg); }
+  .week-num { font-family: ui-monospace, monospace; color: var(--muted); font-size: 13px; }
+  .week-main { color: var(--ink); }
+  .week-sec { color: var(--accent); font-size: 13px; padding: 4px 10px; background: var(--sec-bg); border-radius: 4px; display: inline-block; }
+  .week-status {
+    text-align: right;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .week-status.done {
+    color: #047857;
+    font-weight: 600;
+  }
+  .week-status.done::before { content: "✓ "; }
+  .week-status a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .week-status a:hover { text-decoration: underline; }
+
+  .days-list {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 22px;
+    margin: 16px 0;
+  }
+  .days-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .day-link {
+    display: block;
+    padding: 10px 14px;
+    background: var(--sec-bg);
+    border: 1px solid var(--sec-border);
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--ink);
+    font-size: 13px;
+    transition: transform 0.1s ease;
+  }
+  .day-link:hover { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(194,65,12,0.15); }
+  .day-link .num { font-family: ui-monospace, monospace; color: var(--accent); font-weight: 600; display: block; font-size: 12px; }
+  .day-link .topic { color: var(--ink); margin-top: 2px; line-height: 1.4; }
+  .day-link.sec { background: #fff1e8; }
+  .day-link.sec .num::before { content: "🔐 "; }
+
+  .footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+
+  @media (max-width: 720px) {
+    .selling { grid-template-columns: 1fr; }
+    .phases { grid-template-columns: 1fr; }
+    .week-row { grid-template-columns: 1fr; gap: 6px; }
+    .week-sec { display: block; }
+    .week-status { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="hero">
+  <div class="meta">2026.05 – 2026.10 · 168 天 · 18 小时/周</div>
+  <h1>从算法到工程</h1>
+  <div class="subtitle">为 AI 算法工程师量身打造的 6 个月系统底层补完计划。每天一份教材级密度的 HTML 学习材料，把"只懂模型"的算法工程师，淬炼成"懂硬件、懂网络、懂分布式"的系统型高级工程师。</div>
+  <span class="pill">操作系统</span><span class="pill">网络</span><span class="pill">硬件 / GPU</span><span class="pill">容器 / K8s</span><span class="pill">Go / 服务化</span><span class="pill">数据库</span><span class="pill">分布式</span><span class="pill">🔐 AI 安全</span>
+</div>
+
+<div class="progress">
+  <div class="progress-text"><span><strong>6 / 168</strong> 天</span><span>3.6%</span></div>
+  <div class="progress-bar"><div class="progress-bar-fill" style="width: 3.6%"></div></div>
+  <div style="font-size:12px;color:var(--muted);margin-top:8px;">当前进度：Week 01 进行中（Day 06 / 7）</div>
+</div>
+
+<h2>💡 三大卖点</h2>
+
+<div class="selling">
+  <div class="selling-card">
+    <h3>站在 AI 场景讲底层</h3>
+    <p>不是抄 OS 教材——为什么 LLM 推理是 memory-bound？PagedAttention 怎么借鉴 OS 虚拟内存？每个底层概念都对应到 AI 工程师的真实场景。</p>
+  </div>
+  <div class="selling-card">
+    <h3>安全主线贯穿全程</h3>
+    <p>不是末尾蜻蜓点水一章——每周六固定 4h 安全专题（共 24 个），从 Linux 提权到容器逃逸到 LLM 越狱攻击，AI 安全方向特别契合。</p>
+  </div>
+  <div class="selling-card">
+    <h3>教材级密度 / 每日 HTML</h3>
+    <p>不是 5 分钟一篇的碎片笔记——单日 30-60KB / 4000-8000 字密集材料，配大量命令实操，能坐下来扎实学 1.5-4 小时。</p>
+  </div>
+</div>
+
+<h2>🗂 6 个阶段</h2>
+
+<div class="phases">
+  <div class="phase"><div class="phase-num">PHASE 1</div><div class="phase-title">操作系统 + 网络</div><div class="phase-weeks">Week 01 – 04 · 进程 / 内存 / TCP / HTTP / TLS</div></div>
+  <div class="phase"><div class="phase-num">PHASE 2</div><div class="phase-title">硬件 + LLM 推理</div><div class="phase-weeks">Week 05 – 08 · CPU / NUMA / GPU / vLLM</div></div>
+  <div class="phase"><div class="phase-num">PHASE 3</div><div class="phase-title">容器 + Kubernetes</div><div class="phase-weeks">Week 09 – 12 · cgroups / Docker / K8s / 可观测性</div></div>
+  <div class="phase"><div class="phase-num">PHASE 4</div><div class="phase-title">Go + 服务化</div><div class="phase-weeks">Week 13 – 16 · Go / 微服务 / MQ / 网关 / Mesh</div></div>
+  <div class="phase"><div class="phase-num">PHASE 5</div><div class="phase-title">数据库与存储</div><div class="phase-weeks">Week 17 – 20 · PostgreSQL / Redis / 向量库 / 对象存储</div></div>
+  <div class="phase"><div class="phase-num">PHASE 6</div><div class="phase-title">分布式 + 综合实战</div><div class="phase-weeks">Week 21 – 24 · CAP / Raft / SRE / 毕业项目</div></div>
+</div>
+
+<h2>📅 24 周完整课程表</h2>
+
+<div class="week-list">
+  <div class="week-row"><div class="week-num">Week 01</div><div class="week-main">操作系统 Part 1：进程、线程、调度</div><div class="week-sec">Linux 权限与提权</div><div class="week-status done">进行中</div></div>
+  <div class="week-row"><div class="week-num">Week 02</div><div class="week-main">操作系统 Part 2：内存、I/O、文件系统</div><div class="week-sec">系统调用追踪 & eBPF 入门</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 03</div><div class="week-main">TCP/IP + HTTP/2/3 + TLS</div><div class="week-sec">tcpdump + Wireshark 抓包</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 04</div><div class="week-main">REST / gRPC / WebSocket + Nginx + LB</div><div class="week-sec">反弹 shell + C2 框架</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 05</div><div class="week-main">CPU 架构：流水线、缓存、SIMD</div><div class="week-sec">侧信道：Spectre / Meltdown</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 06</div><div class="week-main">内存层级 + NUMA + LLM memory-bound</div><div class="week-sec">内存安全：栈溢出、ASLR、ROP</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 07</div><div class="week-main">GPU 架构：SM、warp、HBM、NVLink</div><div class="week-sec">GPU 多租户安全：MIG / MPS</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 08</div><div class="week-main">LLM 推理工程：KV cache、量化、vLLM</div><div class="week-sec">AI 推理服务攻击面</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 09</div><div class="week-main">Linux 进阶 + 容器原理</div><div class="week-sec">namespace / cgroup 滥用</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 10</div><div class="week-main">Docker 深入：镜像、网络、存储</div><div class="week-sec">容器逃逸技术综述</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 11</div><div class="week-main">K8s 核心：Pod、Service、调度</div><div class="week-sec">K8s 安全：RBAC、SA token</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 12</div><div class="week-main">K8s 生态 + 可观测性</div><div class="week-sec">Falco / Tetragon 运行时检测</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 13</div><div class="week-main">Go 语言：goroutine + channel</div><div class="week-sec">Go 安全编码</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 14</div><div class="week-main">Go 微服务 + 服务发现</div><div class="week-sec">内网渗透概览：frp / Stowaway</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 15</div><div class="week-main">消息中间件：Kafka / RabbitMQ / Redis</div><div class="week-sec">API 安全：JWT / OAuth / SSRF</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 16</div><div class="week-main">API 网关 + Service Mesh + Istio</div><div class="week-sec">零信任 + mTLS + SPIFFE</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 17</div><div class="week-main">PostgreSQL：索引、事务、MVCC</div><div class="week-sec">SQL 注入深入</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 18</div><div class="week-main">Redis：数据结构、集群、缓存陷阱</div><div class="week-sec">Redis 未授权 + 缓存投毒</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 19</div><div class="week-main">向量数据库 + RAG</div><div class="week-sec">⭐ 检索投毒 + indirect prompt injection</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 20</div><div class="week-main">对象存储 + 时序 DB + 大数据</div><div class="week-sec">数据脱敏 + 密钥管理</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 21</div><div class="week-main">分布式理论：CAP / 一致性 / Raft</div><div class="week-sec">分布式系统攻击面</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 22</div><div class="week-main">高可用 + 混沌工程 + SRE</div><div class="week-sec">供应链：log4shell 复盘</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 23</div><div class="week-main">LLM 服务化 + Agent 系统架构</div><div class="week-sec">⭐ LLM / Agent 攻击面综述</div><div class="week-status">待开始</div></div>
+  <div class="week-row"><div class="week-num">Week 24</div><div class="week-main">毕业项目：10 万用户 Agent 安全平台</div><div class="week-sec">威胁建模 + 红蓝对抗演练</div><div class="week-status">待开始</div></div>
+</div>
+
+<h2>📖 已完成的内容</h2>
+
+<div class="days-list">
+  <p style="margin: 0 0 8px; font-size: 14px; color: var(--muted);">点击直接打开（按生成日期顺序）：</p>
+  <div class="days-grid">
+    <a class="day-link" href="week-01/day-01.html"><span class="num">Day 01 · Mon</span><span class="topic">计算机系统大图 + 进程本质</span></a>
+    <a class="day-link" href="week-01/day-02.html"><span class="num">Day 02 · Tue</span><span class="topic">进程深入：生命周期与状态机</span></a>
+    <a class="day-link" href="week-01/day-03.html"><span class="num">Day 03 · Wed</span><span class="topic">线程模型与 Python GIL</span></a>
+    <a class="day-link" href="week-01/day-04.html"><span class="num">Day 04 · Thu</span><span class="topic">CPU 调度（CFS + nice + 亲和性）</span></a>
+    <a class="day-link" href="week-01/day-05.html"><span class="num">Day 05 · Fri 🔧</span><span class="topic">LAB：进程与调度动手</span></a>
+    <a class="day-link sec" href="week-01/day-06.html"><span class="num">Day 06 · Sat</span><span class="topic">Linux 权限与提权基础</span></a>
+  </div>
+  <p style="margin-top: 16px; font-size: 13px; color: var(--muted);">
+    📄 完整 168 天目录见 <a href="curriculum.html" style="color: var(--accent);">curriculum.html</a> · 项目说明见 <a href="https://github.com/JulieCarlon/168-days-to-systems" style="color: var(--accent);">GitHub README</a>
+  </p>
+</div>
+
+<div class="footer">
+  <p>每日 HTML 由 Claude Code 定时任务自动生成。内容由 AI 辅助产出，请独立验证后引用。</p>
+  <p><a href="https://github.com/JulieCarlon/168-days-to-systems">GitHub 仓库</a> · 如果对你有帮助，欢迎 Star ⭐</p>
+</div>
+
+</div>
+
+</body>
+</html>
