@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 03 · 线程模型与 Python GIL</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 03 · 线程模型与 Python GIL</h1>
+  <div class="meta">Week 01 · 周三 · 2026-05-15 · 主线：操作系统核心 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：你大概率写过 <code>threading.Thread(target=...)</code>，也大概率听过「Python 有 GIL，多线程没用」这句江湖口诀。但下面这几个问题，你能立刻答出来吗？<br>
+—— 一个 Python 线程在 Linux 内核眼里到底是「线程」还是「进程」？<br>
+—— 为什么用 4 个线程做矩阵乘法反而比 1 个慢，但同样 4 个线程做 HTTP 抓取却快了 4 倍？<br>
+—— <code>asyncio</code> 的协程为什么不受 GIL 限制，它和线程到底差在哪？<br>
+今天我们把<span class="key">用户态线程、内核态线程、NPTL/clone()、TLS、pthread API、GIL 内部实现、CPU vs IO 工作负载、协程本质</span>这七件事一次性串起来。学完之后你应该能拿这把刀，去切任何一段 Python 并发代码——而不再是「试一下哪个快」。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">线程是什么 · 与进程的真正区别</a></li>
+  <li><a href="#s2">三种线程模型：用户级 / 内核级 / 混合</a></li>
+  <li><a href="#s3">Linux 实现：NPTL 与神奇的 clone()</a></li>
+  <li><a href="#s4">线程私有数据 TLS：每个线程的「小金库」</a></li>
+  <li><a href="#s5">pthread API：C 视角的线程</a></li>
+  <li><a href="#s6">GIL 的真面目：CPython 解释器锁是怎么实现的</a></li>
+  <li><a href="#s7">CPU-bound vs IO-bound：GIL 的边界在哪</a></li>
+  <li><a href="#s8">协程本质：为什么它躲开了 GIL 这把锁</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 线程是什么 · 与进程的真正区别</h2>
+
+<p>昨天我们说过，<span class="term">进程</span>是「一个执行中的程序实例」，它拥有自己的<span class="key">独立地址空间</span>、文件描述符表、信号处理表等等。今天的<span class="term">线程（thread）</span>，可以最简洁地定义为：</p>
+
+<div class="note">
+<strong>线程 ≈ 共享了大部分资源的、轻量级的执行流。</strong><br>
+同一进程内的多个线程共享：<em>地址空间（代码段、堆、全局变量）、打开的文件描述符、信号处理表、当前工作目录</em>。<br>
+每个线程独占：<em>寄存器状态、栈、程序计数器 PC、errno、线程私有数据 TLS</em>。
+</div>
+
+<p>用一个数学家熟悉的类比：如果进程是一本「独立的草稿本」，那么线程就是同一本草稿本上同时演算的几支笔——纸（堆/全局变量）共享，但每支笔都有自己当前停在哪一行（PC）、握笔的姿势（寄存器）、各自的演算用稿（栈）。</p>
+
+<p>为什么要有线程？因为<span class="key">创建进程的成本太高</span>——要复制整个页表、复制文件描述符表、新建一套 PCB。而线程只需要新建一个栈和一组寄存器上下文，所以创建成本可以低 1～2 个数量级，上下文切换也更快（不需要换页表，TLB 不会被全部冲走）。</p>
+
+<table>
+<tr><th>维度</th><th>进程</th><th>线程</th></tr>
+<tr><td>地址空间</td><td>独立（fork 时 COW）</td><td>共享</td></tr>
+<tr><td>文件描述符表</td><td>独立</td><td>共享</td></tr>
+<tr><td>栈</td><td>1 个</td><td>每个线程 1 个（默认 8MB）</td></tr>
+<tr><td>创建代价</td><td>高（µs 级 ~ 数百 µs）</td><td>低（µs 级 ~ 数十 µs）</td></tr>
+<tr><td>通信</td><td>需要 IPC（管道、共享内存…）</td><td>直接读写共享变量</td></tr>
+<tr><td>崩溃影响</td><td>只死自己</td><td>一个段错误整个进程都死</td></tr>
+</table>
+
+<p>注意最后一行——这是「线程更轻但更危险」的根源：一个野指针写穿了堆，<em>所有兄弟线程都会一起殉葬</em>。所以高安全/高可靠场景（浏览器的 site isolation、Chrome 的多进程架构）反而会反其道而行，刻意用进程隔离换稳定。</p>
+
+<h2 id="s2">2. 三种线程模型：用户级 / 内核级 / 混合</h2>
+
+<p>线程是「概念」，落到操作系统层面有<span class="key">三种实现方式</span>。理解这三种，是看懂 Go goroutine、Java green thread、Python asyncio 等所有「现代并发」的钥匙。</p>
+
+<h3>2.1 用户级线程 (User-Level Threads, ULT)</h3>
+<p>线程的调度完全在<span class="term">用户态库</span>里完成，内核根本不知道你有多少线程——它只看到一个进程。优点是切换极快（不需要陷入内核）、可以创建几十万个；缺点是<span class="key">一个线程的阻塞 syscall 会阻塞所有线程</span>（因为内核眼里只有一个执行流），而且不能利用多核。早期的 GNU Pth、Java green thread、Ruby 1.8 都是这种。</p>
+
+<h3>2.2 内核级线程 (Kernel-Level Threads, KLT)</h3>
+<p>每个线程在内核里都有对应的<span class="term">调度实体</span>。Linux 的 NPTL、Windows 线程都是这种。优点是真正并行、阻塞一个不影响别的；缺点是创建/切换需要进内核，开销大，难以支持「几十万级别」的线程。</p>
+
+<h3>2.3 混合 (M:N) 模型</h3>
+<p>M 个用户线程映射到 N 个内核线程上。Go 的 <code>goroutine</code> 是这种模型最成功的现代代表——M 个 goroutine（可达百万）由 Go runtime 调度到 N 个 OS 线程（通常 = CPU 核数）上。它兼顾了「轻量」和「真并行」。</p>
+
+<div class="ascii">
+ULT (N:1)              KLT (1:1)              M:N (Go runtime)
+┌─────────────────┐    ┌─────────────────┐    ┌──────────────────────┐
+│ T1 T2 T3 T4 ... │    │ T1   T2   T3    │    │ G1 G2 G3 G4 G5 ...   │
+│   user library  │    │ ┌─┐ ┌─┐ ┌─┐    │    │   Go scheduler       │
+│        ↓        │    │ │k│ │k│ │k│    │    │   ↓    ↓    ↓        │
+│     1 kthread   │    │ └─┘ └─┘ └─┘    │    │  M1   M2   M3 (OS)   │
+└─────────────────┘    └─────────────────┘    └──────────────────────┘
+切换快，无法并行         真并行，但创建昂贵       两者兼得，调度复杂
+</div>
+
+<p>Python 的 <code>threading</code> 是<strong>纯 1:1 内核线程</strong>，但因为 GIL 又让人误以为是 N:1 的用户线程——这就是一切混乱的开始。我们一会儿就解决它。</p>
+
+<h2 id="s3">3. Linux 实现：NPTL 与神奇的 clone()</h2>
+
+<p><span class="term">NPTL</span>（Native POSIX Thread Library）是 Linux 自 2.6 内核起的官方线程实现，替代了早期那个臭名昭著的 LinuxThreads。NPTL 的设计哲学有一个惊人的极简结论：</p>
+
+<div class="note">
+<strong>在 Linux 内核眼里，进程和线程没有本质区别——它们都是「<span class="key">task_struct</span>」。</strong><br>
+区别只在于：创建时是否要求共享地址空间、文件描述符、信号处理等等。
+</div>
+
+<p>实现这一切的核心系统调用，是 <span class="term">clone()</span>。<code>fork()</code> 在内核里其实就是一个特定参数组合的 <code>clone()</code>：</p>
+
+<pre><code># clone() 关键标志位（与 fork 对比）
+#
+# fork() 等价于:
+#   clone(SIGCHLD)  ← 完全不共享
+#
+# 创建线程（pthread_create 内部调用）:
+#   clone(CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND |
+#         CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS |
+#         CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID, ...)
+#
+# 每个 CLONE_xxx 标志 = 「这部分资源要共享」</code></pre>
+
+<p>你能看到：<code>CLONE_VM</code>=共享虚拟内存、<code>CLONE_FILES</code>=共享文件描述符表、<code>CLONE_THREAD</code>=放到同一个线程组（共享 TGID）。把这堆 flag 拼起来，就是「Linux 线程」；把所有 flag 都关掉，就是「Linux 进程」。<span class="key">线程和进程不是两个东西，是同一个东西的两端连续值。</span></p>
+
+<h3>3.1 实操：strace 看 pthread_create 到底干了什么</h3>
+
+<pre><code># 写一个最简单的 C 线程程序
+cat &gt; t.c &lt;&lt; 'EOF'
+#include &lt;pthread.h&gt;
+#include &lt;stdio.h&gt;
+void* worker(void* arg) { printf("hi\n"); return NULL; }
+int main() {
+    pthread_t tid;
+    pthread_create(&amp;tid, NULL, worker, NULL);
+    pthread_join(tid, NULL);
+    return 0;
+}
+EOF
+gcc t.c -o t -lpthread
+strace -f -e trace=clone,clone3 ./t   # 看到一行 clone3(...) 调用</code></pre>
+
+<p>你会看到一条 <code>clone3()</code> 或 <code>clone()</code> 的系统调用，flags 里有一长串 <code>CLONE_VM|CLONE_FS|...</code>，这就是 NPTL 在底下做的工作。</p>
+
+<h2 id="s4">4. 线程私有数据 TLS：每个线程的「小金库」</h2>
+
+<p>既然线程共享地址空间，那「全局变量」自然是所有线程都能看到的。但有时你想要<span class="key">「每个线程都有一份自己的全局变量」</span>——比如 <code>errno</code>，每个线程的 syscall 失败码必须互不干扰。这就需要 <span class="term">TLS（Thread-Local Storage）</span>。</p>
+
+<p>TLS 的实现机制（x86-64 上）：每个线程通过 <code>fs</code> 寄存器指向自己的 TLS 区。访问一个 TLS 变量时，编译器生成的是「<code>%fs:offset</code>」的相对寻址，而不是绝对地址——这样同一段代码在不同线程里访问的就是不同的物理位置。</p>
+
+<pre><code># C 语言 TLS
+__thread int counter = 0;     // GCC 扩展，每个线程一份
+
+# Python TLS
+import threading
+local = threading.local()      # 每个线程访问 local.x 都是自己的副本
+local.user_id = 42</code></pre>
+
+<p>在 Python 的 Web 框架（Flask 的 <code>g</code>、Django 的 request context）里，TLS 是处理「请求级别上下文」的经典武器。但要小心：<span class="key">async 协程下 threading.local 会泄漏</span>——因为多个协程跑在同一个线程上，会读到彼此的「私有」数据。这时要用 <code>contextvars.ContextVar</code> 替代。</p>
+
+<h2 id="s5">5. pthread API：C 视角的线程</h2>
+
+<p>虽然你天天用 Python，但 <span class="term">pthread</span>（POSIX Threads）API 是所有线程库的「公分母」——Python 的 <code>threading</code>、Java 的 <code>java.lang.Thread</code>、Rust 的 <code>std::thread</code>、底下都是 pthread。看懂 pthread 的几个核心 API，理解任何高级线程库都会轻松。</p>
+
+<pre><code>// 创建 + 等待
+int pthread_create(pthread_t *tid, attr, void *(*start)(void*), void *arg);
+int pthread_join(pthread_t tid, void **retval);   // 等待线程结束
+int pthread_detach(pthread_t tid);                // 不等待，资源自动回收
+
+// 互斥锁
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_lock(&amp;m);
+/* critical section */
+pthread_mutex_unlock(&amp;m);
+
+// 条件变量
+pthread_cond_t c = PTHREAD_COND_INITIALIZER;
+pthread_cond_wait(&amp;c, &amp;m);     // 必须配合 mutex
+pthread_cond_signal(&amp;c);       // 唤醒一个
+pthread_cond_broadcast(&amp;c);    // 唤醒所有
+
+// 读写锁
+pthread_rwlock_t rw;
+pthread_rwlock_rdlock(&amp;rw);
+pthread_rwlock_wrlock(&amp;rw);</code></pre>
+
+<p>记住<span class="key">条件变量必须配合 mutex 使用</span>——因为「检查条件 + 进入等待」必须是原子的，否则会丢失唤醒信号。这是 OS 课考试题里反复出现的坑。Python 的 <code>threading.Condition</code> 把 mutex 内嵌了，所以接口看起来更简单，但本质一样。</p>
+
+<h2 id="s6">6. GIL 的真面目：CPython 解释器锁是怎么实现的</h2>
+
+<p>终于到了今天的主菜。<span class="term">GIL</span>（Global Interpreter Lock）是 CPython 解释器内部的一把<strong>互斥锁</strong>，它保证<span class="key">同一时刻，只有一个线程在执行 Python 字节码</span>。</p>
+
+<p>注意三个限定词：</p>
+<ul>
+  <li><strong>CPython 内部</strong>——这是实现细节，不是 Python 语言规范。Jython、IronPython 没有 GIL。</li>
+  <li><strong>执行 Python 字节码</strong>——线程在阻塞于 IO syscall、或运行 NumPy 这样的 C 扩展时是<em>不持有</em> GIL 的。</li>
+  <li><strong>同一时刻</strong>——线程之间会轮流持有 GIL。</li>
+</ul>
+
+<p>为什么 CPython 要有 GIL？因为 Python 的对象都是<span class="term">引用计数 (refcount)</span> 管理内存——每次给变量赋值、把对象传进函数、放进列表，都会有 <code>Py_INCREF</code>/<code>Py_DECREF</code>。如果允许多线程真并行执行字节码，那 refcount 的读改写必须用原子操作，每个最常见的操作都要付出原子指令成本，整个解释器就慢得不能用。GIL 是一个<span class="key">「为了单线程性能，牺牲多线程并行」的工程决策</span>。</p>
+
+<h3>6.1 GIL 的两代实现</h3>
+
+<p><strong>Python 3.2 之前（旧 GIL）</strong>：基于「字节码计数」，每执行 100 条字节码就检查一次是否要释放 GIL。这种方式在多核上会出现「<span class="key">护航效应</span>」：CPU 线程刚释放 GIL，IO 线程被唤醒，但还没抢到 GIL，CPU 线程又把它抢回去了——IO 响应延迟巨大。</p>
+
+<p><strong>Python 3.2+（新 GIL，由 Antoine Pitrou 改进）</strong>：基于<span class="term">时间片</span>。默认 <code>sys.setswitchinterval(0.005)</code>，即 5ms 一切换。机制变成：线程持有 GIL 跑一段时间后，<em>主动设置「需要切换」标志</em>，其他线程被唤醒来抢锁。代码大致逻辑：</p>
+
+<pre><code># CPython 内核里的简化伪代码 (ceval.c)
+while (1) {
+    if (gil_drop_request) {     // 有线程要求切换
+        release_gil();
+        # 这里给其他线程一个抢锁的窗口
+        acquire_gil();
+    }
+    opcode = NEXT_BYTECODE();
+    dispatch(opcode);           // 执行字节码
+}</code></pre>
+
+<p>所以 GIL 不是「Python 用不了多线程」，而是「Python 多线程不能在多核上真正并行<em>跑字节码</em>」。这两个表述在工程上差别巨大。</p>
+
+<h3>6.2 一个戏剧性的反例</h3>
+
+<pre><code>import threading, time
+
+x = 0
+def inc():
+    global x
+    for _ in range(10_000_000):
+        x += 1
+
+t1 = threading.Thread(target=inc)
+t2 = threading.Thread(target=inc)
+t0 = time.time()
+t1.start(); t2.start(); t1.join(); t2.join()
+print(time.time() - t0, x)
+# Python 3.11: 约 1.5-2.5 秒，x 不是 20_000_000 （竞态）</code></pre>
+
+<p>你会发现两个现象：(1) 速度没有变快——双线程版本几乎和单线程一样慢、甚至更慢（因为切换开销）；(2) 结果 <code>x</code> 通常不是 20_000_000——<span class="key">GIL 并不保证 <code>x += 1</code> 是原子操作</span>，因为它会被翻译成多条字节码（LOAD/ADD/STORE），中间是可以切换的。GIL 保护的是<em>解释器内部数据结构</em>，不是<em>你的业务变量</em>。</p>
+
+<h2 id="s7">7. CPU-bound vs IO-bound：GIL 的边界在哪</h2>
+
+<p>下面这张表是你用 Python 写并发时<span class="key">最重要的决策依据</span>，请记牢：</p>
+
+<table>
+<tr><th>工作负载</th><th>例子</th><th>持锁情况</th><th>多线程是否加速？</th><th>该用什么</th></tr>
+<tr><td>纯 Python CPU</td><td>循环、字符串处理、纯 Python 数学</td><td>持锁</td><td>否，反而变慢</td><td>multiprocessing / Cython / Rust 扩展</td></tr>
+<tr><td>NumPy / PyTorch 计算</td><td>矩阵乘、卷积</td><td><strong>不持锁</strong>（C 扩展自己释放）</td><td>是，能跑满多核</td><td>threading 或交给底层 BLAS</td></tr>
+<tr><td>阻塞 IO</td><td>requests, socket.recv, 文件读写</td><td><strong>不持锁</strong>（阻塞前主动释放）</td><td>是，N 个并发可达 N 倍</td><td>threading 或 asyncio</td></tr>
+<tr><td>异步 IO</td><td>aiohttp、asyncpg</td><td>单线程 event loop</td><td>不需要多线程</td><td>asyncio</td></tr>
+</table>
+
+<p>所以那句口诀「Python 多线程没用」是错的，正确版本是：<span class="key">「Python 多线程在 CPU-bound 的纯 Python 代码上没用，但在 IO-bound 和 C 扩展计算上是非常有用的」</span>。这也解释了为什么 Web 框架（Flask, Django）愿意用多线程跑 worker——绝大部分时间都在等数据库、等网络。</p>
+
+<h3>7.1 实操：感受 GIL 的边界</h3>
+
+<pre><code># cpu_bound.py —— 多线程比单线程慢
+import threading, time
+def burn():
+    n = 0
+    for _ in range(50_000_000): n += 1
+t0 = time.time(); burn(); burn(); print("seq:", time.time()-t0)
+t0 = time.time()
+ts = [threading.Thread(target=burn) for _ in range(2)]
+for t in ts: t.start()
+for t in ts: t.join()
+print("thr:", time.time()-t0)
+
+# io_bound.py —— 多线程是单线程的 N 倍
+import threading, time, urllib.request
+def fetch(): urllib.request.urlopen("http://example.com").read()
+t0 = time.time()
+for _ in range(8): fetch()
+print("seq:", time.time()-t0)
+t0 = time.time()
+ts = [threading.Thread(target=fetch) for _ in range(8)]
+for t in ts: t.start()
+for t in ts: t.join()
+print("thr:", time.time()-t0)</code></pre>
+
+<div class="note">
+<strong>Python 3.13 的「无 GIL 构建」</strong>：PEP 703 引入了 <code>python3.13t</code>（free-threaded build），允许在编译时彻底关掉 GIL。代价是单线程性能下降 5-15%，且很多 C 扩展需要重新适配。这是 CPython 自诞生以来最大的内部架构变更，预计还要好几年才会成为默认。
+</div>
+
+<h2 id="s8">8. 协程本质：为什么它躲开了 GIL 这把锁</h2>
+
+<p><span class="term">协程</span>（coroutine）是另一种维度上的并发：它在<strong>一个线程内</strong>，通过<span class="key">主动让出（yield/await）</span>的方式，让多个执行流交替推进。它和线程的根本区别：</p>
+
+<table>
+<tr><th></th><th>线程</th><th>协程</th></tr>
+<tr><td>调度者</td><td>OS 内核（抢占式）</td><td>事件循环（协作式）</td></tr>
+<tr><td>切换时机</td><td>时间片到、阻塞 syscall</td><td>只在 <code>await</code> 点</td></tr>
+<tr><td>切换成本</td><td>µs 级（陷入内核 + 上下文换）</td><td>ns 级（函数调用级）</td></tr>
+<tr><td>数量上限</td><td>千级（栈占 8MB）</td><td>百万级</td></tr>
+<tr><td>是否真并行</td><td>多核可并行（受 GIL）</td><td>单核单线程</td></tr>
+</table>
+
+<p>那为什么协程「躲开了 GIL」？因为 GIL 本来就是用来防止多个 OS 线程同时跑字节码，而协程<span class="key">只有一个 OS 线程</span>——根本不存在「多个执行流同时跑」的问题，自然不需要 GIL 来排队。事件循环就是一个超级简化的「用户态调度器」：</p>
+
+<div class="ascii">
+asyncio 事件循环主流程（极简版）：
+
+  while tasks_alive:
+      # 1. 跑所有 ready 任务，直到它们 await
+      for task in ready_queue:
+          run_until_next_await(task)     # 协作让出
+
+      # 2. 用 epoll 等内核告知有事件就绪
+      ready_fds = epoll_wait(fds, timeout=...)
+
+      # 3. 把对应的 task 重新放进 ready_queue
+      for fd in ready_fds:
+          ready_queue.append(callback_of(fd))
+</div>
+
+<p>所以 <code>async def</code> + <code>await</code> 不是魔法，它本质上是一个<span class="key">「函数能暂停 + 事件循环」的组合</span>。<code>await some_coro()</code> 在语义上等于「把当前协程的执行状态保存进堆，让出控制权给事件循环，等被通知就绪后再恢复」。</p>
+
+<h3>8.1 三种并发模型的选择矩阵</h3>
+
+<table>
+<tr><th>场景</th><th>推荐</th><th>原因</th></tr>
+<tr><td>CPU 密集（科学计算）</td><td><code>multiprocessing</code> 或 NumPy/Torch</td><td>绕开 GIL，吃满多核</td></tr>
+<tr><td>少量长连接（&lt; 100）</td><td><code>threading</code></td><td>简单，代码同步风格</td></tr>
+<tr><td>海量并发 IO（&gt; 1000）</td><td><code>asyncio</code></td><td>线程开不了那么多</td></tr>
+<tr><td>需要在多核上跑模型推理</td><td>多进程 + 共享显存</td><td>vLLM/SGLang 都是这种架构</td></tr>
+</table>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. vLLM 是多进程 + 多线程的混合。</strong> 当你看到 vLLM 启动后 <code>ps</code> 出来有多个进程，其中每个进程又有很多线程——这就是为了绕开 GIL 又同时利用多核：CUDA kernel 启动、IO 调度跑在 Python 线程（释放 GIL 时真并行），调度循环本身则单线程协程化。理解今天的内容能让你看懂 vLLM 的 worker 拓扑。</p>
+
+<p><strong>2. Agent 工具执行的并发风险。</strong> 一个 Agent 同时调用多个工具时，如果工具是同进程线程，那么<span class="key">一个工具的全局副作用（修改环境变量、改工作目录）会污染其他工具的执行</span>。OpenAI Code Interpreter 和我们公司的沙箱产品都因此选择「每个工具一个独立进程/容器」——这就是用进程隔离换稳定的现实案例。</p>
+
+<p><strong>3. 推理服务的拒绝服务攻击面。</strong> 如果你的 LLM 网关用 Python threading 服务长连接，攻击者一旦撑爆线程池（默认 8MB/线程，1024 线程就是 8GB），整个进程 OOM。换成 asyncio 之后单进程能撑 10 万连接——但又要警惕「<span class="key">事件循环阻塞攻击</span>」：一段恶意输入触发某个 CPU 密集的同步函数，整个 event loop 卡死。Day 105、Day 107 我们会详细讲限流和熔断。</p>
+
+<p><strong>4. 多 Agent 系统的竞态。</strong> 多个 Agent 共享一个知识库或工具状态时，GIL 给你的<em>安全感是错的</em>——Day 06 我们看到 <code>x += 1</code> 都不是原子的，更别说复杂的 dict update。Multi-Agent 框架里因为这种竞态导致工具状态错乱、记忆污染的 bug 非常常见，必须用显式锁保护共享可变状态。</p>
+
+<p><strong>5. TLS / ContextVar 的上下文泄漏漏洞。</strong> 在带认证的多租户 LLM 服务里，如果用 <code>threading.local</code> 存当前用户身份，而你的框架内部偷偷把请求切换到 async（许多新框架混用），就可能出现「用户 A 的请求读到了用户 B 的 user_id」——这是真实出现过的<span class="key">权限越权 CVE</span>类问题。规范做法是 <code>contextvars.ContextVar</code>。</p>
+</div>
+
+<h2 id="exercise">今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手 · 看 clone() 真容</strong></p>
+<p>找一台 Linux（或在 Docker 里 <code>docker run -it --rm ubuntu bash</code>），写一个 5 行的 Python 多线程程序，然后用：</p>
+<pre><code>strace -f -e trace=clone,clone3 python3 your_script.py 2&gt;&amp;1 | head -20</code></pre>
+<p>观察 clone 的 flags 里有哪些 <code>CLONE_VM|CLONE_FS|CLONE_FILES|...</code>。<strong>问题：</strong>为什么会看到「clone」而不是「pthread_create」？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察 · GIL 的边界</strong></p>
+<p>跑文中的 <code>cpu_bound.py</code> 和 <code>io_bound.py</code>，记录单线程 vs 多线程时间。<strong>追问：</strong>把 <code>cpu_bound.py</code> 里的 <code>n += 1</code> 换成 <code>np.dot(A, B)</code>（A, B 是 1000×1000 矩阵），再观察——为什么这次多线程<em>变快了</em>？提示：NumPy 的 C 扩展会做什么？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考 · 协程取代线程？</strong></p>
+<p>如果协程这么便宜（百万级）、又躲开了 GIL，那为什么 Python 还要保留 <code>threading</code> 模块？至少想出<strong>三个</strong> threading 仍然不可替代的场景。提示：思考「调用了一个会阻塞但没有 async 版本的旧库」、「需要在多核上真正并行」、「想用 <code>signal.signal</code> 处理 Ctrl+C」分别会怎样。</p>
+</div>
+
+<div class="next">
+<strong>明日预告（Day 04 · CPU 调度）</strong>：今天我们造好了「线程」这个执行单位，但<em>谁来决定哪个线程现在跑、哪个排队</em>？答案是内核里的<strong>调度器</strong>。明天我们拆 Linux 的 CFS 调度器：vruntime、红黑树、nice 值、CPU 亲和性、load average 的真实含义——为什么你的 16 核机器 load average 16 是「刚好」而 32 是「危险」？为什么把推理 worker pin 到特定 core 能提性能 10%+？敬请期待。
+</div>
+
+</body>
+</html>

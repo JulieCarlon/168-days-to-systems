@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>168 天完整课程目录</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --sec-bg: #fff7ed;
+    --sec-border: #fdba74;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+  h1 {
+    font-size: 26px;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 10px;
+  }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  h2 {
+    font-size: 19px;
+    margin-top: 36px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  .week-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  .day {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 12px;
+    font-size: 14px;
+  }
+  .day:last-child { border-bottom: none; }
+  .day.sec {
+    background: var(--sec-bg);
+    border-left: 3px solid var(--sec-border);
+    padding-left: 12px;
+    margin-left: -12px;
+    border-radius: 4px;
+  }
+  .day-tag {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 12px;
+    color: var(--muted);
+    padding-top: 2px;
+  }
+  .day-title {
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .day.sec .day-title { color: var(--accent); }
+  .day-bullets {
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .day-bullets ul { margin: 4px 0; padding-left: 18px; }
+  .day-bullets li { margin: 1px 0; }
+  .phase-title {
+    background: linear-gradient(90deg, var(--accent-soft) 0%, transparent 60%);
+    padding: 8px 14px;
+    border-radius: 4px;
+    margin-top: 40px;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 16px 0 28px;
+    font-size: 13px;
+    columns: 3;
+    column-gap: 24px;
+  }
+  .toc a { color: var(--accent); text-decoration: none; display: block; padding: 2px 0; }
+</style>
+</head>
+<body>
+
+<h1>从 AI 算法到系统型工程师 · 168 天完整课程目录</h1>
+<div class="subtitle">每天 3–6 个核心概念 · 教材章节密度 · 工作日 ~4500 字 / 周末 ~7000 字 · 生成于 2026-05-13</div>
+
+<div class="toc">
+  <a href="#p1">Phase 1 (W1-W4) 操作系统 + 网络</a>
+  <a href="#p2">Phase 2 (W5-W8) 硬件 + LLM 推理</a>
+  <a href="#p3">Phase 3 (W9-W12) 容器 + K8s</a>
+  <a href="#p4">Phase 4 (W13-W16) Go + 服务化</a>
+  <a href="#p5">Phase 5 (W17-W20) 数据库</a>
+  <a href="#p6">Phase 6 (W21-W24) 分布式 + 毕业项目</a>
+</div>
+
+<div class="phase-title" id="p1">Phase 1 · 操作系统 + 网络（Week 1-4）</div>
+
+<h2>Week 01 · 操作系统 Part 1：进程、线程、调度</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 01 Mon</div><div><div class="day-title">计算机系统大图 + 进程的本质</div><div class="day-bullets"><ul><li>计算机系统的 4 层架构：硬件 / 内核 / 用户空间 / 应用</li><li>操作系统的三大职责：资源管理、抽象、隔离</li><li>内核态 vs 用户态、ring 0/3 保护环</li><li>系统调用 syscall 是什么、怎么发生（int 0x80、syscall 指令）</li><li>进程的本质：地址空间 + 资源 + PCB</li><li>进程地址空间布局：text / data / bss / heap / stack</li><li>一个 hello world 从源码到运行的完整旅程</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 02 Tue</div><div><div class="day-title">进程深入：生命周期与状态机</div><div class="day-bullets"><ul><li>PCB / Linux task_struct 关键字段</li><li>进程状态机：R / S / D / T / Z / X 完整含义</li><li>进程创建 fork() 与写时复制 COW 语义</li><li>exec() 替换地址空间机制</li><li>wait() 与僵尸进程回收</li><li>exit() 与孤儿进程；init/systemd 的收养角色</li><li>进程组、会话、控制终端</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 03 Wed</div><div><div class="day-title">线程模型与 Python GIL</div><div class="day-bullets"><ul><li>用户线程 vs 内核线程 vs 混合模型（1:1, M:1, M:N）</li><li>Linux NPTL 实现：clone() 系统调用与 CLONE_VM 等标志</li><li>线程的私有数据：栈、寄存器、TLS（thread-local storage）</li><li>pthread API 速览（create/join/detach）</li><li>Python GIL 的实现原理：字节码级互斥</li><li>GIL 对 CPU-bound vs IO-bound 的不同影响</li><li>协程（coroutine）的本质：用户态调度的轻量级执行流</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 04 Thu</div><div><div class="day-title">CPU 调度</div><div class="day-bullets"><ul><li>为什么需要调度器、调度的目标函数</li><li>抢占式 vs 协作式调度</li><li>调度类：批处理、交互式、实时</li><li>Linux O(1) 调度器历史与缺陷</li><li>CFS 完全公平调度器：vruntime、红黑树</li><li>nice / renice / SCHED_FIFO / SCHED_RR</li><li>CPU 亲和性 taskset、isolcpus</li><li>负载均衡 load average 的含义</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 05 Fri 🔧</div><div><div class="day-title">LAB：进程与调度动手</div><div class="day-bullets"><ul><li>top / htop 全字段解读、按键命令</li><li>ps 高级用法（-o 自定义列、--sort）</li><li>用 time / vmstat 测量上下文切换次数</li><li>perf stat / perf record 性能事件初步</li><li>strace 跟踪一个 Python 程序的所有 syscall</li><li>用 Python 实现 fork-exec-wait 完整流程</li><li>观察 ps 中 STAT 列变化（R/S/D/Z）</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 06 Sat 🔐</div><div><div class="day-title">Linux 权限与提权基础</div><div class="day-bullets"><ul><li>Unix 权限模型：rwx、ugo、umask、chmod 数字记号</li><li>特殊位：SUID / SGID / Sticky bit</li><li>sudo 工作原理与 /etc/sudoers 配置</li><li>Linux capabilities 模型（细粒度权限拆分）</li><li>PAM 认证框架</li><li>常见提权路径：misconfigured SUID、可写 PATH、cron 写权限、内核 exploit</li><li>用 GTFOBins 查可滥用的 binary</li><li>动手：搭一个简易提权 lab，跑通从 user → root</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 07 Sun 🌐</div><div><div class="day-title">同步原语 + IPC + 周复盘</div><div class="day-bullets"><ul><li>同步原语：mutex、自旋锁、读写锁、信号量、条件变量</li><li>原子操作 atomic / CAS</li><li>死锁四条件 + 避免/检测/恢复</li><li>进程间通信六大方式：匿名管道、命名管道、消息队列、共享内存、socket、文件锁</li><li>信号 signal：SIGTERM/SIGKILL/SIGCHLD/SIGPIPE/SIGUSR1 等</li><li>信号处理的不安全函数（async-signal-safe）</li><li>与 LLM 服务连结：vLLM 多进程为何用共享内存通信</li><li>本周复盘 + Week 2 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 02 · 操作系统 Part 2：内存、I/O、文件系统</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 08 Mon</div><div><div class="day-title">虚拟内存与页表</div><div class="day-bullets"><ul><li>物理内存层级：寄存器 / L1 / L2 / L3 / DRAM / SSD / HDD 的延迟与带宽数量级</li><li>物理内存 vs 虚拟内存：为什么需要虚拟化</li><li>MMU 内存管理单元、地址翻译</li><li>多级页表：x86_64 的 4 级 / 5 级页表</li><li>TLB 快表：原理、命中率、刷新</li><li>大页 hugepage 与 transparent hugepage</li><li>/proc/meminfo 全字段解读</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 09 Tue</div><div><div class="day-title">内存分配器</div><div class="day-bullets"><ul><li>内核 buddy allocator 算法</li><li>内核 slab/slub allocator 与对象缓存</li><li>用户态 malloc 的实现路径：brk vs mmap</li><li>glibc ptmalloc 设计</li><li>jemalloc vs tcmalloc vs mimalloc 对比</li><li>内存碎片：内部 vs 外部</li><li>OOM killer 选择算法、oom_score_adj 调节</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 10 Wed</div><div><div class="day-title">虚拟内存进阶</div><div class="day-bullets"><ul><li>缺页中断 page fault：minor / major / invalid (segfault)</li><li>写时复制 COW：fork+exec 为何省内存</li><li>mmap 完全解析：file-backed / anonymous, shared / private</li><li>swap 机制、swappiness、zswap</li><li>page cache、buffer cache、dirty page 回写</li><li>madvise 提示符</li><li>mlock 锁页（用于安全敏感数据）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 11 Thu</div><div><div class="day-title">I/O 模型完整谱系</div><div class="day-bullets"><ul><li>同步 vs 异步、阻塞 vs 非阻塞（区分两组维度）</li><li>5 种 I/O 模型：blocking / nonblocking / multiplexing / signal-driven / async</li><li>select / poll 原理与局限</li><li>epoll 内部：红黑树 + 就绪链表，LT vs ET 触发模式</li><li>kqueue（BSD/macOS）对比</li><li>Reactor 模式 vs Proactor 模式</li><li>io_uring：环形队列设计、内核轮询</li><li>POSIX aio 与 libaio</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 12 Fri 🔧</div><div><div class="day-title">LAB：内存与 I/O 动手</div><div class="day-bullets"><ul><li>用 Python selectors 模块写 epoll 回声服务器</li><li>测试 1000 并发连接</li><li>用 mmap 加速大文件处理（模拟模型权重加载）</li><li>/proc/[pid]/maps 与 /proc/[pid]/smaps 详读</li><li>vmstat / free / sar 命令解读</li><li>用 valgrind 检测内存泄漏</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 13 Sat 🔐</div><div><div class="day-title">系统调用追踪与 eBPF 入门</div><div class="day-bullets"><ul><li>strace 深入：-f 跟踪子进程、-e 过滤、-c 统计</li><li>ltrace 跟踪动态库函数</li><li>ftrace 内核函数追踪</li><li>eBPF 是什么、与 kprobe/uprobe 关系</li><li>bpftrace 第一个程序：统计 open() 调用</li><li>bcc 工具包导览（execsnoop / opensnoop / tcpconnect / biosnoop）</li><li>eBPF 在安全监控的前景</li><li>动手：写 bpftrace 监控可疑 exec</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 14 Sun 🌐</div><div><div class="day-title">文件系统 + 零拷贝 + 周复盘</div><div class="day-bullets"><ul><li>VFS 抽象层、操作表</li><li>inode、目录项 dentry、硬链接 vs 软链接</li><li>ext4 / xfs / btrfs / zfs 简介与取舍</li><li>磁盘 I/O 路径全景：syscall → VFS → fs → block → scheduler → device</li><li>块设备调度器：noop / deadline / cfq / mq-deadline</li><li>零拷贝技术：sendfile / splice / MSG_ZEROCOPY 原理</li><li>fsync / O_DIRECT 何时用</li><li>为什么大模型 checkpoint 加载慢；如何加速</li><li>周复盘 + Week 3 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 03 · 网络 Part 1：TCP/IP 与 HTTP</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 15 Mon</div><div><div class="day-title">网络分层与 IP</div><div class="day-bullets"><ul><li>OSI 7 层 vs TCP/IP 4 层模型对比</li><li>物理层 + 数据链路层（以太网帧、MAC 地址、交换机）</li><li>网络层：IP 头格式、TTL、分片</li><li>ICMP（ping、traceroute 原理）</li><li>ARP 协议、ARP 缓存</li><li>IPv4 寻址、子网掩码、CIDR 记号</li><li>私有 IP 范围、NAT 工作原理</li><li>IPv6 概览</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 16 Tue</div><div><div class="day-title">TCP 深入</div><div class="day-bullets"><ul><li>TCP 头格式 + 关键字段</li><li>三次握手为什么不是两次或四次</li><li>四次挥手与 TIME_WAIT 的 2MSL</li><li>TCP 状态机完整图</li><li>序列号、确认号、滑动窗口</li><li>拥塞控制：慢启动 / 拥塞避免 / 快重传 / 快恢复</li><li>算法演进：Reno / Cubic / BBR</li><li>Nagle 算法 vs 延迟 ACK 之争</li><li>SO_REUSEADDR / SO_REUSEPORT</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 17 Wed</div><div><div class="day-title">UDP + HTTP 协议演进</div><div class="day-bullets"><ul><li>UDP 头与典型应用（DNS、QUIC、视频）</li><li>HTTP/1.0：请求-响应、短连接</li><li>HTTP/1.1：keep-alive、pipelining、chunked</li><li>HTTP/2：二进制分帧、多路复用、Server Push、HPACK 头压缩</li><li>HTTP/3 与 QUIC：UDP-based、0-RTT、连接迁移</li><li>HTTP 方法语义、状态码体系</li><li>关键 Header：Content-Type、Host、Authorization、Cookie</li><li>CORS 跨域机制</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 18 Thu</div><div><div class="day-title">TLS / HTTPS</div><div class="day-bullets"><ul><li>对称加密 vs 非对称加密回顾</li><li>PKI 体系：CA、证书链、Root CA</li><li>X.509 证书结构</li><li>TLS 1.2 握手完整流程</li><li>TLS 1.3 改进：1-RTT 握手、0-RTT 恢复</li><li>SNI 服务器名指示</li><li>ALPN 协议协商</li><li>mTLS 双向认证</li><li>经典漏洞：Heartbleed、BEAST、POODLE、降级攻击</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 19 Fri 🔧</div><div><div class="day-title">LAB：网络动手</div><div class="day-bullets"><ul><li>curl 高级用法：-v、--trace、-w 自定义输出</li><li>tcpdump 基础抓包语法</li><li>Wireshark 看 TCP 三次握手、TLS 握手</li><li>ss / netstat / lsof -i 看连接状态</li><li>nc 工具：建 TCP/UDP、传文件、端口扫描</li><li>dig / nslookup 查询 DNS 各类记录</li><li>traceroute 看路径、mtr 实时监控</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 20 Sat 🔐</div><div><div class="day-title">网络抓包与协议分析</div><div class="day-bullets"><ul><li>tcpdump 表达式语法（host/port/proto/and/or/not）</li><li>过滤特定流量、保存 pcap</li><li>Wireshark 显示过滤器</li><li>跟踪 TCP 流、HTTP 重组</li><li>TLS 解密：SSLKEYLOGFILE 环境变量</li><li>中间人攻击：ARP 欺骗 + sslstrip</li><li>DNS 投毒原理</li><li>DoH / DoT 隐私保护</li><li>动手：抓自己机器的 HTTPS，解密看明文</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 21 Sun 🌐</div><div><div class="day-title">DNS + CDN + 周复盘</div><div class="day-bullets"><ul><li>DNS 完整协议：报文格式、UDP/TCP、端口 53</li><li>记录类型：A、AAAA、CNAME、MX、TXT、NS、SOA、SRV</li><li>递归查询 vs 迭代查询</li><li>权威 DNS vs 缓存 DNS</li><li>DNS over UDP 的 512 字节限制与 EDNS</li><li>CDN 原理：边缘节点、回源、缓存策略</li><li>Anycast 路由</li><li>HTTP 缓存：Cache-Control / ETag / Last-Modified / Vary</li><li>周复盘 + Week 4 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 04 · 网络 Part 2：服务通信与中间件</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 22 Mon</div><div><div class="day-title">应用层协议全景</div><div class="day-bullets"><ul><li>REST 设计原则（无状态、资源、HATEOAS）</li><li>RESTful API 最佳实践与反模式</li><li>gRPC：基于 HTTP/2、Protobuf 编码</li><li>gRPC 4 种调用模式（unary/stream）</li><li>GraphQL 概览与适用场景</li><li>WebSocket：升级握手、帧格式、心跳</li><li>SSE（Server-Sent Events）与 LLM 流式输出</li><li>长轮询 / 长连接 / WebSocket / SSE 取舍</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 23 Tue</div><div><div class="day-title">负载均衡</div><div class="day-bullets"><ul><li>L4（传输层）vs L7（应用层）负载均衡</li><li>调度算法：轮询、加权轮询、最少连接、随机、源 IP 哈希</li><li>一致性哈希在 LB 中的应用</li><li>健康检查机制（主动/被动）</li><li>会话保持 sticky session</li><li>LVS 内核态 LB（DR/TUN/NAT 模式）</li><li>HAProxy vs Nginx vs Envoy 对比</li><li>云负载均衡产品：AWS ELB/ALB/NLB</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 24 Wed</div><div><div class="day-title">Nginx 深入</div><div class="day-bullets"><ul><li>master / worker 进程模型</li><li>事件驱动 + epoll</li><li>配置文件层级：http / server / location</li><li>反向代理 vs 正向代理</li><li>upstream 模块与 LB 算法</li><li>静态资源、gzip、缓存配置</li><li>限流：limit_req（令牌桶）、limit_conn</li><li>SSL 终止与 SSL passthrough</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 25 Thu</div><div><div class="day-title">服务通信进阶</div><div class="day-bullets"><ul><li>服务发现：客户端发现 vs 服务端发现</li><li>注册中心：Consul / etcd / Nacos / Eureka 对比</li><li>心跳与健康检查协议</li><li>容错三剑客：超时、重试、熔断</li><li>降级策略</li><li>限流算法：计数器 / 漏桶 / 令牌桶 / 滑动窗口</li><li>限流的层级（接入层、应用层、用户级）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 26 Fri 🔧</div><div><div class="day-title">LAB：服务通信动手</div><div class="day-bullets"><ul><li>用 Python grpcio 写 server + client</li><li>定义 .proto、生成代码</li><li>用 Nginx 反向代理两个后端</li><li>用 ab / wrk 压测，观察 P50/P95/P99</li><li>给 LLM API 加流式 SSE 输出</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 27 Sat 🔐</div><div><div class="day-title">反弹 shell 与 C2 框架</div><div class="day-bullets"><ul><li>bind shell vs reverse shell 概念</li><li>各种语言的 reverse shell payload（bash / python / nc / powershell）</li><li>为什么 reverse shell 能绕过防火墙（egress 通常开放）</li><li>出网技巧：DNS tunnel、ICMP tunnel、HTTPS C2</li><li>C2 框架设计：Beacon、心跳、jitter</li><li>主流 C2：Cobalt Strike / Sliver / Mythic / Havoc</li><li>检测思路：异常出网、长连接、域名特征、JA3 指纹</li><li>动手：在本地起 nc listener，用 Python payload 反弹</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 28 Sun 🌐</div><div><div class="day-title">综合：一个 HTTP 请求的完整旅程 + 周复盘</div><div class="day-bullets"><ul><li>从浏览器到 K8s 后端的完整链路追踪</li><li>各层延迟分布（DNS / TCP / TLS / 应用）</li><li>常见性能瓶颈定位</li><li>网络故障诊断方法论</li><li>与 Agent 安全：用户请求 → 网关 → 推理服务 → 工具调用的攻击面</li><li>周复盘 + Phase 1 总结 + Phase 2 预告</li></ul></div></div></div>
+</div>
+
+<div class="phase-title" id="p2">Phase 2 · 硬件 + LLM 推理（Week 5-8）</div>
+
+<h2>Week 05 · CPU 架构</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 29 Mon</div><div><div class="day-title">CPU 工作原理</div><div class="day-bullets"><ul><li>冯诺依曼模型与哈佛架构</li><li>CPU 内部组件：ALU / 寄存器 / 控制单元</li><li>指令周期：fetch / decode / execute / writeback</li><li>时钟频率、IPC、性能公式</li><li>x86 vs ARM 指令集架构对比</li><li>CISC vs RISC 哲学</li><li>32 位 vs 64 位</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 30 Tue</div><div><div class="day-title">流水线、分支预测、乱序</div><div class="day-bullets"><ul><li>5 级经典流水线</li><li>流水线冒险：结构冒险 / 数据冒险 / 控制冒险</li><li>转发 forwarding 与气泡</li><li>分支预测：静态 / 动态 / BTB</li><li>超标量 superscalar</li><li>乱序执行 OoO、保留站、重排序缓冲</li><li>推测执行 speculative execution</li><li>推测执行的安全代价（Spectre 根源）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 31 Wed</div><div><div class="day-title">缓存层级</div><div class="day-bullets"><ul><li>L1 / L2 / L3 缓存的延迟与大小</li><li>缓存行 cache line（典型 64 字节）</li><li>映射方式：直接、组相联、全相联</li><li>替换策略：LRU / Random / LFU</li><li>写策略：write-through vs write-back，write-allocate</li><li>false sharing 与对齐填充</li><li>缓存友好的数据结构设计</li><li>预取 prefetch</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 32 Thu</div><div><div class="day-title">SIMD + 多核 + 内存一致性</div><div class="day-bullets"><ul><li>SIMD 思想，SSE / AVX / AVX-512 演进</li><li>向量化是怎么加速矩阵运算的</li><li>SMP / UMA / NUMA 概览</li><li>MESI 缓存一致性协议</li><li>内存屏障：编译屏障 vs CPU 屏障</li><li>happens-before 关系</li><li>x86 vs ARM 内存模型对比（强 vs 弱）</li><li>双重检查锁定 DCL 的陷阱</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 33 Fri 🔧</div><div><div class="day-title">LAB：CPU 性能动手</div><div class="day-bullets"><ul><li>perf top 看热点函数</li><li>perf stat 看 cache miss / branch miss</li><li>实验：缓存友好 vs 缓存不友好的矩阵遍历（行优先 vs 列优先）</li><li>用 numpy 看 SIMD 加速倍率</li><li>cpuinfo 解读：CPU 特性、缓存大小</li><li>用 dmidecode 看硬件信息</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 34 Sat 🔐</div><div><div class="day-title">侧信道攻击</div><div class="day-bullets"><ul><li>Spectre 攻击原理：训练分支预测器 + cache timing</li><li>Meltdown：乱序执行 + 权限检查时机</li><li>cache timing 攻击家族（Prime+Probe、Flush+Reload）</li><li>Rowhammer 硬件级位翻转攻击</li><li>缓解措施：retpoline、KPTI、microcode 更新</li><li>云上多租户 GPU 的侧信道关注点</li><li>动手：跑一个 cache-timing PoC</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 35 Sun 🌐</div><div><div class="day-title">CPU 与 LLM 推理的关系 + 周复盘</div><div class="day-bullets"><ul><li>LLM 推理中 CPU 扮演什么角色（tokenization、scheduling、preprocessing）</li><li>为什么 transformer 推理瓶颈通常不在 CPU</li><li>CPU 优化对吞吐的影响（数据预处理 pipeline）</li><li>异构计算的协调成本</li><li>周复盘 + Week 6 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 06 · 内存层级 + NUMA + LLM memory-bound 分析</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 36 Mon</div><div><div class="day-title">内存系统全貌</div><div class="day-bullets"><ul><li>内存延迟与带宽的数量级</li><li>DDR4 vs DDR5 vs HBM</li><li>内存控制器、内存通道</li><li>带宽与延迟的关系</li><li>Roofline 模型：compute-bound vs memory-bound 的判断</li><li>算术强度 arithmetic intensity 概念</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 37 Tue</div><div><div class="day-title">NUMA 架构</div><div class="day-bullets"><ul><li>为什么有 NUMA：多 socket 系统的现实</li><li>本地节点 vs 远程节点访问代价</li><li>NUMA 拓扑查看：numactl --hardware、lstopo</li><li>numactl 工具：进程绑定 NUMA</li><li>内存分配策略：local / preferred / interleave / bind</li><li>多卡训练中的 NUMA 影响</li><li>GPU 与 CPU NUMA 节点的拓扑关系</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 38 Wed</div><div><div class="day-title">为什么 LLM 推理是 memory-bound</div><div class="day-bullets"><ul><li>decoder-only 推理的两个阶段：prefill vs decode</li><li>decode 阶段的算术强度推导</li><li>KV cache 的内存消耗公式</li><li>batching 为何能提升 GPU 利用率（提升算术强度）</li><li>量化为何能加速 decode（降低 memory bandwidth 需求）</li><li>分析 LLama-2 7B / 70B 的理论吞吐上限</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 39 Thu</div><div><div class="day-title">内存优化技术</div><div class="day-bullets"><ul><li>大页 huge page / 1GB page 的应用</li><li>预取 prefetch 指令</li><li>内存对齐与 SIMD 加速</li><li>数据布局：AoS vs SoA、对模型推理的影响</li><li>cache-oblivious 算法思路</li><li>NUMA-aware 内存分配</li><li>透明大页 THP 与性能抖动</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 40 Fri 🔧</div><div><div class="day-title">LAB：内存性能动手</div><div class="day-bullets"><ul><li>STREAM benchmark 测内存带宽</li><li>用 mlock 锁定页面</li><li>用 numactl 改变进程的 NUMA 策略</li><li>perf 测 cache miss / TLB miss / page fault</li><li>vmstat 解读 si/so/buff/cache</li><li>实验：跨 NUMA 节点访问的性能损失</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 41 Sat 🔐</div><div><div class="day-title">内存安全攻防</div><div class="day-bullets"><ul><li>栈帧结构、函数调用约定</li><li>经典栈溢出 + shellcode 注入</li><li>缓解机制：Stack canary、NX/DEP、ASLR、PIE、CFI</li><li>ROP / JOP 绕过 NX</li><li>堆溢出、UAF（use-after-free）、double free</li><li>C/C++ 不安全的根源；Rust 借用检查器如何解决</li><li>fuzzing 工具：AFL++ / libFuzzer 概念</li><li>动手：跑一个简单的栈溢出 PoC（DEP/ASLR 关闭的环境）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 42 Sun 🌐</div><div><div class="day-title">内存视角看 vLLM PagedAttention + 周复盘</div><div class="day-bullets"><ul><li>传统 KV cache 的内存碎片问题</li><li>PagedAttention 的核心思想（借鉴 OS 虚拟内存）</li><li>block table 数据结构</li><li>preemption 与 swap 机制</li><li>prefix caching 实现</li><li>周复盘 + Week 7 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 07 · GPU 架构</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 43 Mon</div><div><div class="day-title">GPU 基础</div><div class="day-bullets"><ul><li>GPU vs CPU 设计哲学：高并行 vs 低延迟</li><li>NVIDIA GPU 演进：V100 → A100 → H100 → H200 → B200</li><li>流式多处理器 SM 内部结构</li><li>CUDA core vs Tensor core 用途</li><li>SIMT 执行模型</li><li>warp（32 线程）调度</li><li>FP32 / TF32 / FP16 / BF16 / FP8 / INT8 / INT4 单元</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 44 Tue</div><div><div class="day-title">CUDA 编程模型</div><div class="day-bullets"><ul><li>thread / warp / block / grid 层级</li><li>kernel 启动语法 &lt;&lt;&lt;blocks, threads&gt;&gt;&gt;</li><li>GPU 内存层级：register / shared / L1 / L2 / global / HBM</li><li>cudaMalloc / cudaMemcpy / cudaFree</li><li>第一个 CUDA kernel：向量加</li><li>cooperative groups</li><li>CUDA stream 与异步</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 45 Wed</div><div><div class="day-title">GPU 性能要点</div><div class="day-bullets"><ul><li>occupancy 概念与计算</li><li>memory coalescing（合并访存）</li><li>shared memory bank conflict</li><li>warp divergence 性能代价</li><li>kernel fusion 思想</li><li>Profiler：Nsight Compute / Nsight Systems</li><li>看 SM 利用率 vs HBM 带宽利用率</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 46 Thu</div><div><div class="day-title">GPU 互联</div><div class="day-bullets"><ul><li>PCIe 历史与带宽（Gen3/4/5）</li><li>NVLink 与 NVSwitch 拓扑</li><li>GPUDirect RDMA</li><li>NCCL：AllReduce / AllGather / Broadcast 原理</li><li>Ring vs Tree AllReduce 算法</li><li>多机多卡通信：InfiniBand / RoCE</li><li>nvidia-smi topo -m 看拓扑</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 47 Fri 🔧</div><div><div class="day-title">LAB：GPU 动手</div><div class="day-bullets"><ul><li>nvidia-smi 完整字段解读（温度、功耗、显存、利用率）</li><li>nvtop / nvitop 实时监控</li><li>PyTorch profiler 看 GPU kernel</li><li>用 nsight systems 看 transformer 推理 timeline</li><li>对比 PyTorch eager vs torch.compile 性能</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 48 Sat 🔐</div><div><div class="day-title">GPU 多租户安全</div><div class="day-bullets"><ul><li>MIG（Multi-Instance GPU）硬件级隔离</li><li>MPS（Multi-Process Service）软件共享</li><li>时间片共享模式风险</li><li>显存残留与清零</li><li>CUDA context 隔离边界</li><li>已知 GPU 漏洞案例（CVE）</li><li>侧信道在 GPU 上的可能性</li><li>多租户推理服务的隔离设计建议</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 49 Sun 🌐</div><div><div class="day-title">GPU 选型与成本分析 + 周复盘</div><div class="day-bullets"><ul><li>为什么大模型推理推荐 H100 而不是 A100（FP8 + HBM3）</li><li>H100 vs H200 关键差异</li><li>各种 GPU 的成本/性能比</li><li>推理 vs 训练对 GPU 的不同需求</li><li>租赁 vs 自建</li><li>周复盘 + Week 8 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 08 · LLM 推理工程深入</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 50 Mon</div><div><div class="day-title">推理基础</div><div class="day-bullets"><ul><li>autoregressive 生成完整流程</li><li>prefill vs decode 阶段差异</li><li>logits 处理 pipeline</li><li>sampling 算法：greedy / temperature / top-k / top-p / typical</li><li>repetition penalty / frequency penalty</li><li>beam search 与 LLM 取舍</li><li>stop tokens / EOS 处理</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 51 Tue</div><div><div class="day-title">KV cache 全解</div><div class="day-bullets"><ul><li>KV cache 的本质：避免重复 attention 计算</li><li>内存占用公式：2 × layer × head × dim × seq × batch × bytes</li><li>PagedAttention 实现细节</li><li>prefix sharing / prefix caching</li><li>KV cache offload 到 CPU/SSD</li><li>KV cache 压缩与量化</li><li>大上下文窗口（128K+）的挑战</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 52 Wed</div><div><div class="day-title">量化技术</div><div class="day-bullets"><ul><li>数值类型回顾：FP32 / FP16 / BF16 / FP8 / INT8 / INT4</li><li>PTQ vs QAT</li><li>权重量化 vs 激活量化 vs KV cache 量化</li><li>GPTQ 算法原理</li><li>AWQ activation-aware 量化</li><li>SmoothQuant 思路</li><li>精度评估方法</li><li>实际选型建议</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 53 Thu</div><div><div class="day-title">批处理、调度与解码加速</div><div class="day-bullets"><ul><li>static batching 的局限</li><li>continuous batching / in-flight batching 原理</li><li>chunked prefill</li><li>speculative decoding 算法</li><li>medusa / lookahead decoding</li><li>FlashAttention v1/v2/v3</li><li>vLLM、SGLang、TensorRT-LLM、TGI 取舍</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 54 Fri 🔧</div><div><div class="day-title">LAB：vLLM 部署动手</div><div class="day-bullets"><ul><li>装 vLLM，启动 7B 模型</li><li>OpenAI 兼容 API 测试</li><li>压测：TTFT、TPOT、throughput</li><li>参数调优：max-model-len、gpu-memory-utilization、max-num-seqs</li><li>看 vLLM 调度日志</li><li>对比不同 batching 策略</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 55 Sat 🔐</div><div><div class="day-title">AI 推理服务攻击面</div><div class="day-bullets"><ul><li>模型权重窃取：API 推断 + 蒸馏</li><li>对抗输入攻击：jailbreak / 越权 prompt</li><li>资源耗尽：超长 prompt、循环、重复 token</li><li>时间侧信道：通过响应时间推断对方 prompt</li><li>模型水印技术</li><li>API 滥用监控</li><li>速率限制与配额管理</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 56 Sun 🌐</div><div><div class="day-title">Phase 2 综合 + Phase 3 预告</div><div class="day-bullets"><ul><li>一次推理请求的完整生命周期（从硬件视角）</li><li>性能调优 cheat sheet</li><li>常见瓶颈快速诊断流程</li><li>本阶段复盘 + 容器章节预告</li></ul></div></div></div>
+</div>
+
+<div class="phase-title" id="p3">Phase 3 · 容器 + K8s（Week 9-12）</div>
+
+<h2>Week 09 · Linux 进阶 + 容器原理</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 57 Mon</div><div><div class="day-title">cgroups</div><div class="day-bullets"><ul><li>cgroups v1 vs v2 架构差异</li><li>资源子系统：cpu / memory / blkio / pids / net_cls</li><li>层次结构</li><li>资源配额的实现机制</li><li>systemd 与 cgroups 的关系</li><li>用 systemd-run 创建临时 cgroup</li><li>实操：用 cgroup 限制进程 CPU/内存</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 58 Tue</div><div><div class="day-title">namespaces</div><div class="day-bullets"><ul><li>6 大 namespace：PID / NET / MNT / UTS / IPC / USER（+ cgroup, time）</li><li>每种 namespace 隔离什么</li><li>clone() / unshare() / setns() 系统调用</li><li>unshare 命令</li><li>nsenter 进入命名空间</li><li>/proc/[pid]/ns 目录</li><li>动手：用 namespaces 手搓 mini container</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 59 Wed</div><div><div class="day-title">capabilities + seccomp + LSM</div><div class="day-bullets"><ul><li>Linux capabilities 完整列表</li><li>cap_drop / cap_add / cap_set_file</li><li>seccomp-bpf 系统调用过滤</li><li>seccomp profile 编写</li><li>AppArmor 路径策略</li><li>SELinux MAC 强制访问控制</li><li>LSM (Linux Security Modules) 框架</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 60 Thu</div><div><div class="day-title">容器 = namespaces + cgroups + 镜像</div><div class="day-bullets"><ul><li>容器与虚拟机的本质差异</li><li>rootfs 与 overlay 文件系统</li><li>OverlayFS 工作原理</li><li>镜像分层与共享</li><li>runc / containerd / Docker 三层架构</li><li>OCI 镜像规范 + 运行时规范</li><li>CRI 接口</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 61 Fri 🔧</div><div><div class="day-title">LAB：手搓容器</div><div class="day-bullets"><ul><li>用 unshare + chroot 跑一个隔离环境</li><li>挂载 /proc 让 ps 工作</li><li>用 cgroups 限制资源</li><li>用 dive 工具拆解 Docker 镜像</li><li>用 ctr 直接操作 containerd</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 62 Sat 🔐</div><div><div class="day-title">namespace / cgroup 滥用</div><div class="day-bullets"><ul><li>--privileged 容器风险全解</li><li>挂载 host /proc 的危险</li><li>挂载 docker.sock 的逃逸路径</li><li>host PID / NET namespace 风险</li><li>cgroups v1 的信息泄露</li><li>release_agent 逃逸（CVE-2022-0492）</li><li>检测方法：Falco 规则</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 63 Sun 🌐</div><div><div class="day-title">容器中的同步与 IPC + 周复盘</div><div class="day-bullets"><ul><li>容器间网络通信</li><li>容器共享 volume</li><li>容器间共享 IPC namespace</li><li>容器 PID 1 问题（信号处理、僵尸收割）</li><li>tini / dumb-init 解决方案</li><li>周复盘 + Week 10 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 10 · Docker 深入</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 64 Mon</div><div><div class="day-title">Docker 镜像</div><div class="day-bullets"><ul><li>Dockerfile 完整指令集</li><li>BuildKit 现代构建</li><li>多阶段构建模式</li><li>镜像优化：distroless / alpine / scratch / chainguard</li><li>缓存层与构建效率</li><li>镜像签名 cosign / sigstore</li><li>镜像扫描 trivy</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 65 Tue</div><div><div class="day-title">Docker 运行时</div><div class="day-bullets"><ul><li>docker run 关键参数全解</li><li>容器生命周期管理</li><li>资源限制：--cpus、--memory、--pids-limit</li><li>HEALTHCHECK 指令</li><li>restart policy 完整语义</li><li>容器日志驱动</li><li>docker exec / docker attach</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 66 Wed</div><div><div class="day-title">Docker 网络</div><div class="day-bullets"><ul><li>网络驱动：bridge / host / none / overlay / macvlan</li><li>bridge 模式 + iptables 端口映射原理</li><li>容器互联与内置 DNS</li><li>用户自定义网络</li><li>跨主机网络 overlay 原理</li><li>CNM 标准</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 67 Thu</div><div><div class="day-title">Docker 存储</div><div class="day-bullets"><ul><li>数据卷 volume 完整管理</li><li>绑定挂载 bind mount</li><li>tmpfs 挂载</li><li>OverlayFS / devicemapper / btrfs storage driver</li><li>存储驱动选择</li><li>数据备份恢复</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 68 Fri 🔧</div><div><div class="day-title">LAB：Docker 实战</div><div class="day-bullets"><ul><li>把 Python LLM 服务 dockerize</li><li>多阶段构建优化镜像大小</li><li>docker-compose 起多服务栈（应用 + Redis + PG）</li><li>docker stats 监控</li><li>用 trivy 扫描镜像漏洞</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 69 Sat 🔐</div><div><div class="day-title">容器逃逸</div><div class="day-bullets"><ul><li>经典 runc 逃逸 CVE-2019-5736 详解</li><li>CVE-2022-0492 cgroups release_agent</li><li>--privileged 模式逃逸路径全解</li><li>docker.sock 暴露逃逸</li><li>内核漏洞类：Dirty Pipe / Dirty Cow</li><li>防御纵深：rootless / user ns remap / seccomp / AppArmor</li><li>动手：在 vuln 镜像里复现逃逸</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 70 Sun 🌐</div><div><div class="day-title">容器最佳实践 + 周复盘</div><div class="day-bullets"><ul><li>12-factor app 原则</li><li>容器内日志策略（stdout vs 文件 + sidecar）</li><li>信号处理 + 优雅停机</li><li>镜像版本管理</li><li>CI/CD 中的镜像构建</li><li>周复盘 + Week 11 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 11 · K8s 核心</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 71 Mon</div><div><div class="day-title">K8s 架构总览</div><div class="day-bullets"><ul><li>control plane vs data plane</li><li>apiserver / etcd / scheduler / controller-manager</li><li>kubelet / kube-proxy / container runtime（CRI）</li><li>CNI / CSI / CRI 接口</li><li>一次 kubectl apply 的完整路径</li><li>声明式 API 与 reconcile loop</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 72 Tue</div><div><div class="day-title">Pod 与生命周期</div><div class="day-bullets"><ul><li>Pod 是最小调度单位的设计动机</li><li>多容器 Pod 模式：sidecar / init / ambassador / adapter</li><li>Pod 生命周期与重启策略</li><li>liveness / readiness / startup probe</li><li>资源请求 vs 限制（requests vs limits）</li><li>QoS class：Guaranteed / Burstable / BestEffort</li><li>Pod 调度过程</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 73 Wed</div><div><div class="day-title">控制器家族</div><div class="day-bullets"><ul><li>ReplicaSet 基础</li><li>Deployment：滚动更新 / 回滚 / 暂停</li><li>StatefulSet：有序、稳定的网络标识、持久存储</li><li>DaemonSet：每节点一份</li><li>Job 与 CronJob</li><li>HorizontalPodAutoscaler</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 74 Thu</div><div><div class="day-title">网络与 Service</div><div class="day-bullets"><ul><li>Service 类型：ClusterIP / NodePort / LoadBalancer / ExternalName</li><li>Endpoints 与 EndpointSlice</li><li>kube-proxy 模式：iptables vs IPVS</li><li>Ingress 与 Ingress Controller</li><li>Gateway API 新标准</li><li>Network Policy 东西向流量控制</li><li>headless Service 与 StatefulSet 配合</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 75 Fri 🔧</div><div><div class="day-title">LAB：K8s 实战</div><div class="day-bullets"><ul><li>minikube / kind 起本地集群</li><li>部署 Deployment + Service + Ingress</li><li>滚动更新与回滚演练</li><li>kubectl 高级用法（jsonpath、--watch、port-forward）</li><li>用 k9s 提升效率</li><li>排错三板斧：describe / logs / events</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 76 Sat 🔐</div><div><div class="day-title">K8s 安全</div><div class="day-bullets"><ul><li>RBAC：Role / ClusterRole / RoleBinding / ClusterRoleBinding</li><li>ServiceAccount token 工作原理</li><li>SA token 滥用案例</li><li>Pod Security Admission (PSA) 替代 PSP</li><li>Network Policy 最小权限设计</li><li>etcd 加密静态数据</li><li>API audit log</li><li>kube-bench CIS benchmark</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 77 Sun 🌐</div><div><div class="day-title">调度 + HPA + 周复盘</div><div class="day-bullets"><ul><li>调度器原理：filter + score 两阶段</li><li>nodeSelector / nodeAffinity / podAffinity</li><li>taints / tolerations 隔离机制</li><li>HPA 完整工作流（metrics-server + 自定义指标）</li><li>VPA、Cluster Autoscaler 简介</li><li>周复盘 + Week 12 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 12 · K8s 生态 + 可观测性</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 78 Mon</div><div><div class="day-title">GPU 调度</div><div class="day-bullets"><ul><li>nvidia-device-plugin 工作原理</li><li>GPU 资源声明 nvidia.com/gpu</li><li>GPU 拓扑感知调度</li><li>MIG 分配策略</li><li>批调度器：Volcano / Kueue / Yunikorn</li><li>多租户 GPU 集群设计</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 79 Tue</div><div><div class="day-title">配置与密钥</div><div class="day-bullets"><ul><li>ConfigMap 完整用法</li><li>Secret 与 base64（注意不是加密！）</li><li>挂载方式：env / volume / projected</li><li>External Secrets Operator + Vault/AWS Secrets</li><li>Sealed Secrets（GitOps 友好）</li><li>密钥轮转策略</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 80 Wed</div><div><div class="day-title">存储</div><div class="day-bullets"><ul><li>Volume / PersistentVolume / PVC / StorageClass</li><li>CSI 驱动机制</li><li>动态供应</li><li>访问模式：RWO / ROX / RWX</li><li>StatefulSet 与 PVC 模板</li><li>有状态服务的备份恢复</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 81 Thu</div><div><div class="day-title">Operator + Helm</div><div class="day-bullets"><ul><li>CRD 自定义资源定义</li><li>Controller 模式 + reconcile</li><li>Operator SDK / Kubebuilder 简介</li><li>Helm chart 结构</li><li>Helm 模板语法</li><li>Operator 案例：cert-manager / prometheus-operator / kubevirt</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 82 Fri 🔧</div><div><div class="day-title">LAB：可观测性栈</div><div class="day-bullets"><ul><li>部署 prometheus-operator</li><li>ServiceMonitor 抓 LLM 服务指标</li><li>Grafana 看 P99 延迟、QPS、GPU 利用率</li><li>Loki + promtail 日志聚合</li><li>Jaeger 链路追踪初步</li><li>告警规则 + Alertmanager</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 83 Sat 🔐</div><div><div class="day-title">运行时安全检测</div><div class="day-bullets"><ul><li>Falco 基于 syscall 的检测</li><li>Falco 规则编写</li><li>Tetragon 基于 eBPF 的检测</li><li>Cilium + Tetragon 协同</li><li>检测规则示例：exec 异常、文件访问、网络</li><li>kube-bench 基线扫描</li><li>kube-hunter 主动测试</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 84 Sun 🌐</div><div><div class="day-title">Phase 3 综合 + Phase 4 预告</div><div class="day-bullets"><ul><li>一个完整 LLM 推理服务在 K8s 上的部署形态</li><li>GPU 节点池 + Cluster Autoscaler</li><li>Service Mesh + 监控 + 安全完整栈</li><li>本阶段复盘</li></ul></div></div></div>
+</div>
+
+<div class="phase-title" id="p4">Phase 4 · Go + 服务化（Week 13-16）</div>
+
+<h2>Week 13 · Go 语言 i</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 85 Mon</div><div><div class="day-title">为什么学 Go + 入门</div><div class="day-bullets"><ul><li>Go 设计哲学：简洁、并发、工程化</li><li>与 Python / Java / Rust 对比</li><li>在云原生生态的地位</li><li>安装与开发环境（VSCode + gopls）</li><li>go.mod / go.sum / GOPATH / GOPROXY</li><li>hello world + 命令行参数</li><li>编译与跨平台构建</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 86 Tue</div><div><div class="day-title">Go 基础语法</div><div class="day-bullets"><ul><li>类型系统：基本类型、值类型 vs 引用类型</li><li>变量声明（var / :=）、零值</li><li>控制流：if / for / switch / for-range</li><li>函数：多返回值、命名返回值、可变参数</li><li>错误处理：error 接口与惯例</li><li>defer / panic / recover</li><li>数组 vs slice vs map</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 87 Wed</div><div><div class="day-title">struct + interface + 组合</div><div class="day-bullets"><ul><li>struct 定义与方法</li><li>指针接收者 vs 值接收者</li><li>interface：鸭子类型 + 隐式实现</li><li>空接口 interface{} / any</li><li>类型断言与 type switch</li><li>嵌入式组合（没有继承）</li><li>包管理与可见性（首字母大小写）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 88 Thu</div><div><div class="day-title">并发：goroutine + channel</div><div class="day-bullets"><ul><li>goroutine 是什么（用户态轻量线程）</li><li>Go runtime GMP 调度模型</li><li>channel：无缓冲 vs 有缓冲</li><li>channel 方向、关闭信号</li><li>select 多路复用</li><li>经典并发模式：fan-out / fan-in / pipeline / worker pool</li><li>"Don't communicate by sharing memory; share memory by communicating"</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 89 Fri 🔧</div><div><div class="day-title">LAB：Go 实战</div><div class="day-bullets"><ul><li>写并发 web 爬虫</li><li>用 channel + worker pool 控制并发数</li><li>用 go test 写单元测试</li><li>pprof 性能分析（CPU、内存、goroutine）</li><li>race detector 检测数据竞争</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 90 Sat 🔐</div><div><div class="day-title">Go 安全编码</div><div class="day-bullets"><ul><li>SSRF 模式（net/http 客户端误用）</li><li>反序列化风险（gob、json、xml）</li><li>SQL 注入 + 参数化查询</li><li>命令注入（exec.Command vs system shell）</li><li>goroutine 泄漏排查</li><li>unsafe 包的危险</li><li>静态分析工具：gosec / staticcheck</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 91 Sun 🌐</div><div><div class="day-title">sync + context + 周复盘</div><div class="day-bullets"><ul><li>sync.Mutex / sync.RWMutex / sync.Once</li><li>sync.WaitGroup / sync.Map / sync.Pool</li><li>原子操作 sync/atomic</li><li>context.Context：取消、超时、传值</li><li>错误处理最佳实践（errors.Is / As / Wrap）</li><li>周复盘 + Week 14 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 14 · Go 语言 ii + 微服务基础</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 92 Mon</div><div><div class="day-title">HTTP 服务</div><div class="day-bullets"><ul><li>net/http 包基础</li><li>handler 与 ServeMux</li><li>中间件模式</li><li>路由库：gin / chi / echo</li><li>JSON 编解码 + struct tag</li><li>请求验证 validator</li><li>优雅停机</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 93 Tue</div><div><div class="day-title">gRPC 服务</div><div class="day-bullets"><ul><li>Protobuf 定义、IDL</li><li>protoc 生成 Go 代码</li><li>server / client 完整写法</li><li>4 种调用模式实战</li><li>interceptor（拦截器）</li><li>错误码 / 元数据 / 超时</li><li>gRPC reflection</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 94 Wed</div><div><div class="day-title">数据库访问</div><div class="day-bullets"><ul><li>database/sql 包</li><li>连接池配置</li><li>sqlx 增强</li><li>GORM ORM</li><li>事务管理</li><li>migration 工具（goose、migrate）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 95 Thu</div><div><div class="day-title">服务注册与发现</div><div class="day-bullets"><ul><li>注册中心：Consul / etcd / Nacos</li><li>客户端发现 vs 服务端发现</li><li>心跳与健康检查</li><li>配置中心模式</li><li>分布式配置热更新</li><li>k8s 内置服务发现（DNS + Service）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 96 Fri 🔧</div><div><div class="day-title">LAB：完整微服务</div><div class="day-bullets"><ul><li>写一个 Go HTTP + gRPC 双协议服务</li><li>调另一个 service</li><li>接 PostgreSQL</li><li>单元测试 + 集成测试</li><li>构建 Docker 镜像</li><li>本地 docker-compose 联调</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 97 Sat 🔐</div><div><div class="day-title">内网渗透概览</div><div class="day-bullets"><ul><li>红队 kill chain：侦察 → 武器化 → 投递 → 利用 → 持久化 → 横向移动 → 目标达成</li><li>信息收集：端口扫描、服务识别（nmap / masscan）</li><li>横向移动：SOCKS 代理（frp / Stowaway / nps）</li><li>SSH tunneling 技巧</li><li>持久化：cron / systemd unit / SSH key</li><li>痕迹清理思路</li><li>蓝队视角的检测点（异常进程、可疑出网、日志异常）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 98 Sun 🌐</div><div><div class="day-title">Go + Python 协作 + 周复盘</div><div class="day-bullets"><ul><li>典型架构：Go 写网关 + Python 写推理</li><li>跨语言通信选择（gRPC vs HTTP vs IPC）</li><li>共享数据结构（protobuf 作为契约）</li><li>性能对比与场景选型</li><li>周复盘 + Week 15 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 15 · 消息中间件</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 99 Mon</div><div><div class="day-title">为什么用消息队列</div><div class="day-bullets"><ul><li>同步 vs 异步通信</li><li>四大用途：解耦、削峰、广播、缓冲</li><li>消息语义：at-most-once / at-least-once / exactly-once</li><li>消息一致性难题</li><li>选型决策树</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 100 Tue</div><div><div class="day-title">Kafka 深入</div><div class="day-bullets"><ul><li>架构：Producer / Broker / Consumer / Topic / Partition / Replica</li><li>持久化机制（log segment）</li><li>Consumer group 与分区分配策略</li><li>offset 管理</li><li>ISR、Leader Election</li><li>Exactly-once 实现（事务 + 幂等 producer）</li><li>性能调优要点</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 101 Wed</div><div><div class="day-title">RabbitMQ + Pulsar</div><div class="day-bullets"><ul><li>AMQP 0.9.1 协议</li><li>Exchange / Queue / Binding / Routing key</li><li>4 种 Exchange 路由模式</li><li>消息确认与重试</li><li>死信队列 DLX</li><li>Pulsar 与 Kafka 对比（存算分离）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 102 Thu</div><div><div class="day-title">Redis 作为消息队列</div><div class="day-bullets"><ul><li>Pub/Sub 模式（at-most-once）</li><li>Stream 类型：XADD / XREAD / XGROUP</li><li>Consumer group + 确认机制</li><li>与专业 MQ 的取舍</li><li>典型场景：异步任务、实时消息</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 103 Fri 🔧</div><div><div class="day-title">LAB：Kafka 实战</div><div class="day-bullets"><ul><li>起 KRaft 模式的单机 Kafka</li><li>用 Go / Python 写 producer + consumer</li><li>测试消息重放</li><li>观察 consumer lag</li><li>用 kafdrop 看 broker 状态</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 104 Sat 🔐</div><div><div class="day-title">API 安全</div><div class="day-bullets"><ul><li>认证：API Key / OAuth 2.0 / OIDC / JWT</li><li>JWT 误用案例：none 算法、key confusion、未验签</li><li>IDOR（Insecure Direct Object Reference）</li><li>SSRF 完整分类与利用</li><li>签名机制：HMAC、时间戳防重放</li><li>BOLA / BFLA（API1-API2 OWASP API Top 10）</li><li>速率限制策略</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 105 Sun 🌐</div><div><div class="day-title">LLM 异步服务设计 + 周复盘</div><div class="day-bullets"><ul><li>同步推理 vs 异步任务的取舍</li><li>队列削峰用于 LLM</li><li>批量推理任务架构</li><li>Webhook 回调模式</li><li>周复盘 + Week 16 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 16 · API 网关 + 服务网格</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 106 Mon</div><div><div class="day-title">API 网关</div><div class="day-bullets"><ul><li>网关的 5 大职责：路由 / 鉴权 / 限流 / 日志 / 协议转换</li><li>Kong / APISIX / Traefik / Envoy 对比</li><li>插件机制</li><li>灰度发布与金丝雀</li><li>蓝绿部署</li><li>多租户网关设计</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 107 Tue</div><div><div class="day-title">限流 + 熔断 + 降级</div><div class="day-bullets"><ul><li>限流算法对比与实现</li><li>分布式限流（Redis + Lua）</li><li>熔断器模式：closed / open / half-open</li><li>Hystrix / Resilience4j / Sentinel</li><li>降级策略与默认值</li><li>客户端限流 vs 服务端限流</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 108 Wed</div><div><div class="day-title">Service Mesh 与 Istio</div><div class="day-bullets"><ul><li>Service Mesh 是什么</li><li>数据平面（Envoy）vs 控制平面（istiod）</li><li>Sidecar 模式</li><li>Istio 资源：VirtualService / DestinationRule / Gateway</li><li>流量切分与灰度</li><li>策略与遥测</li><li>Linkerd 对比</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 109 Thu</div><div><div class="day-title">可观测性进阶</div><div class="day-bullets"><ul><li>OpenTelemetry 标准</li><li>tracing 数据模型：span / trace / context</li><li>三大支柱：metrics / logs / traces</li><li>采样策略（head-based vs tail-based）</li><li>关联三大信号</li><li>eBPF 观测：Pixie / Parca</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 110 Fri 🔧</div><div><div class="day-title">LAB：网关 + 监控</div><div class="day-bullets"><ul><li>用 APISIX 起网关</li><li>配置 JWT 鉴权 + 限流插件</li><li>接 Prometheus 抓指标</li><li>压测触发限流</li><li>看 Grafana 面板</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 111 Sat 🔐</div><div><div class="day-title">零信任 + mTLS</div><div class="day-bullets"><ul><li>零信任理念：never trust, always verify</li><li>BeyondCorp 模型</li><li>mTLS 工作原理与实现</li><li>SPIFFE / SPIRE 工作负载身份</li><li>服务身份 vs 用户身份</li><li>身份联邦</li><li>K8s 中的零信任落地</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 112 Sun 🌐</div><div><div class="day-title">Phase 4 综合 + Phase 5 预告</div><div class="day-bullets"><ul><li>一个完整的微服务架构图绘制</li><li>从 ingress → 网关 → mesh → 服务 → 数据库的完整路径</li><li>本阶段复盘 + 数据库章节预告</li></ul></div></div></div>
+</div>
+
+<div class="phase-title" id="p5">Phase 5 · 数据库与存储（Week 17-20）</div>
+
+<h2>Week 17 · PostgreSQL</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 113 Mon</div><div><div class="day-title">关系数据库基础</div><div class="day-bullets"><ul><li>关系模型与集合理论基础</li><li>SQL 关键语法快速过</li><li>范式：1NF / 2NF / 3NF / BCNF</li><li>反范式的取舍</li><li>PostgreSQL vs MySQL 对比</li><li>常见数据类型与选型</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 114 Tue</div><div><div class="day-title">索引</div><div class="day-bullets"><ul><li>B-tree 索引原理（多叉平衡树）</li><li>Hash / GIN（全文 + 数组）/ GiST（几何） / BRIN</li><li>聚簇 vs 非聚簇索引</li><li>覆盖索引、回表</li><li>联合索引最左前缀原则</li><li>索引失效场景</li><li>部分索引、表达式索引</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 115 Wed</div><div><div class="day-title">事务 + 隔离 + MVCC</div><div class="day-bullets"><ul><li>ACID 完整含义</li><li>隔离级别：read uncommitted / committed / repeatable read / serializable</li><li>4 大异常：脏读 / 不可重复读 / 幻读 / 写偏</li><li>MVCC 原理（PG 多版本实现）</li><li>WAL 预写日志</li><li>VACUUM 与表膨胀</li><li>死锁检测</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 116 Thu</div><div><div class="day-title">查询优化</div><div class="day-bullets"><ul><li>EXPLAIN / EXPLAIN ANALYZE 解读</li><li>统计信息 ANALYZE</li><li>优化器原理</li><li>Join 算法：nested loop / hash join / merge join</li><li>常见慢查询模式</li><li>pg_stat_statements 找慢查询</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 117 Fri 🔧</div><div><div class="day-title">LAB：PG 实战</div><div class="day-bullets"><ul><li>本地起 PG，建表</li><li>百万行数据生成</li><li>对比有无索引的查询性能</li><li>看执行计划演变</li><li>pgbench 压测</li><li>用 pgcli 提升体验</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 118 Sat 🔐</div><div><div class="day-title">SQL 注入深入</div><div class="day-bullets"><ul><li>经典 union-based 注入</li><li>boolean-based 盲注</li><li>time-based 盲注</li><li>二阶注入</li><li>ORM 绕过案例</li><li>NoSQL 注入</li><li>防御：参数化查询、最小权限、WAF</li><li>sqlmap 工具用法</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 119 Sun 🌐</div><div><div class="day-title">复制 + 备份 + 周复盘</div><div class="day-bullets"><ul><li>流复制（物理复制）</li><li>逻辑复制：发布订阅</li><li>同步 vs 异步复制</li><li>读写分离架构</li><li>PITR 时间点恢复</li><li>pg_dump / pg_basebackup</li><li>周复盘 + Week 18 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 18 · Redis</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 120 Mon</div><div><div class="day-title">Redis 基础 + 数据结构</div><div class="day-bullets"><ul><li>5 大基础类型：string / list / hash / set / sorted set</li><li>高级类型：HyperLogLog / Bitmap / Stream / GEO</li><li>内部实现：SDS / 跳表 / ziplist / intset</li><li>单线程模型 + IO 多路复用</li><li>6.0+ 多线程网络</li><li>过期策略</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 121 Tue</div><div><div class="day-title">持久化</div><div class="day-bullets"><ul><li>RDB 快照原理</li><li>AOF 日志（append-only file）</li><li>AOF 重写</li><li>混合持久化（4.0+）</li><li>持久化选择权衡</li><li>故障恢复流程</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 122 Wed</div><div><div class="day-title">集群</div><div class="day-bullets"><ul><li>主从复制（PSYNC）</li><li>哨兵 Sentinel：failover、quorum</li><li>Cluster 模式：16384 槽位、CRC16</li><li>客户端路由（MOVED / ASK）</li><li>一致性哈希 vs 槽位映射</li><li>跨槽位事务限制</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 123 Thu</div><div><div class="day-title">使用模式与陷阱</div><div class="day-bullets"><ul><li>缓存模式：cache-aside / read-through / write-through / write-behind</li><li>缓存穿透 / 击穿 / 雪崩 + 各自方案</li><li>分布式锁：SET NX EX + Lua + token 校验</li><li>Redlock 算法及争议</li><li>限流：固定窗口 / 滑动窗口 / 令牌桶（Lua 实现）</li><li>大 key / 热 key 问题</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 124 Fri 🔧</div><div><div class="day-title">LAB：Redis 实战</div><div class="day-bullets"><ul><li>起 3 主 3 从 cluster</li><li>性能测试 redis-benchmark</li><li>模拟缓存雪崩 + 验证缓解方案</li><li>写 Lua 脚本实现分布式限流</li><li>用 RedisInsight 看数据</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 125 Sat 🔐</div><div><div class="day-title">Redis 安全</div><div class="day-bullets"><ul><li>未授权访问漏洞历史（默认无密码）</li><li>主从复制 RCE 漏洞详解</li><li>恶意 Lua 脚本</li><li>缓存投毒攻击场景</li><li>慢查询 DoS</li><li>防御：ACL（6.0+）、bind、protected-mode、密码、rename-command</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 126 Sun 🌐</div><div><div class="day-title">LLM 服务中的 Redis + 周复盘</div><div class="day-bullets"><ul><li>用 Redis 做 LLM 限流 + 配额</li><li>会话存储（多轮对话上下文）</li><li>KV cache 元数据</li><li>实时排行榜（Tool 调用统计）</li><li>周复盘 + Week 19 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 19 · 向量数据库 + RAG</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 127 Mon</div><div><div class="day-title">向量数据库基础</div><div class="day-bullets"><ul><li>为什么需要向量数据库（embedding 时代）</li><li>向量空间与相似度度量：cosine / dot product / Euclidean</li><li>暴力检索的代价</li><li>近似最近邻 ANN 算法概览</li><li>HNSW 算法详解（分层导航图）</li><li>IVF 倒排索引</li><li>PQ 乘积量化压缩</li><li>召回率 vs 速度的权衡</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 128 Tue</div><div><div class="day-title">主流向量数据库对比</div><div class="day-bullets"><ul><li>FAISS（Meta，库非服务）</li><li>Milvus（云原生、分布式）</li><li>pgvector（PG 扩展、SQL 友好）</li><li>Qdrant（Rust 实现）</li><li>Weaviate（带 schema、混合检索）</li><li>Chroma（轻量、开发友好）</li><li>选型决策矩阵</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 129 Wed</div><div><div class="day-title">RAG 架构</div><div class="day-bullets"><ul><li>RAG pipeline 全景</li><li>chunking 策略：固定大小 / 语义 / 递归</li><li>embedding 模型选择</li><li>检索 + reranker 两阶段</li><li>hybrid search（向量 + BM25）</li><li>context 拼接策略</li><li>评估指标：召回@k、MRR、答案准确率</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 130 Thu</div><div><div class="day-title">Embedding 工程</div><div class="day-bullets"><ul><li>常用 embedding 模型对比（OpenAI、BGE、E5、Cohere）</li><li>向量维度选择</li><li>量化 embedding（节省存储）</li><li>多模态 embedding（CLIP 等）</li><li>领域适配与微调</li><li>批量 embedding 优化</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 131 Fri 🔧</div><div><div class="day-title">LAB：RAG 端到端</div><div class="day-bullets"><ul><li>用 pgvector 建本地 RAG</li><li>chunk + embed + 索引化</li><li>查询 + 测召回率</li><li>加入 reranker（cohere-rerank 或开源）</li><li>评测一组 ground truth</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 132 Sat 🔐</div><div><div class="day-title">检索投毒 + indirect prompt injection（重点）</div><div class="day-bullets"><ul><li>知识库投毒攻击模型</li><li>恶意文档构造（SEO style + prompt 注入）</li><li>indirect prompt injection 完整案例库</li><li>跨用户信息泄露场景</li><li>工具调用劫持</li><li>防御：内容过滤、来源标记、prompt 隔离、输出审查</li><li>SecGPT 等防御框架</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 133 Sun 🌐</div><div><div class="day-title">向量数据库性能调优 + 周复盘</div><div class="day-bullets"><ul><li>索引参数调优（HNSW M / ef）</li><li>分片与副本</li><li>预热与冷启动</li><li>更新策略</li><li>周复盘 + Week 20 预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 20 · 对象存储 + 时序数据库 + 数据安全</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 134 Mon</div><div><div class="day-title">对象存储</div><div class="day-bullets"><ul><li>对象存储 vs 块存储 vs 文件存储</li><li>S3 协议核心 API</li><li>桶 / 对象 / 版本</li><li>多部分上传 multipart upload</li><li>预签名 URL（临时访问授权）</li><li>生命周期策略</li><li>跨区复制</li><li>MinIO 自建</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 135 Tue</div><div><div class="day-title">时序数据库</div><div class="day-bullets"><ul><li>时序数据特性（时间维度、追加为主）</li><li>Prometheus TSDB 内部结构</li><li>InfluxDB / VictoriaMetrics / TimescaleDB 对比</li><li>压缩算法：delta-of-delta、Gorilla</li><li>下采样 + 保留策略</li><li>PromQL 入门</li><li>用于 LLM 监控的指标设计</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 136 Wed</div><div><div class="day-title">大数据存储概览</div><div class="day-bullets"><ul><li>HDFS 设计基础</li><li>Parquet / ORC 列式存储</li><li>数据湖 vs 数据仓库 vs 湖仓一体</li><li>Delta Lake / Iceberg / Hudi</li><li>LLM 训练数据 pipeline 视角</li><li>对象存储 + 元数据 表的现代架构</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 137 Thu</div><div><div class="day-title">存储选型实战</div><div class="day-bullets"><ul><li>OLTP vs OLAP vs 时序 vs 向量 vs 对象 决策树</li><li>Agent 安全产品的完整存储栈设计</li><li>会话数据 / 审计日志 / 知识库 / 模型权重各自落地</li><li>成本与性能权衡</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 138 Fri 🔧</div><div><div class="day-title">LAB：MinIO + Prometheus</div><div class="day-bullets"><ul><li>起 MinIO 单机</li><li>用 boto3 操作 S3 API</li><li>生命周期策略实验</li><li>起 Prometheus 抓自定义 metrics</li><li>用 Thanos / Mimir 实现长期存储</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 139 Sat 🔐</div><div><div class="day-title">数据脱敏 + 密钥管理</div><div class="day-bullets"><ul><li>数据分类分级（公开 / 内部 / 机密 / 高度机密）</li><li>脱敏策略：masking / tokenization / pseudonymization / 差分隐私</li><li>加密：传输中（TLS）+ 静态（KMS / SSE）</li><li>密钥管理：Vault / AWS KMS / GCP KMS</li><li>SOPS GitOps 友好密钥</li><li>密钥轮转</li><li>BYOK / HYOK 模式</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 140 Sun 🌐</div><div><div class="day-title">Phase 5 综合 + Phase 6 预告</div><div class="day-bullets"><ul><li>Agent 安全产品的完整数据栈</li><li>用户数据流 / 审计流 / 模型流</li><li>本阶段复盘 + 分布式章节预告</li></ul></div></div></div>
+</div>
+
+<div class="phase-title" id="p6">Phase 6 · 分布式 + 综合实战（Week 21-24）</div>
+
+<h2>Week 21 · 分布式系统理论</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 141 Mon</div><div><div class="day-title">分布式系统基础</div><div class="day-bullets"><ul><li>为什么分布式系统难</li><li>8 大错误假设（Fallacies of Distributed Computing）</li><li>时钟问题（绝对时间不可靠）</li><li>逻辑时钟 / 向量时钟 / TrueTime</li><li>故障模型：crash-stop / crash-recovery / 拜占庭</li><li>网络分区与脑裂</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 142 Tue</div><div><div class="day-title">CAP + 一致性模型</div><div class="day-bullets"><ul><li>CAP 定理精确表述</li><li>BASE 哲学</li><li>一致性模型谱系：linearizability / sequential / causal / eventual</li><li>PACELC 扩展</li><li>读写一致性配置：N / R / W</li><li>典型系统的 CAP 选择</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 143 Wed</div><div><div class="day-title">共识算法</div><div class="day-bullets"><ul><li>原子提交：2PC / 3PC 及其问题</li><li>Paxos 概念性理解（不必死磕证明）</li><li>Raft：leader / log / term 三大概念</li><li>Raft leader 选举完整流程</li><li>Raft 日志复制</li><li>拜占庭容错算法概览（PBFT）</li><li>etcd 内部用 Raft 的实战</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 144 Thu</div><div><div class="day-title">分布式存储</div><div class="day-bullets"><ul><li>复制策略：单主 / 多主 / 无主</li><li>分片策略：hash / range / lookup</li><li>一致性哈希深入</li><li>Gossip 协议</li><li>反熵机制</li><li>Cassandra / DynamoDB 设计借鉴</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 145 Fri 🔧</div><div><div class="day-title">LAB：Raft 实战</div><div class="day-bullets"><ul><li>起 3 节点 etcd 集群</li><li>观察 leader election</li><li>模拟节点故障</li><li>看日志复制过程</li><li>用 etcdctl 操作</li><li>制造网络分区</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 146 Sat 🔐</div><div><div class="day-title">分布式系统攻击面</div><div class="day-bullets"><ul><li>拜占庭故障与防御</li><li>Eclipse 攻击（围攻单节点）</li><li>Sybil 攻击（伪造多身份）</li><li>共识层攻击</li><li>时钟攻击</li><li>LLM 分布式推理的潜在攻击</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 147 Sun 🌐</div><div><div class="day-title">综合 + Week 22 预告</div><div class="day-bullets"><ul><li>典型分布式系统案例梳理</li><li>分布式系统设计中的常见陷阱</li><li>本周复盘</li></ul></div></div></div>
+</div>
+
+<h2>Week 22 · 高可用 + 混沌工程</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 148 Mon</div><div><div class="day-title">可用性指标</div><div class="day-bullets"><ul><li>SLI / SLO / SLA 完整定义</li><li>错误预算 error budget</li><li>不同 9 数对应的允许停机时长</li><li>MTBF / MTTR / MTTF</li><li>SLO 的多窗口告警（burn rate）</li><li>谷歌 SRE 实践</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 149 Tue</div><div><div class="day-title">高可用模式</div><div class="day-bullets"><ul><li>主备 / 主主 / 多活</li><li>同城双活 / 异地多活</li><li>异地容灾</li><li>灾难恢复 RTO / RPO</li><li>金丝雀部署</li><li>蓝绿部署</li><li>定期演练（DR drill）</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 150 Wed</div><div><div class="day-title">混沌工程</div><div class="day-bullets"><ul><li>混沌工程 4 大原则</li><li>Netflix Chaos Monkey 历史</li><li>故障注入工具：chaos-mesh / Litmus / ChaosBlade / Gremlin</li><li>常见故障注入：网络延迟 / 丢包 / 杀进程 / 磁盘满</li><li>稳态假设的建立</li><li>实验的 blast radius 控制</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 151 Thu</div><div><div class="day-title">系统设计案例</div><div class="day-bullets"><ul><li>设计 URL shortener</li><li>设计 chat 服务（千万用户）</li><li>设计 LLM gateway（多模型 + 限流 + 计费）</li><li>容量估算方法</li><li>瓶颈分析方法论</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 152 Fri 🔧</div><div><div class="day-title">LAB：混沌实验</div><div class="day-bullets"><ul><li>K8s 上部署 chaos-mesh</li><li>对 LLM 推理服务注入网络延迟</li><li>杀 Pod 测试 readiness</li><li>磁盘填满测试</li><li>观察服务降级表现</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 153 Sat 🔐</div><div><div class="day-title">供应链 + log4shell 复盘</div><div class="day-bullets"><ul><li>log4shell 漏洞机制深入（JNDI + LDAP）</li><li>影响范围与教训</li><li>依赖混淆攻击（dependency confusion）</li><li>typosquatting / namespace hijack</li><li>SBOM（软件物料清单）</li><li>镜像投毒</li><li>模型权重供应链风险</li><li>SLSA framework</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 154 Sun 🌐</div><div><div class="day-title">综合 + Week 23 预告</div><div class="day-bullets"><ul><li>SRE 视角的服务运行</li><li>事故复盘文化（blameless postmortem）</li><li>本周复盘</li></ul></div></div></div>
+</div>
+
+<h2>Week 23 · LLM 服务化深入 + Agent 架构</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 155 Mon</div><div><div class="day-title">LLM 推理引擎全景</div><div class="day-bullets"><ul><li>vLLM 详解</li><li>SGLang（RadixAttention）</li><li>TensorRT-LLM</li><li>TGI (HuggingFace)</li><li>llama.cpp / MLC-LLM（端侧）</li><li>选型决策矩阵</li><li>性能对比</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 156 Tue</div><div><div class="day-title">推理网关</div><div class="day-bullets"><ul><li>多模型路由（按 model / 按用户 / 按 cost）</li><li>模型版本管理与 A/B</li><li>fallback 策略</li><li>计费与配额</li><li>缓存层（前置 KV cache）</li><li>LiteLLM / OneAPI 类网关</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 157 Wed</div><div><div class="day-title">Agent 系统架构</div><div class="day-bullets"><ul><li>Agent 核心组件：planner / executor / memory / tools</li><li>tool calling 协议（OpenAI function calling、MCP）</li><li>沙箱设计（语言级 vs 进程级 vs VM）</li><li>记忆系统：short-term / long-term / episodic</li><li>计划-执行-反思循环</li><li>错误恢复</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 158 Thu</div><div><div class="day-title">多 Agent 协同</div><div class="day-bullets"><ul><li>Agent-to-Agent 通信协议（A2A）</li><li>共享内存模式 vs 消息传递</li><li>编排框架：LangGraph / CrewAI / AutoGen</li><li>多 Agent 一致性</li><li>角色分工模式</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 159 Fri 🔧</div><div><div class="day-title">LAB：完整 Agent 服务</div><div class="day-bullets"><ul><li>实现一个有 tool calling 的 Agent（vLLM + 自写网关）</li><li>接 pgvector 做 RAG</li><li>用 Docker 沙箱执行 code tool</li><li>部署到本地 K8s</li><li>压测 + 监控</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 160 Sat 🔐</div><div><div class="day-title">LLM / Agent 攻击面综述（你本职的本职）</div><div class="day-bullets"><ul><li>prompt injection 完整分类：direct / indirect / multimodal</li><li>jailbreak 技术演进史</li><li>tool abuse 攻击</li><li>code execution 沙箱逃逸</li><li>memory poisoning（长程记忆攻击）</li><li>multi-agent 攻击（社工链）</li><li>data exfiltration（通过 tool / response）</li><li>防御纵深策略：input filter / instruction hierarchy / output filter / human in the loop</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 161 Sun 🌐</div><div><div class="day-title">综合 + Week 24 预告</div><div class="day-bullets"><ul><li>典型 Agent 安全产品形态梳理</li><li>本周复盘 + 毕业项目预告</li></ul></div></div></div>
+</div>
+
+<h2>Week 24 · 毕业项目：10 万用户 Agent 安全平台</h2>
+<div class="week-card">
+  <div class="day"><div class="day-tag">Day 162 Mon</div><div><div class="day-title">需求与目标</div><div class="day-bullets"><ul><li>核心功能：实时检测 / 策略管理 / 审计 / 告警</li><li>非功能：10 万 DAU、P99 < 200ms、99.9% 可用</li><li>合规要求</li><li>核心场景拆解</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 163 Tue</div><div><div class="day-title">架构设计</div><div class="day-bullets"><ul><li>容量估算（QPS、存储、带宽）</li><li>技术栈选型（综合应用前 23 周知识）</li><li>组件交互图</li><li>关键决策点</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 164 Wed</div><div><div class="day-title">数据流设计</div><div class="day-bullets"><ul><li>推理路径（同步、低延迟）</li><li>审计路径（异步、高吞吐）</li><li>监控路径</li><li>反馈/学习路径</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 165 Thu</div><div><div class="day-title">部署架构</div><div class="day-bullets"><ul><li>K8s 集群规划（多 AZ）</li><li>GPU 节点池设计</li><li>数据库部署模式</li><li>CI/CD 流水线</li><li>灰度发布策略</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 166 Fri 🔧</div><div><div class="day-title">LAB：写设计文档</div><div class="day-bullets"><ul><li>完整一份 system design doc</li><li>包含组件图、时序图、数据模型</li><li>容量计算</li><li>降级方案</li><li>渐进式上线计划</li></ul></div></div></div>
+  <div class="day sec"><div class="day-tag">Day 167 Sat 🔐</div><div><div class="day-title">威胁建模 + 红蓝对抗</div><div class="day-bullets"><ul><li>STRIDE 方法应用</li><li>攻击树构建</li><li>红蓝演练流程设计</li><li>表格化威胁清单</li><li>对应防御措施</li></ul></div></div></div>
+  <div class="day"><div class="day-tag">Day 168 Sun 🎓</div><div><div class="day-title">毕业总结</div><div class="day-bullets"><ul><li>24 周完整回顾</li><li>你现在能做什么（能力评估）</li><li>下一步学习方向建议</li><li>推荐进阶资源</li><li>结业证书 :)</li></ul></div></div></div>
+</div>
+
+</body>
+</html>

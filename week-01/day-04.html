@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 04 · CPU 调度：内核怎么决定下一个跑谁</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 04 · CPU 调度：内核怎么决定下一个跑谁</h1>
+  <div class="meta">Week 01 · 周四 · 2026-05-16 · 主线：操作系统核心 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：你的笔记本只有 8 个 CPU 核，但<code>ps -e | wc -l</code>大概会告诉你正在跑着 400 多个进程。它们怎么"同时"运行？答案是——它们根本没在同时运行，是内核以毫秒级精度在不停地切换，让你<strong>看上去</strong>它们在同时跑。今天我们深入这个"魔术"：内核每一次时钟中断都在问自己<span class="key">「下一个该跑谁？」</span>这个看似简单的问题。我们会回答 7 个问题：调度想达成什么目标？为什么 Linux 不再用古老的 O(1) 调度器而改用 CFS？<code>nice</code>那个 -20 到 +19 的怪数字到底什么意思？<code>uptime</code>里 <code>load average: 2.43</code> 这个 2.43 究竟在说什么？读完今天你会发现，<span class="term">调度器</span>是整个操作系统里最像一个真实"AI"的子系统——它无时无刻不在做权衡。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">调度目标：内核的五个相互冲突的 KPI</a></li>
+  <li><a href="#s2">抢占式 vs 协作式：谁有权打断谁</a></li>
+  <li><a href="#s3">调度类（scheduling class）：Linux 的多策略框架</a></li>
+  <li><a href="#s4">历史课：O(n) → O(1) → CFS</a></li>
+  <li><a href="#s5">CFS 详解：vruntime + 红黑树</a></li>
+  <li><a href="#s6">nice 与实时优先级：用户能怎么影响调度</a></li>
+  <li><a href="#s7">CPU 亲和性与 load average</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 调度目标：内核的五个相互冲突的 KPI</h2>
+
+<p>在讲算法之前必须先讲"想要什么"。调度器并不是简单地"公平"那么浪漫，它在不停地在 5 个互相矛盾的目标之间走钢丝：</p>
+
+<ul>
+  <li><span class="term">吞吐量（throughput）</span>：单位时间完成多少工作。批处理服务器关心这个。</li>
+  <li><span class="term">延迟 / 响应性（latency）</span>：一个事件来了多久能被处理。交互式应用、实时音视频、推理 API 关心这个。</li>
+  <li><span class="term">公平（fairness）</span>：相同优先级的任务能拿到大体相等的 CPU。</li>
+  <li><span class="term">CPU 利用率（utilization）</span>：让昂贵的硬件别空转。</li>
+  <li><span class="term">优先级遵守</span>：高优先级任务确实要比低优先级先跑。</li>
+</ul>
+
+<p>这五条互相打架。为了响应性必须频繁切换 → 上下文切换开销变大 → 吞吐量降低；为了公平不偏袒 → 高优先级任务被稀释；为了利用率让 CPU 满载 → 突然来个交互任务延迟就高。<span class="key">没有一个调度器能同时把这五条做到最好</span>，你能做的是<strong>挑一个平衡点</strong>。这就是为什么 Linux 有"调度类"——不同任务用不同的调度器。</p>
+
+<p><strong>数学家视角</strong>：这是一个典型的多目标优化（Pareto front）。调度算法本质上是在帕累托前沿上选一个点。CFS 选的是「在公平约束下最大化交互响应」，而实时调度器 SCHED_FIFO 选的是「死守优先级，公平和利用率都让步」。</p>
+
+<h2 id="s2">2. 抢占式 vs 协作式：谁有权打断谁</h2>
+
+<p>这是调度的根本设计选择。</p>
+
+<h3>协作式（cooperative / non-preemptive）</h3>
+
+<p>任务必须<strong>主动</strong>让出 CPU，调度器才能切到下一个。早期 Windows 3.x、经典 macOS 9 都是这样。优点：上下文切换可控，没并发竞态。<span class="key">致命缺点</span>：一个 bug 让进程死循环，整个系统就卡死，因为它永远不主动放手。</p>
+
+<p>你今天还能在哪里见到协作式？<strong>Python 的 asyncio</strong>。<code>async def</code> 里的协程必须自己 <code>await</code> 才把控制权交还事件循环。如果你写了 <code>while True: pass</code>，你的整个 asyncio 程序就僵了。这就是协作式的现代回声。</p>
+
+<h3>抢占式（preemptive）</h3>
+
+<p>内核可以在<strong>任何时刻</strong>把当前进程踢下 CPU，换一个上去。Linux、Windows NT 之后、macOS X 之后都是抢占式。怎么做到？靠两样东西：</p>
+
+<ul>
+  <li><span class="term">定时中断（timer interrupt）</span>：CPU 上有个硬件定时器（在 x86 上常见的是 HPET 或 local APIC timer），每隔固定时间（典型是 1ms 到 10ms，对应 <code>CONFIG_HZ</code> 250 或 1000）触发一次中断，强制进入内核。</li>
+  <li>进入内核后，内核检查"现在跑的这家伙是不是该换了？"，如果是，调用 <code>schedule()</code> 把它换下来。</li>
+</ul>
+
+<p>抢占式让一个死循环的进程不会卡死系统，但代价是<strong>必须处理并发</strong>：当你正在改一个共享变量时，可能下一毫秒你就被换走了，等回来时变量已经被别人改过。这就是为什么我们需要锁。</p>
+
+<div class="note">
+<strong>内核态也能抢占？</strong> Linux 2.6 之前内核态不可抢占（用户态可以）——一旦你陷入 syscall，必须等它跑完才能切。现代 Linux 是 <code>PREEMPT</code> 内核，连内核态都能被抢占，所以实时性更好（PREEMPT_RT 补丁更激进，几乎所有内核代码都可抢占）。
+</div>
+
+<h2 id="s3">3. 调度类（scheduling class）：Linux 的多策略框架</h2>
+
+<p>Linux 不止有一个调度器。它把任务分成几类，每类有自己的算法。当 CPU 空闲要找下一个任务时，内核<strong>按优先级遍历调度类</strong>，第一个有 ready 任务的类就赢。优先级从高到低：</p>
+
+<table>
+<tr><th>调度类</th><th>策略常量</th><th>用途</th><th>优先级</th></tr>
+<tr><td>stop_sched_class</td><td>—</td><td>内核内部用，迁移任务、停 CPU</td><td>最高</td></tr>
+<tr><td>dl_sched_class</td><td>SCHED_DEADLINE</td><td>EDF 算法，硬实时</td><td>↓</td></tr>
+<tr><td>rt_sched_class</td><td>SCHED_FIFO / SCHED_RR</td><td>软实时，固定优先级 1-99</td><td>↓</td></tr>
+<tr><td>fair_sched_class</td><td>SCHED_OTHER / SCHED_BATCH</td><td>CFS，普通进程（99%）</td><td>↓</td></tr>
+<tr><td>idle_sched_class</td><td>SCHED_IDLE</td><td>系统真没事干才跑</td><td>最低</td></tr>
+</table>
+
+<p>你写的所有 Python 脚本、Chrome、Slack 默认全是 <code>SCHED_OTHER</code>，由 CFS 调度。<code>SCHED_FIFO/RR</code> 给音频驱动、工业控制这种「丢一帧就完蛋」的场景。<code>SCHED_DEADLINE</code> 是 3.14 内核才加的，给你「这个任务必须在 5ms 内完成 2ms 的计算」这种声明式表达。</p>
+
+<p>查看一个进程的调度类：</p>
+
+<pre><code># 看自己 shell 用什么策略
+chrt -p $$
+# 输出形如：pid 12345's current scheduling policy: SCHED_OTHER
+#         pid 12345's current scheduling priority: 0</code></pre>
+
+<h2 id="s4">4. 历史课：O(n) → O(1) → CFS</h2>
+
+<p>Linux 的调度器换过 3 次，每次都因为前一个撞墙了。理解为什么换，比记参数重要得多。</p>
+
+<h3>O(n) 调度器（Linux 2.4，1999-2003）</h3>
+
+<p>每次要挑下一个进程时，遍历<strong>所有 runnable 任务</strong>，给每个算一个 goodness 分数，挑最高的。任务越多越慢——这是字面意义的 O(n)。多核扩展性更糟，因为有一把全局大锁。100 个进程还行，10000 个就卡。</p>
+
+<h3>O(1) 调度器（Linux 2.6，2003-2007，Ingo Molnar）</h3>
+
+<p>每个 CPU 维护两个数组：active 和 expired，每个里面 140 个优先级桶（runqueue）。挑下一个任务 = 找到 active 数组里最高优先级的非空桶 = 用位图查 + 队首取，<strong>常数时间</strong>。任务用完时间片就从 active 挪到 expired；active 空了把两者交换。革命性进步，但有个不优雅的地方：<span class="key">交互性的判断靠一堆复杂启发式</span>——"睡得多的任务说明是交互式，奖励它"，公式靠经验拼凑，调起来很玄学，社区戏称"调度器是个黑魔法咒语"。</p>
+
+<h3>CFS（Completely Fair Scheduler，Linux 2.6.23，2007-至今，Ingo Molnar）</h3>
+
+<p>Ingo 推翻自己重写。核心思想极其优雅：<strong>"假装我们有无限多核 CPU，每个进程都拿到 1/N 的算力。"</strong> 真实硬件只有 8 个核，做不到，所以我们用一个数字 <span class="term">vruntime</span>（虚拟运行时间）来记录每个任务"欠 / 拿到"了多少 CPU，然后总是挑 vruntime 最小的跑。<span class="key">不再需要启发式</span>，公平性是数学自然出来的。</p>
+
+<h2 id="s5">5. CFS 详解：vruntime + 红黑树</h2>
+
+<p>这是今天的核心。把 CFS 拆成三个机制：</p>
+
+<h3>vruntime：欠债簿</h3>
+
+<p>每个任务都有个 <code>vruntime</code>（单位是纳秒）。它<strong>跟实际运行时间不完全相等</strong>，会按优先级加权：</p>
+
+<pre><code>delta_vruntime = delta_real_time × (NICE_0_WEIGHT / task_weight)
+
+NICE_0_WEIGHT = 1024
+nice -10 task_weight ≈ 9548   → vruntime 涨得慢 → 跑得多
+nice   0 task_weight  = 1024
+nice +10 task_weight ≈ 110    → vruntime 涨得快 → 跑得少</code></pre>
+
+<p>同样真实跑 1ms，nice 值低（高优先级）的任务 vruntime 只涨一点点，nice 值高的涨好几倍。<strong>调度器规则只有一条：永远挑 vruntime 最小的跑</strong>。优先级自然就被尊重了，因为低优 nice 的总是显得"很饿"。</p>
+
+<h3>红黑树：找最小元素的数据结构</h3>
+
+<p>所有 runnable 任务按 vruntime 插入一棵<strong>红黑树</strong>（自平衡 BST）。挑下一个跑谁 = 拿最左节点。插入、删除都是 O(log n)。比 O(1) 调度的位图慢一点，但带来的公平性和简洁性值得。</p>
+
+<div class="ascii">          [vruntime=10]            <- 当前正在跑的（暂时不在树里）
+                                       跑完一会儿后用更新的 vruntime 重新插回
+   红黑树：按 vruntime 排序
+              (15)
+             /    \
+          (12)    (20)
+          /  \    /  \
+       (11)(13)(18)(25)   <- pick_next: 拿最左边那个 (11)</div>
+
+<h3>调度延迟（sched_latency）</h3>
+
+<p>CFS 不是"想跑多久跑多久"。它有个目标周期 <code>sched_latency_ns</code>（默认 6ms），保证每个 runnable 任务<strong>在这个周期内至少跑一次</strong>。如果有 N 个任务，每人理论分到 <code>6ms / N</code>。但任务太多时会限制最小切片 <code>sched_min_granularity_ns</code>（默认 0.75ms），避免切换开销吃光 CPU。</p>
+
+<pre><code># 看 CFS 实时调度参数
+sysctl -a 2>/dev/null | grep sched_
+
+# 看某个进程的 vruntime（se.vruntime）
+cat /proc/$$/sched</code></pre>
+
+<h2 id="s6">6. nice 与实时优先级：用户能怎么影响调度</h2>
+
+<p>普通用户调 CFS 任务用 <code>nice</code>，root 用户调实时任务用 <code>chrt</code>。</p>
+
+<h3>nice 值（-20 到 +19）</h3>
+
+<p>历史包袱：低数字 = 优先级高（"不 nice"，霸占 CPU），高数字 = 优先级低（"很 nice"，让给别人）。每差一级 nice，CPU 时间约差 1.25 倍（精确说是 1024/820 ≈ 1.25 的指数级）。nice -20 比 nice 0 大概多拿 100 倍的 CPU。</p>
+
+<pre><code># 起一个低优先级进程（nice 10）
+nice -n 10 python heavy_compute.py
+
+# 改已经跑着的进程
+renice 5 -p 12345
+
+# 普通用户只能调高 nice 值（让自己更让步）
+# 调低 nice（更霸道）需要 CAP_SYS_NICE 或 root</code></pre>
+
+<h3>实时优先级（1-99）</h3>
+
+<pre><code># 把一个进程改成 SCHED_FIFO，优先级 50
+sudo chrt -f -p 50 $PID
+
+# SCHED_FIFO：跑到自己 yield 或被更高优先级抢
+# SCHED_RR ：跟 FIFO 一样，但同优先级之间轮转</code></pre>
+
+<p><strong>警告</strong>：实时进程会饿死所有普通进程。一个写死循环的 SCHED_FIFO 进程能把整台机器冻住。所以内核有 <code>sched_rt_runtime_us</code> 限制（默认每 1s 给实时任务最多 950ms，留 50ms 给普通任务）。</p>
+
+<h2 id="s7">7. CPU 亲和性与 load average</h2>
+
+<h3>CPU 亲和性（affinity）</h3>
+
+<p>默认 CFS 会在多核之间迁移任务做负载均衡，但迁移有代价：<span class="key">L1/L2 缓存全废</span>，新核要重新加载内存到缓存。对 cache 敏感的工作负载（高频交易、DPDK 收包、推理引擎）会"钉"住核：</p>
+
+<pre><code># 把进程绑定到核 2 和 3
+taskset -c 2,3 -p 12345
+
+# 起新进程就绑
+taskset -c 0-3 python serve.py
+
+# 查看绑定
+taskset -p 12345  # 返回 mask，0xf = 核 0-3</code></pre>
+
+<p>vLLM、TensorRT-LLM 这类推理引擎在生产环境基本都会做亲和性绑定 + isolcpus 隔离 CPU + 中断打散，目标是<strong>消除尾延迟抖动</strong>。</p>
+
+<h3>load average：被严重误解的三个数字</h3>
+
+<p><code>uptime</code> 或 <code>w</code> 会显示：</p>
+
+<pre><code>$ uptime
+ 22:31:05 up 12 days,  3:21,  2 users,  load average: 1.23, 0.85, 0.42</code></pre>
+
+<p>三个数字分别是 1 / 5 / 15 分钟的<strong>平均 runnable + uninterruptible 任务数</strong>。<span class="term">注意 Linux 把 D 状态（不可中断睡眠，通常在等磁盘 IO）也算进去了</span>——这跟 BSD/Unix 经典定义不一样，所以 Linux 上 load 高<strong>不一定是 CPU 忙</strong>，可能是磁盘卡。</p>
+
+<ul>
+  <li>在 4 核机器上：load 4.0 = 刚好饱和；load 8.0 = 排队等核的任务跟正在跑的一样多；load 0.5 = CPU 一半空闲。</li>
+  <li>1 分钟值 > 15 分钟值：负载在上升；反之在下降。</li>
+  <li>load 高、CPU 利用率却不高 → 大概率是 D 状态的 IO 阻塞，用 <code>top</code> 看 <code>wa%</code> 或 <code>iostat -x 1</code> 确认。</li>
+</ul>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 推理服务的尾延迟抖动 == 调度抖动。</strong> 你跑一个 vLLM 服务，95% 的请求 50ms 返回，但 P99 突然飙到 500ms。第一反应是查模型，但十有八九是调度问题：你的 Python 进程被迁到了另一个 NUMA 节点的核，或者突然来了个 cron 任务抢了 CPU。解决方案就是今天讲的：<code>taskset</code> 钉核 + <code>isolcpus</code> 内核参数把核留给推理 + <code>chrt</code> 提高优先级。</p>
+
+<p><strong>2. Agent 沙箱里的 fork 炸弹防御。</strong> 让 Agent 跑用户代码的容器里，一旦攻击者塞进 <code>:(){ :|:& };:</code>，子进程指数级增长，CFS 还在尽职地"公平分配"——结果是整台机器 100 万个进程，OOM 之前 load average 飙到几百。防御靠 cgroups 的 <code>pids.max</code> 限制进程数（不是调度的事，但调度暴露了攻击面）。</p>
+
+<p><strong>3. 时间侧信道。</strong> CFS 调度时机和 vruntime 是<strong>可观测</strong>的。在多租户 GPU/CPU 共享环境里，攻击者可以通过测量自己被调度的频率，反推同核上其他租户的活动模式（甚至猜出对方在推理什么模型——不同模型的 attention pattern 导致 CPU 端 token 序列化时机不同）。这是 Spectre 之外的另一类侧信道，研究称为 scheduler side channel。</p>
+
+<p><strong>4. 实时优先级提权。</strong> 如果 Agent 不小心拿到了 <code>CAP_SYS_NICE</code>，它能把自己提到 SCHED_FIFO 高优先级，饿死监控守护进程。这是为什么 K8s SecurityContext 默认不应该给 <code>SYS_NICE</code> capability。</p>
+
+<p><strong>5. load average 是最便宜的入侵检测信号。</strong> 一台只跑 LLM 推理的服务器，load 应该贴近 GPU 利用率而不是 CPU。如果 load 突然飙高但 GPU 不动，要么挖矿木马，要么大模型权重在被偷偷拷贝（IO 阻塞）。把 load average 拉进 Prometheus，配 burn-rate 告警比写 ML 异常检测便宜 100 倍。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手：观察 nice 对 CPU 分配的影响。</strong></p>
+<p>开两个 shell。Shell A 跑 <code>yes &gt; /dev/null</code>，Shell B 跑 <code>nice -n 19 yes &gt; /dev/null</code>（最低优先级）。再开 Shell C 跑 <code>top</code>，按 P 按 CPU 排序，看两个 yes 占用的 %CPU。再把 B 改成 <code>nice -n -10</code>（需要 sudo），对比变化。<strong>预期</strong>：低 nice（高优先级）拿到的 CPU 显著多于高 nice。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察：CFS 的 vruntime。</strong></p>
+<p>跑 <code>cat /proc/self/sched</code>（macOS 上没有 /proc，需要在 Linux 上做，或者用 Docker 起个 ubuntu 容器 <code>docker run -it ubuntu bash</code>）。找到 <code>se.vruntime</code>、<code>se.sum_exec_runtime</code>、<code>nr_switches</code>、<code>nr_voluntary_switches</code>、<code>nr_involuntary_switches</code> 几行，解释每个数字的含义。<strong>预期理解</strong>：voluntary 是自己阻塞让出（IO 等待）、involuntary 是被抢占。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考：load average 解谜。</strong></p>
+<p>一台 16 核机器，<code>uptime</code> 显示 load average: 32.0, 31.5, 28.0，但 <code>top</code> 显示 CPU 用户态 + 内核态加起来才 40%、idle 50%、wa（iowait）10%。问：哪里出了问题？应该从哪些命令查起？（提示：D 状态进程、磁盘 IO 队列、是否在 swap）。写下你的诊断步骤。</p>
+</div>
+
+<div class="next">
+<strong>明日预告（Day 05 · 周五 LAB 🔧）</strong>：把这周的概念全部砸到键盘上——<code>top</code> / <code>htop</code> 怎么读所有列、<code>ps</code> 的高级用法、用 <code>time</code> 测上下文切换开销、<code>perf</code> 工具入门、<code>strace</code> 跟踪一个 Python 进程的 syscall。准备好打开终端，明天我们不读字，只动手。
+</div>
+
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 01 · 计算机系统大图 + 进程的本质</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 01 · 计算机系统大图 + 进程的本质</h1>
+  <div class="meta">Week 01 · 周一 · 2026-05-13 · 主线：操作系统核心 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：你用了多年 Python，但可能从来没回答过这个问题——「你的 <code>python my_script.py</code> 进去之后，到底发生了什么？」今天我们一次性把这个问题搞清楚。我们会从最底层的硬件谈起，逐层向上爬：硬件 → 内核 → 用户空间 → 你的 Python 代码。中途解释 7 个核心概念：<span class="key">系统分层、OS 职责、内核态/用户态、syscall、进程本质、地址空间布局、hello world 的完整旅程</span>。如果今天结束时你能跟同事说清楚「为什么 <code>open()</code> 是个系统调用而 <code>list.append()</code> 不是」，今天就值。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">计算机系统的 4 层架构</a></li>
+  <li><a href="#s2">操作系统的三大职责</a></li>
+  <li><a href="#s3">内核态 vs 用户态：CPU 的两套档位</a></li>
+  <li><a href="#s4">系统调用 syscall：跨越特权边界的桥梁</a></li>
+  <li><a href="#s5">进程的本质：地址空间 + 资源 + PCB</a></li>
+  <li><a href="#s6">进程地址空间布局：text/data/bss/heap/stack</a></li>
+  <li><a href="#s7">一个 hello world 从源码到运行的完整旅程</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 计算机系统的 4 层架构</h2>
+
+<p>现代计算机系统不是单一层，它是被有意切成多层的——每一层只对上一层暴露干净的接口，藏起内部的脏活累活。从下到上：</p>
+
+<div class="ascii">┌─────────────────────────────────────────────────┐
+│  Layer 4: 用户应用（你的 Python / Chrome / vim）    │   <- 你天天写代码的地方
+├─────────────────────────────────────────────────┤
+│  Layer 3: 系统库 + 运行时（libc / glibc / CPython） │   <- printf、open、malloc 来自这里
+├─────────────────────────────────────────────────┤
+│  Layer 2: 操作系统内核（Linux Kernel / XNU / NT）   │   <- 调度、内存、文件系统、网络栈
+├─────────────────────────────────────────────────┤
+│  Layer 1: 硬件（CPU / RAM / 磁盘 / 网卡）           │   <- 真正干活的物理设备
+└─────────────────────────────────────────────────┘</div>
+
+<p>这个分层有几个重要含义：</p>
+
+<ul>
+  <li><strong>每一层只信任更底层的一层</strong>。你的 Python 信任 CPython 解释器；CPython 信任 glibc；glibc 信任 Linux 内核；内核信任 CPU。</li>
+  <li><strong>越往下，特权越高、出错代价越大</strong>。Layer 4 写挂了你的进程死，Layer 2 写挂了整个机器死，Layer 1 物理损坏只能换硬件。</li>
+  <li><strong>越往下，接口越窄、越稳定</strong>。Linux 内核给用户空间暴露的<span class="term">系统调用接口（约 400 个 syscall）</span>几十年都不变。POSIX 标准 1988 年定下来，今天的代码还能跑。</li>
+</ul>
+
+<p>你做 AI 时熟悉的所有东西——PyTorch、CUDA、HuggingFace transformers——全部坐在 Layer 4。它们要做任何"摸得到真实世界"的事（读文件、申请显存、发网络包），<strong>都得通过 Layer 2 这道门</strong>。Layer 2 就是<span class="key">操作系统</span>。</p>
+
+<h2 id="s2">2. 操作系统的三大职责</h2>
+
+<p>不同教材会列出五条十条，但归根结底只有三件事：</p>
+
+<h3>职责一：资源管理（仲裁者）</h3>
+
+<p>你机器上的 CPU 核数、内存大小、磁盘空间是有限的，但同时跑着几百个进程：Chrome、Spotify、Slack、IDE、Python 解释器、Docker daemon……谁能用 CPU？谁能用多少内存？谁先磁盘 IO？这些都由内核来仲裁。</p>
+
+<p><strong>类比</strong>：操作系统是机场塔台。飞机（进程）想起飞降落都得报告，塔台分配跑道（CPU 核）、滑行道（内存带宽）、停机位（磁盘 IO），还要处理紧急情况（中断）。</p>
+
+<h3>职责二：抽象（翻译官）</h3>
+
+<p>硬件的真实接口非常难用。磁盘真正暴露的是「扇区编号 + 字节偏移」，网卡暴露的是 DMA 寄存器，键盘暴露的是扫描码。如果让每个程序都直接和硬件打交道，你的 Python 代码会变成这样：</p>
+
+<pre><code># 没有 OS 抽象的世界，写一个读文件要这样
+disk_io_send_command(controller=0, sector=14921, count=8, dma_addr=0x7000)
+wait_for_interrupt(irq=14)
+# ...还有 800 行错误处理</code></pre>
+
+<p>有了 OS 抽象，你的代码变成这样：</p>
+
+<pre><code>with open('data.txt') as f:
+    content = f.read()</code></pre>
+
+<p>OS 把磁盘抽象成「文件」，把网卡抽象成「socket」，把内存抽象成「连续的虚拟地址空间」。<strong>这些抽象是数十年软件工程的最大馈赠之一</strong>。</p>
+
+<h3>职责三：隔离（保安）</h3>
+
+<p>你机器上同时跑的几百个进程互不信任：Chrome 不应该能读到你 1Password 的内存；恶意网页加载的脚本不应该能改你的系统文件。OS 通过<span class="term">虚拟内存 + 权限位 + 进程命名空间</span>等机制强制隔离。</p>
+
+<p>这是<strong>所有沙箱、所有安全产品的底层基石</strong>。Docker 容器、K8s Pod、Agent 沙箱，本质上都是在用 OS 提供的隔离原语搭高级建筑。</p>
+
+<h2 id="s3">3. 内核态 vs 用户态：CPU 的两套档位</h2>
+
+<p>OS 怎么保证你的 Python 代码不能直接乱碰硬件、不能读别人的内存？答案是：<strong>CPU 自己提供硬件支持</strong>。</p>
+
+<p>现代 x86_64 CPU 内部有一个叫 <span class="term">CPL（Current Privilege Level）</span>的 2 位状态字段，可以是 0/1/2/3，分别对应 4 个特权级（"环"）。实际上只用两个：</p>
+
+<table>
+<tr><th>特权级</th><th>俗称</th><th>能干什么</th><th>谁住在这里</th></tr>
+<tr><td>Ring 0</td><td>内核态 / kernel mode</td><td>所有特权指令：操作页表、IO 端口、关中断、改 CR3 等</td><td>Linux 内核、设备驱动</td></tr>
+<tr><td>Ring 3</td><td>用户态 / user mode</td><td>只能用普通指令：算术、跳转、内存读写（且仅限自己的地址空间）</td><td>你的 Python、Chrome、所有 app</td></tr>
+</table>
+
+<p>关键性质：<strong>CPU 在硬件层面禁止用户态执行特权指令</strong>。你写一段 C 代码 <code>asm("cli")</code>（关中断指令）试图关闭中断，CPU 会立刻抛出 <span class="term">General Protection Fault</span>，内核把你 kill 掉。这是物理上的保护，不是软件约定。</p>
+
+<p>这就引出一个新问题：用户态做不了特权操作，但用户程序又必须做这些事（比如读文件，本质上是要操作磁盘控制器）。怎么办？答案就是 <span class="key">系统调用 syscall</span>。</p>
+
+<h2 id="s4">4. 系统调用 syscall：跨越特权边界的桥梁</h2>
+
+<p>系统调用是用户态向内核态请求服务的<strong>受控通道</strong>。你不能随便跳到内核代码执行，但你可以"敲门"——通过专门的指令，告诉 CPU「我要执行 N 号系统调用」，CPU 帮你切换到 Ring 0，跳到内核预先注册好的入口函数。</p>
+
+<h3>syscall 怎么发生</h3>
+
+<p>在 x86_64 Linux 上，syscall 的流程大致是：</p>
+
+<ol>
+  <li>用户程序把<strong>系统调用号</strong>（比如 <code>open</code> 是 2、<code>read</code> 是 0、<code>write</code> 是 1）放到寄存器 <code>%rax</code></li>
+  <li>把<strong>参数</strong>放到约定的寄存器：<code>%rdi, %rsi, %rdx, %r10, %r8, %r9</code></li>
+  <li>执行 <code>syscall</code> 指令</li>
+  <li>CPU 切换到 Ring 0，跳转到 MSR 寄存器 <code>LSTAR</code> 指向的内核函数 <code>entry_SYSCALL_64</code></li>
+  <li>内核查表（<code>sys_call_table</code>），根据 <code>%rax</code> 找到对应的内核函数</li>
+  <li>执行（比如 <code>sys_read</code>），结果放到 <code>%rax</code></li>
+  <li><code>sysret</code> 指令切回 Ring 3，控制权回到用户程序</li>
+</ol>
+
+<p>整个过程是 CPU 硬件 + 内核软件配合完成的，对用户程序来说看起来"只是调了个函数"。</p>
+
+<h3>哪些是 syscall，哪些不是</h3>
+
+<p>这是一个最容易混淆的点。看下面的 Python 代码：</p>
+
+<pre><code>x = [1, 2, 3]
+x.append(4)              # 不是 syscall，纯 Python/C 内存操作
+y = sum(x)               # 不是 syscall
+
+with open('a.txt') as f: # open() 触发 syscall: openat
+    data = f.read()      # f.read() 触发 syscall: read
+
+import socket
+s = socket.socket()      # 触发 syscall: socket
+s.connect(('1.1.1.1',80))# 触发 syscall: connect
+
+print('hi')              # 触发 syscall: write (写到 stdout fd=1)</code></pre>
+
+<p>规律：<strong>只要涉及"和外部打交道"（文件、网络、进程管理、内存大块申请），就一定要走 syscall</strong>。纯内存计算、纯字节码执行不需要。</p>
+
+<div class="note">
+<strong>一个直观的数字</strong>：syscall 的开销大约是 1000-3000 个 CPU 周期（因为要切换特权级、保存寄存器、刷一些缓存）。普通函数调用只有 10-50 个周期。这就是为什么<strong>高性能服务要批量做 IO（一次 syscall 处理多个连接），而不是每个连接一次 syscall</strong>——后者就是后面要讲的 <code>epoll</code> 的核心动机。
+</div>
+
+<h3>查看你的 Python 程序发了哪些 syscall</h3>
+
+<p>Linux 上有个神器 <code>strace</code>（macOS 上对应 <code>dtruss</code>，但需要关 SIP）。它能拦截一个进程发出的所有 syscall。试一下：</p>
+
+<pre><code># Linux:
+strace -e openat,read,write python3 -c "print('hi')"
+
+# 你会看到类似（精简后）：
+openat(AT_FDCWD, "/usr/lib/python3/...", O_RDONLY|...) = 3
+read(3, "...", 4096) = 1234
+...
+write(1, "hi\n", 3) = 3
++++ exited with 0 +++</code></pre>
+
+<p>每一行就是一次"敲门"。一个简单的 <code>print('hi')</code> 背后可能有<strong>几百次 syscall</strong>（加载 Python 解释器要打开数十个 .so 文件、读它们的元信息……）。</p>
+
+<h2 id="s5">5. 进程的本质：地址空间 + 资源 + PCB</h2>
+
+<p>现在我们有了基础。终于可以问：「进程到底是什么？」</p>
+
+<p>一个常见的错误理解是：「进程就是一个正在运行的程序」。这话不算错，但太模糊。更精确的定义：</p>
+
+<p style="background: var(--callout-bg); padding: 16px; border-radius: 6px; border-left: 4px solid var(--accent);">
+<strong>进程 = 一个独立的虚拟地址空间 + 一组关联资源 + 内核里的控制块（PCB）</strong>
+</p>
+
+<h3>独立的虚拟地址空间</h3>
+
+<p>每个进程都"以为自己独占整个内存"。OS 给每个进程一份虚拟地址空间，64 位系统上理论上是 256 TB（实际限制小很多）。两个进程都看到地址 <code>0x400000</code>，但映射到的真实物理内存<strong>完全不同</strong>。这种"看起来共享、实则隔离"的魔法是由 <span class="term">MMU + 多级页表</span>实现的（Week 2 详谈）。</p>
+
+<h3>一组关联资源</h3>
+
+<p>除了地址空间，进程还拥有：</p>
+<ul>
+  <li><strong>文件描述符表</strong>：进程当前打开的所有文件、socket、管道。fd=0/1/2 分别是 stdin/stdout/stderr。</li>
+  <li><strong>信号处理函数表</strong>：进程对 SIGTERM、SIGINT 等信号的响应。</li>
+  <li><strong>当前工作目录、umask、环境变量、用户/组 ID</strong>。</li>
+  <li><strong>进程间关系</strong>：父进程 PID、子进程列表、进程组、会话。</li>
+</ul>
+
+<h3>内核里的 PCB（task_struct）</h3>
+
+<p>内核为每个进程维护一个叫 <span class="term">PCB（Process Control Block）</span>的数据结构。在 Linux 内核源码里它叫 <code>struct task_struct</code>，定义在 <code>include/linux/sched.h</code>，约 3000 行，包含 200+ 字段。重要的几个：</p>
+
+<pre><code>struct task_struct {
+    pid_t          pid;             // 进程 ID
+    pid_t          tgid;            // 线程组 ID（同一进程的所有线程共享）
+    struct task_struct *real_parent;// 父进程指针
+    struct list_head children;      // 子进程链表
+    long           state;           // R/S/D/T/Z（明天讲）
+    struct mm_struct *mm;           // 地址空间描述符 ← 关键
+    struct files_struct *files;     // 文件描述符表 ← 关键
+    struct signal_struct *signal;   // 信号处理
+    cred_t        *cred;            // 用户身份与权限
+    // ... 还有 100+ 字段
+};</code></pre>
+
+<p>所以当你 <code>ps aux</code> 看到一个进程，你实际上看到的是内核里一个 <code>task_struct</code> 的可视化投影。<strong>这个结构体就是进程的"身份证 + 户口本"</strong>。</p>
+
+<h2 id="s6">6. 进程地址空间布局：text / data / bss / heap / stack</h2>
+
+<p>每个进程的虚拟地址空间不是混沌的，它被分成若干 <span class="term">段（segment）</span>。从低地址到高地址：</p>
+
+<div class="ascii">高地址 0xFFFFFFFFFFFFFFFF
+       ┌──────────────────────────────┐
+       │ 内核空间（用户态访问不到）        │  ← Ring 0 区域，所有进程共享同一份内核映射
+       ├──────────────────────────────┤
+       │ 栈 stack（向下增长 ↓）          │  ← 函数调用栈帧、局部变量
+       │                              │
+       │ ░░░░ 巨大的未使用空隙 ░░░░       │
+       │                              │
+       │ mmap 映射区（动态库、大块内存）   │  ← 加载的 .so 文件、mmap 申请的内存
+       │                              │
+       │ 堆 heap（向上增长 ↑）           │  ← malloc / Python 对象池
+       ├──────────────────────────────┤
+       │ bss 段（未初始化全局变量）       │  ← 进程启动时清零
+       │ data 段（已初始化全局变量）      │  ← 从可执行文件加载
+       │ text 段（代码段，只读）         │  ← 你的指令在这里，CPU 从这里 fetch
+       └──────────────────────────────┘
+低地址 0x0000000000000000（实际从 0x400000 左右起，下面是 NULL 检测区）</div>
+
+<p>几个关键事实：</p>
+
+<ul>
+  <li><strong>text 段是只读的</strong>。你的代码在里面，CPU 一条条 fetch 执行。如果某个 bug 试图写 text 段（比如野指针），CPU 抛 <code>SIGSEGV</code>，进程挂掉。</li>
+  <li><strong>栈和堆相向增长</strong>，中间是巨大的空隙。Python 每个函数调用都在栈上分配一个 frame；<code>x = [1,2,3]</code> 这个 list 对象在堆上。</li>
+  <li><strong>栈的大小默认有限</strong>（Linux 上通常 8MB）。无限递归 → 栈溢出 → SIGSEGV。这是 Python 把递归深度默认限制在 1000 的原因。</li>
+  <li><strong>mmap 区域非常重要</strong>。所有动态库（libc.so、Python 解释器自己的 .so、PyTorch 的 .so）都被 mmap 进来。模型权重文件也可以用 mmap 加载（节省内存）。</li>
+</ul>
+
+<p>你可以用一个命令直接看你 Python 进程的地址空间（Linux 上）：</p>
+
+<pre><code># 起一个 Python，让它睡着
+python3 -c "import time; time.sleep(1000)" &
+PID=$!
+
+# 看它的地址空间
+cat /proc/$PID/maps | head -30
+# 你会看到一堆地址范围，标着 r-xp(代码) / rw-p(数据) / r--p(只读) 等</code></pre>
+
+<h2 id="s7">7. 一个 hello world 从源码到运行的完整旅程</h2>
+
+<p>把今天讲的所有东西串起来。看这个最简单的 C 程序：</p>
+
+<pre><code>// hello.c
+#include &lt;stdio.h&gt;
+int main() {
+    printf("hello, world\n");
+    return 0;
+}</code></pre>
+
+<p>它从源码到屏幕显示 "hello, world" 的完整旅程是：</p>
+
+<h3>阶段 A：编译期（你按下回车之前）</h3>
+
+<ol>
+  <li><strong>预处理</strong>：<code>cpp</code> 展开 <code>#include</code>，把 stdio.h 的内容拷进来。</li>
+  <li><strong>编译</strong>：<code>cc1</code> 把 C 源码翻译成汇编。</li>
+  <li><strong>汇编</strong>：<code>as</code> 把汇编翻译成机器码，产出 <code>hello.o</code>（重定位目标文件）。</li>
+  <li><strong>链接</strong>：<code>ld</code> 把 <code>hello.o</code> 和 libc 等库链接，产出 <code>hello</code>（ELF 可执行文件）。</li>
+</ol>
+
+<h3>阶段 B：加载与执行</h3>
+
+<p>当你在 shell 里敲 <code>./hello</code>：</p>
+
+<ol>
+  <li>Shell 自己也是一个进程。它先 <code>fork()</code> 系统调用，复制出一个子进程（COW 优化，下次讲）。</li>
+  <li>子进程立即 <code>execve("./hello", ...)</code> 系统调用，请求内核「把我变成 ./hello 这个程序」。</li>
+  <li>内核接管：解析 ELF 头，分配一个新的 <code>task_struct</code>（如果是 exec 则<strong>替换</strong>原有的地址空间）。</li>
+  <li>把 text 段、data 段从 hello 文件 mmap 进虚拟地址空间。bss 段清零。</li>
+  <li>映射动态链接器 <code>ld-linux-x86-64.so</code>，跳到它的入口。</li>
+  <li>动态链接器查找并 mmap 所有依赖（libc.so.6 等），完成重定位。</li>
+  <li>跳转到 hello 程序的 <code>_start</code> 函数（不是 main！），经过 glibc 的初始化代码，最终调用 <code>main</code>。</li>
+</ol>
+
+<h3>阶段 C：执行 printf</h3>
+
+<ol>
+  <li><code>printf("hello, world\n")</code> 是个 libc 函数，先做格式化，把字符串写到 stdio 缓冲区。</li>
+  <li>缓冲区遇到 <code>\n</code> 触发 flush，调用 <code>write(1, "hello, world\n", 13)</code> 系统调用。</li>
+  <li>CPU 执行 <code>syscall</code> 指令，切到 Ring 0。</li>
+  <li>内核 <code>sys_write</code> 把字符串拷到 stdout 对应的设备（终端模拟器的 pty）。</li>
+  <li>终端模拟器（也是个用户态进程）从 pty 读到数据，调用图形栈绘制到屏幕。</li>
+  <li><code>main</code> 返回，glibc 调用 <code>exit(0)</code> → <code>sys_exit_group</code> 系统调用，内核回收 <code>task_struct</code> 和地址空间。</li>
+</ol>
+
+<p>从源码到屏幕，<strong>跨了 4 个抽象层、若干次特权级切换、几十次 syscall</strong>。这就是你每次跑 Python 的本质——只是 Python 解释器把流程包装得更长。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p>今天讲的概念都是底层基础，但它们直接决定你的 Agent 安全产品能做什么、不能做什么：</p>
+
+<p><strong>1. 沙箱的最强边界来自 OS 层级</strong>。LLM Agent 经常要执行不可信代码（用户给的 tool input、模型生成的 Python）。任何"语言层沙箱"都不够安全——Python 的 <code>RestrictedPython</code>、JavaScript 的 vm 模块都被反复绕过。<strong>真正可靠的沙箱基于 OS 隔离原语</strong>：fork 出独立进程 + seccomp 限制 syscall + cgroups 限制资源 + 独立 namespace 屏蔽 host 信息。你今天理解的"特权级 + syscall + 进程隔离"就是这套沙箱的物理基础。</p>
+
+<p><strong>2. 监控可疑行为的最佳层级是 syscall</strong>。LLM 生成的代码再千变万化，要做"实际危害的事"（开后门、读敏感文件、连外网）<strong>必然要发 syscall</strong>。所以基于 eBPF/Falco 监控 syscall（特别是 <code>execve</code>、<code>connect</code>、<code>open</code>）是最不可绕过的检测方法。你今天对 syscall 流程的理解是 Week 2 周六 eBPF 课的前置。</p>
+
+<p><strong>3. Prompt injection 的最终落点是进程创建</strong>。攻击者通过 indirect prompt injection 让 Agent 调一个 tool，最终意图往往是「在你的机器上创建一个新进程做坏事」（典型如反弹 shell）。理解 <code>fork + execve</code> 流程，你就能在最关键的点设监控：「任何 LLM 触发的 execve 都要审查可执行文件路径和参数」。</p>
+
+<p><strong>4. 推理服务的资源耗尽攻击都映射到 OS 概念</strong>。攻击者发超长 prompt → 申请大量内存 → 触发 OOM killer → 杀掉你的进程。攻击者诱导循环生成 → 占满 GPU + CPU → CFS 调度器无法保证其他用户的服务质量。今天的"资源管理"这一节直接对应这些场景。</p>
+
+<p><strong>5. 你以后看大模型 OOM 的诊断思路</strong>：先看 <code>dmesg</code> 是不是 kernel OOM killer 出手；查 <code>/proc/[pid]/status</code> 的 <code>VmRSS</code> 字段看进程真实内存；ps 看 STAT 列；strace 看是否阻塞在某个 syscall。这些工具你以后会反复用。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>10 分钟 · 系统调用追踪</strong></p>
+<p>在 mac 终端运行下列命令，把你看到的内容理一遍：</p>
+<pre><code># 1. 看一个 Python 启动会触碰多少文件（系统库加载）
+# mac 上用 dtrace 或者直接看进程行为：
+python3 -c "import sys; print(sys.version)" 2>&1 | head -5
+
+# 2. 看你 shell 自己的 PID 和它的限制
+echo "我的 shell PID: $$"
+ulimit -a   # 看你的 shell 的各种资源限制</code></pre>
+<p>问题：找到 "stack size" 那一行的值（字节数），换算成 MB。<strong>这个值就是你 Python 程序的栈空间上限</strong>，超过会爆栈。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>15 分钟 · 进程对象的实地观察</strong></p>
+<p>开两个终端窗口。窗口 A 跑一个无限 sleep 的 Python：</p>
+<pre><code>python3 -c "import time; time.sleep(99999)"</code></pre>
+<p>窗口 B 找到这个进程的信息：</p>
+<pre><code>ps aux | grep "sleep(99999)" | grep -v grep
+# 记下 PID
+ps -p &lt;PID&gt; -o pid,ppid,user,stat,vsz,rss,command
+# vsz = 虚拟内存大小（地址空间总量）
+# rss = 实际占用物理内存</code></pre>
+<p>问题：vsz 和 rss 通常相差很大，为什么？回顾今天讲的虚拟地址空间概念。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考题</strong></p>
+<p>你的 Agent 安全产品要"在用户 LLM 调用任何工具前做一次审查"。下面三种实现方案，从安全角度排序（最安全到最不安全），并说明理由：</p>
+<ol type="A">
+  <li>在 Python 层拦截 <code>tool.execute()</code> 调用</li>
+  <li>在系统库层拦截 <code>libc</code> 的 <code>execve()</code> 函数</li>
+  <li>在内核层用 eBPF 拦截 <code>execve</code> syscall</li>
+</ol>
+<p>提示：想清楚每一层的"逃逸面"——攻击者要绕过这一层需要什么能力？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 02 · 进程深入：生命周期与状态机</strong>。我们会拆解 PCB 的关键字段、画清进程状态机（R/S/D/T/Z 到底什么意思）、深入 fork/exec/wait/exit 系统调用，并搞懂"为什么 Python 多进程会留下僵尸"和"为什么 init/systemd 是所有孤儿进程的养父"。
+</div>
+
+</body>
+</html>

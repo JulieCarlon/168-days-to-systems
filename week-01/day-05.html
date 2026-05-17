@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 05 · LAB 进程与调度动手</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+    --lab-bg: #f0f9ff;
+    --lab-border: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--accent); border-radius: 6px; padding: 20px 24px; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .leadin { background: var(--callout-bg); border-left: 3px solid var(--accent-soft); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .lab-block {
+    background: var(--lab-bg);
+    border-left: 4px solid var(--lab-border);
+    padding: 14px 20px;
+    border-radius: 6px;
+    margin: 24px 0;
+  }
+  .lab-block h3 { margin-top: 8px; color: #0369a1; }
+  .lab-step { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .lab-step .label { display: inline-block; background: #0369a1; color: white; font-size: 11px; padding: 1px 8px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+  .expect { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 3px; }
+  .expect strong { color: #92400e; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .connect { background: var(--callout-bg); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent-soft); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+  .warn { background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: #991b1b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 05 · LAB 进程与调度动手 🔧</h1>
+  <div class="meta">Week 01 · 周五（序号）· 2026-05-15 · 主线：操作系统核心 · 预计 30min 阅读 + 1.5h 上机</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：前面 4 天讲了进程、线程、地址空间、调度——全是概念。今天<strong>全部上机</strong>。一行 <code>ls</code> 都没有的话，那些概念明天就忘了。我们会用 5 组 LAB 把<span class="key">观察工具（top/htop/ps）→ 性能分析（perf/time）→ 系统追踪（strace）→ 调度控制（taskset/nice）→ 进程编程（fork/exec）</span>串起来。所有命令在 mac 上能直接跑（Linux 上更全），输出预期我都标在框里——和你看到的对比一下。
+</div>
+
+<div class="toc">
+<strong>今日实验</strong>
+<ol>
+  <li><a href="#l1">LAB 1：top / htop 字段全解读</a></li>
+  <li><a href="#l2">LAB 2：ps 高级查询</a></li>
+  <li><a href="#l3">LAB 3：用 time 测一次上下文切换的代价</a></li>
+  <li><a href="#l4">LAB 4：strace 跟踪 Python 的全部 syscall</a></li>
+  <li><a href="#l5">LAB 5：taskset + nice 实战</a></li>
+  <li><a href="#l6">LAB 6：Python 实现完整 fork-exec-wait</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+</ol>
+</div>
+
+<div class="warn">
+<strong>平台说明</strong>：你在 mac 上。<code>top</code>、<code>ps</code>、<code>strace</code> 等命令在 mac 和 Linux 上有差异。本文档以 <strong>mac 命令</strong>为主，括号里标 Linux 等价命令。强烈建议你之后在一个 Linux VM / Docker 里把 LAB 重做一遍——LLM 服务实际跑在 Linux 上，差异不能不知道。
+</div>
+
+<h2 id="l1">1. LAB 1：top / htop 字段全解读</h2>
+
+<p><code>top</code> 是看进程状态的入门工具，你一定见过。但 99% 的人只看 CPU% 和 MEM%。今天把所有字段搞清楚。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>在终端运行 <code>top -o cpu</code>（mac）或 <code>top</code>（Linux），观察头部和列。</div>
+
+<pre><code># mac 上
+top -o cpu
+
+# Linux 上更好用的是 htop（要先 brew install htop / apt install htop）
+htop</code></pre>
+
+<div class="expect"><strong>预期</strong>：你会看到顶部几行汇总（系统负载、内存使用），下面是进程列表，按 CPU 占用排序。按 <code>q</code> 退出。</div>
+
+<div class="lab-step"><span class="label">B</span>把头部那行 "load avg" 拆开看。</div>
+
+<p>在 top 顶部找到类似 <code>Load Avg: 1.84, 1.42, 1.36</code> 三个数。这是<strong>过去 1 分钟、5 分钟、15 分钟的平均 load</strong>。Day 4 第 9 节讲过：</p>
+<ul>
+  <li>1.84 是 1 分钟均值，正在上涨说明负载在变重</li>
+  <li>三个数若是 <code>5.0, 1.5, 1.0</code>，说明刚刚突发了高负载，但 15 分钟前正常</li>
+  <li>三个数若是 <code>1.5, 1.5, 1.5</code>，说明稳定状态</li>
+</ul>
+<p>用 <code>sysctl -n hw.ncpu</code>（mac）或 <code>nproc</code>（Linux）看你机器核数。<strong>load / 核数 &gt; 1</strong> 才算真过载。</p>
+
+<div class="lab-step"><span class="label">C</span>解读进程行的关键列（mac 版）。</div>
+
+<table>
+<tr><th>列</th><th>含义</th></tr>
+<tr><td>PID</td><td>进程 ID</td></tr>
+<tr><td>COMMAND</td><td>命令名</td></tr>
+<tr><td>%CPU</td><td>占用 CPU 百分比（单核满 = 100%，多核满 = 100% × 核数）</td></tr>
+<tr><td>TIME</td><td>累计 CPU 时间</td></tr>
+<tr><td>#TH</td><td>线程数</td></tr>
+<tr><td>STATE</td><td>R(running) / S(sleeping) / I(idle) / U(uninterruptible)</td></tr>
+<tr><td>MEM</td><td>占用内存（mac 显示 RSS 真实物理内存）</td></tr>
+<tr><td>VPRVT</td><td>私有虚拟内存</td></tr>
+</table>
+
+<div class="lab-step"><span class="label">D</span>在 top 里按交互键。</div>
+
+<pre><code># mac top 交互键
+o cpu     # 按 CPU 排序
+o mem     # 按内存排序
+e <pid>   # 列出某 PID 的详细
+q         # 退出
+
+# htop（Linux/mac brew 装）的快捷键更丰富
+F2  设置
+F3  搜索
+F4  过滤
+F9  发送信号（kill 一个进程）
+F10 退出</code></pre>
+</div>
+
+<h2 id="l2">2. LAB 2：ps 高级查询</h2>
+
+<p><code>ps</code> 比 <code>top</code> 更适合"我要一次性看清楚某个状态"。今天玩几个进阶用法。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>看你自己 shell 的完整信息。</div>
+<pre><code>ps -p $$ -o pid,ppid,user,stat,nice,pri,vsz,rss,command
+# $$ 是当前 shell 的 PID</code></pre>
+
+<div class="expect"><strong>解读</strong>：<code>pri</code> 是优先级数字（越小越高，CFS 下 nice=0 通常 pri=20）。<code>vsz</code>(虚拟大小) 通常远大于 <code>rss</code>(实际物理内存)——因为虚拟地址空间预订了一堆没真用的区域。</div>
+
+<div class="lab-step"><span class="label">B</span>找出系统里最耗内存的 5 个进程。</div>
+<pre><code>ps aux | sort -k 6 -rn | head -5
+# 第 6 列是 RSS（实际物理内存 KB）
+
+# 等价的 Linux 写法（mac 也能用）：
+ps -eo pid,user,rss,command --sort=-rss | head -5</code></pre>
+
+<div class="lab-step"><span class="label">C</span>找出某个特定状态的进程（mac 上看 R 和 D 较少见，因为是桌面系统）。</div>
+<pre><code># 所有非睡眠的进程
+ps aux | awk '$8 !~ /S/ {print}'
+
+# 找 Z(zombie) 进程
+ps aux | awk '$8 ~ /Z/ {print}'  # 通常 0 个，但如果你 Python 多进程编程有 bug 就会有</code></pre>
+
+<div class="lab-step"><span class="label">D</span>看进程树。</div>
+<pre><code># Linux:
+pstree -p $$
+
+# mac 没自带 pstree，用 ps 模拟
+ps -ef | grep $$
+# 或者 brew install pstree</code></pre>
+
+<div class="expect"><strong>思考</strong>：你的 shell 的 PPID（父进程）是什么？它的 PPID 又是什么？一路追到 PID=1（launchd 在 mac / systemd 在 Linux）——所有进程的最终祖先。</div>
+</div>
+
+<h2 id="l3">3. LAB 3：用 time 测一次上下文切换的代价</h2>
+
+<p>Day 1/4 都讲了上下文切换有开销，但到底多少？用 <code>time</code> 实测一下。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>跑一个只做 fork 的小程序。</div>
+
+<pre><code>cat &gt; /tmp/fork_bench.py &lt;&lt;'EOF'
+import os, sys
+N = 10000
+for _ in range(N):
+    pid = os.fork()
+    if pid == 0:
+        os._exit(0)
+    else:
+        os.waitpid(pid, 0)
+EOF
+
+time python3 /tmp/fork_bench.py</code></pre>
+
+<div class="expect"><strong>预期</strong>：在现代 mac 上 ~1-3 秒。换算下来每次 fork+exit+wait 约 100-300μs。考虑这里有<strong>两次进程创建/销毁 + 多次上下文切换</strong>。</div>
+
+<div class="lab-step"><span class="label">B</span>对比"不 fork，只切换的"：用线程 yield。</div>
+
+<pre><code>cat &gt; /tmp/thread_bench.py &lt;&lt;'EOF'
+import threading, time
+N = 100000
+e = threading.Event()
+count = [0]
+
+def worker():
+    for _ in range(N):
+        count[0] += 1
+        # 主动让出 CPU（不一定真切换，但提示调度器）
+        time.sleep(0)
+
+threads = [threading.Thread(target=worker) for _ in range(4)]
+t0 = time.perf_counter()
+for t in threads: t.start()
+for t in threads: t.join()
+print(f"took {time.perf_counter()-t0:.2f}s")
+EOF
+
+python3 /tmp/thread_bench.py</code></pre>
+
+<div class="expect"><strong>解读</strong>：你会发现这<strong>不一定比纯 CPU 计算快</strong>——<code>time.sleep(0)</code> 触发的调度切换累加起来，可能比你少做的工作还多。<span class="key">这就是为什么"线程不是免费的"</span>。</div>
+
+<div class="lab-step"><span class="label">C</span>看一个进程总共被切换了多少次。</div>
+
+<pre><code># Linux 上
+cat /proc/$$/status | grep -E "voluntary|nonvoluntary"
+# voluntary_ctxt_switches: 自己主动让出（等 IO、调 sleep）
+# nonvoluntary_ctxt_switches: 被时间片打断强制切走
+
+# mac 上没有 /proc，但可以用：
+ps -o pid,minflt,majflt -p $$
+# minflt/majflt 不是切换次数，是 page fault 次数，但能感受调度器的"动作"</code></pre>
+</div>
+
+<h2 id="l4">4. LAB 4：strace 跟踪 Python 的全部 syscall</h2>
+
+<p><code>strace</code>（Linux）/ <code>dtruss</code>（mac）能拦截一个进程的所有系统调用。这是<strong>调试 / 安全审计的瑞士军刀</strong>。</p>
+
+<div class="warn">
+<strong>mac 注意</strong>：<code>dtruss</code> 默认需要关闭 SIP（系统完整性保护）或在特殊用户下运行。如果你不想动 SIP，跳过本节实操，改在 Linux Docker 里做（命令在最后给）。
+</div>
+
+<div class="lab-block">
+<h3>步骤（Linux / Linux Docker）</h3>
+
+<div class="lab-step"><span class="label">A</span>看一个 Python <code>print('hi')</code> 到底跑了多少 syscall。</div>
+
+<pre><code># 简单跟踪
+strace -e openat,read,write python3 -c "print('hi')" 2&gt;&amp;1 | head -30
+
+# 统计每种 syscall 的次数
+strace -c python3 -c "print('hi')" 2&gt;&amp;1 | tail -20</code></pre>
+
+<div class="expect"><strong>预期</strong>：<code>strace -c</code> 的输出会告诉你不同 syscall 的调用次数 + 累计时间。一个最简单的 <code>print('hi')</code> 在 Python 3 上会触发 <strong>几百次</strong> syscall——绝大多数是加载解释器、import 模块。这就是为什么<span class="key">Python 启动慢</span>。</div>
+
+<div class="lab-step"><span class="label">B</span>看你的 Python 程序碰了哪些文件。</div>
+
+<pre><code>strace -e openat -f python3 -c "
+import json
+with open('/tmp/test.json', 'w') as f:
+    json.dump({'a': 1}, f)
+" 2&gt;&amp;1 | grep -E "openat|tmp" | head -20</code></pre>
+
+<p>这种"看进程到底碰了哪些文件"在安全审计里非常关键——比如你怀疑某个 Python 工具偷偷读了你的 SSH key，strace 一跑直接看清楚。</p>
+
+<div class="lab-step"><span class="label">C</span>mac 上的近似替代方案。</div>
+
+<pre><code># mac 上看一个进程打开的文件（不是 syscall 级，但有用）
+lsof -p $$ | head -20
+
+# fs_usage 看文件系统级活动（需要 sudo）
+sudo fs_usage -w -f filesys python3</code></pre>
+</div>
+
+<h2 id="l5">5. LAB 5：taskset + nice 实战</h2>
+
+<p>Day 4 讲了 CPU 亲和性和 nice。今天动手看效果。</p>
+
+<div class="warn">
+<strong>mac 注意</strong>：mac 内核默认不允许用户空间程序绑核（taskset 没有等价命令）。本节用 Linux 命令演示，你可以在一个 Linux VM 或 Docker 里跑。<br>
+<strong>临时方案</strong>：<code>docker run --rm -it ubuntu:22.04 bash</code>，里面 <code>apt install util-linux</code> 后就有 taskset。
+</div>
+
+<div class="lab-block">
+<h3>步骤（Linux）</h3>
+
+<div class="lab-step"><span class="label">A</span>看一个进程当前的亲和性。</div>
+<pre><code>taskset -p $$
+# 输出: pid 12345's current affinity mask: ff
+# ff = 11111111 二进制，说明能在 8 个核全部上跑</code></pre>
+
+<div class="lab-step"><span class="label">B</span>启动一个 CPU 密集程序绑到核 0。</div>
+<pre><code>taskset -c 0 python3 -c "
+while True: pass" &amp;
+PID=$!
+
+# 看它真的只在核 0 上
+ps -o pid,psr,command -p $PID
+# psr 列就是当前在哪个核
+
+# 用 top 按 1 键展开每个核的 CPU%，看是不是只核 0 在 100%
+top
+# 在 top 里按 1，能看到 CPU0..CPUN 分别的利用率
+
+# 清理
+kill $PID</code></pre>
+
+<div class="lab-step"><span class="label">C</span>nice 的实际效果。</div>
+<pre><code># 起两个一样的任务，一个 nice=0，一个 nice=15
+python3 -c "while True: pass" &amp;
+NORMAL=$!
+nice -n 15 python3 -c "while True: pass" &amp;
+LOWPRI=$!
+
+# 把它们绑到同一个核（这样才能看到调度竞争）
+taskset -cp 0 $NORMAL
+taskset -cp 0 $LOWPRI
+
+sleep 5
+# 看两个进程的 CPU%
+ps -o pid,ni,pcpu,command -p $NORMAL,$LOWPRI
+
+# 清理
+kill $NORMAL $LOWPRI</code></pre>
+
+<div class="expect"><strong>预期</strong>：两个进程绑到同一个核，CPU 总和应该 = 100%。nice=0 的拿 ~76%，nice=15 的拿 ~24%。这就是 Day 4 第 6 节讲的"nice 每差 1，约差 25% CPU 时间"——但要注意 nice 差 15 不是简单乘法，CFS 内部是 1.25^15 ≈ 28× 的权重比。</div>
+</div>
+
+<h2 id="l6">6. LAB 6：Python 实现完整 fork-exec-wait</h2>
+
+<p>把 Day 1-2 讲的进程创建链全部串起来。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>写一个完整的 shell 雏形（30 行 Python）。</div>
+
+<pre><code>cat &gt; /tmp/mini_shell.py &lt;&lt;'EOF'
+"""一个最小化的 shell 实现：fork + exec + wait"""
+import os, sys
+
+def run_one(cmd):
+    pid = os.fork()
+    if pid == 0:
+        # ===== 子进程 =====
+        print(f"  [子] my pid is {os.getpid()}, my parent is {os.getppid()}")
+        # 用 exec 替换地址空间
+        try:
+            os.execvp(cmd[0], cmd)
+        except FileNotFoundError:
+            print(f"  [子] command not found: {cmd[0]}")
+            os._exit(127)
+    else:
+        # ===== 父进程 =====
+        print(f"[父] forked child pid={pid}")
+        finished_pid, status = os.waitpid(pid, 0)
+        exit_code = os.WEXITSTATUS(status)
+        print(f"[父] child {finished_pid} exited with code {exit_code}")
+
+if __name__ == "__main__":
+    while True:
+        line = input("minish&gt; ").strip()
+        if line in ("exit", "quit", ""): break
+        run_one(line.split())
+EOF
+
+python3 /tmp/mini_shell.py</code></pre>
+
+<div class="lab-step"><span class="label">B</span>在 mini_shell 里跑几个命令。</div>
+
+<pre><code>minish&gt; date
+minish&gt; ls /
+minish&gt; echo hello
+minish&gt; false   # 这个会以 exit code 1 退出
+minish&gt; xyz123  # 找不到的命令，child 报错
+minish&gt; exit</code></pre>
+
+<div class="expect"><strong>解读</strong>：你刚刚手写了一个 shell！bash、zsh、fish 内部干的事情核心就是这个三步：<code>fork → exec → wait</code>。多出来的功能（管道、重定向、变量、补全）都是在这个核心上加的料。Day 1 讲的 hello world 旅程，最后一步"shell 调 fork + execve"——你现在亲手实现了。</div>
+
+<div class="lab-step"><span class="label">C</span>挑战：实现孤儿进程和僵尸进程。</div>
+
+<pre><code>cat &gt; /tmp/orphan.py &lt;&lt;'EOF'
+import os, time, sys
+pid = os.fork()
+if pid == 0:
+    # 子进程
+    print(f"  child pid={os.getpid()} parent={os.getppid()}")
+    time.sleep(3)
+    print(f"  child pid={os.getpid()} now parent={os.getppid()}  ← 应该是 init/launchd!")
+    sys.exit(0)
+else:
+    # 父进程立即退出，不 wait
+    print(f"父 pid={os.getpid()} 立即退出，留下子进程")
+    sys.exit(0)
+EOF
+
+python3 /tmp/orphan.py
+sleep 4   # 等子进程打印</code></pre>
+
+<div class="expect"><strong>预期</strong>：第一行打印 <code>parent=&lt;父PID&gt;</code>，第二行打印 <code>parent=1</code>（mac 是 launchd, Linux 是 systemd / init）。<span class="key">这就是孤儿进程被 init 收养的现象</span>——你今天的实验里亲眼看到了。</div>
+</div>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. strace 是 LLM 沙箱的"录音机"</strong>。你的 Agent 安全产品要监控 LLM 生成代码的行为，最可靠的层级就是 syscall。strace 能让你看到一个不可信脚本真正碰了什么。在生产环境用 strace 实时拦截不现实（性能开销 20–50%），所以会换成 eBPF——Week 2 周六会讲。但今天用 strace 直接观察一遍，建立"syscall 视角"的感觉非常重要。</p>
+
+<p><strong>2. nice + cgroups 是不可信代码的两道闸</strong>。LAB 5 你看到了 nice 让低优先级进程拿不到 CPU。但 nice 只能"压低"，不能"封死"——一个 nice=19 的进程在系统空闲时仍能占满 CPU。要真正限制（比如"这个沙箱最多用 0.5 个核"），需要 cgroups，Week 3 会讲。今天先建立"系统提供多种隔离强度"的认识：<code>nice (软) → ulimit (中) → cgroups (硬) → 独立进程 (强) → 独立容器 (更强) → 独立 VM (最强)</code>。每往下一级，隔离更强、开销更大。</p>
+
+<p><strong>3. fork-exec 是攻击落地点</strong>。LAB 6 你实现了 fork+exec 的最小逻辑。攻击者通过 prompt injection 让 Agent 执行恶意 Python，绝大多数后续动作都要走 fork-exec：起一个 nc 反弹 shell、起一个挖矿程序、起一个 ssh 客户端连外网……所以<strong>监控 execve syscall 是最有效的拦截点</strong>。这正是 Falco / Tetragon 这类工具的核心规则之一。</p>
+
+<p><strong>4. top/ps 是上线后的第一道诊断工具</strong>。你的 LLM 服务出现 P99 抖动，先 ssh 到机器跑 <code>top</code> 看：CPU 是不是被某个不该跑的进程占了？看 STATE 列有没有大量 D 状态（IO 卡了）？看 load average 三个数的趋势？这些 30 秒的观察能筛掉一半"看起来很神秘"的问题。</p>
+
+<p><strong>5. 调度抖动是延迟敏感服务的隐形杀手</strong>。一个不绑核、不调 nice 的 LLM 推理服务，跑在与其他工作负载共享的机器上，P99 延迟可能是平均的 5-10 倍。LAB 5 教你的 taskset + nice，加上明天 Week 2 要讲的 cgroups 内存限制，是生产环境的标配三件套。</p>
+</div>
+
+<h2>📝 今日小结</h2>
+
+<p>你今天 hands-on 接触的工具及其用途速查表（建议存下来，未来 24 周经常翻）：</p>
+
+<table>
+<tr><th>工具</th><th>用途</th><th>第一次出现日</th></tr>
+<tr><td><code>top / htop</code></td><td>实时进程状态总览</td><td>Day 5</td></tr>
+<tr><td><code>ps</code></td><td>进程快照查询</td><td>Day 5</td></tr>
+<tr><td><code>time</code></td><td>测程序耗时</td><td>Day 5</td></tr>
+<tr><td><code>strace / dtruss</code></td><td>系统调用追踪</td><td>Day 5</td></tr>
+<tr><td><code>lsof</code></td><td>看进程打开的文件/网络</td><td>Day 5</td></tr>
+<tr><td><code>taskset</code> (Linux)</td><td>CPU 亲和性控制</td><td>Day 5</td></tr>
+<tr><td><code>nice / renice</code></td><td>调整调度优先级</td><td>Day 5</td></tr>
+<tr><td><code>os.fork / os.exec / os.wait</code> (Python)</td><td>进程编程接口</td><td>Day 5</td></tr>
+</table>
+
+<div class="next">
+<strong>明日预告 · Day 06 · 周六 🔐 · Linux 权限与提权基础</strong>。这是本周首个安全主线专题，4 小时密集课。覆盖：Unix 权限模型、SUID/SGID/Sticky bit、sudo 工作原理、Linux capabilities 模型、PAM 认证、常见提权路径（misconfigured SUID、可写 PATH、cron job 写权限、内核 exploit），结尾搭一个本地提权 lab 跑通从 user → root。学完你能跟红队同事对话"我看了 GTFOBins 你这个 lab 用 find 命令就提权了"——是 Agent 安全产品里"沙箱逃逸检测"的前置知识。
+</div>
+
+</body>
+</html>
