@@ -2,7 +2,7 @@
 
 > 为 AI 算法工程师量身打造。6 个月 / 168 天，把「只懂模型」的算法工程师，淬炼成「懂硬件、懂网络、懂分布式」的系统型高级工程师。
 
-### 📖 在线阅读 → **[juliecarlon.github.io/168-days-to-systems](https://juliecarlon.github.io/168-days-to-systems/)**
+📖 在线阅读：[html](https://juliecarlon.github.io/168-days-to-systems/)
 
 每天一份 HTML 教材级密度内容，覆盖操作系统、网络、硬件、容器、服务化、数据库、分布式 6 大主题，外加贯穿全程的 AI 安全主线。
 
@@ -13,7 +13,7 @@
 - **从学界转工业界的学生 / 转码者**：技术栈以 Python + 算法为主，需要一份「工程系统」的体系化补课
 - **想搞懂 LLM 服务化背后的工程底层**：知道 vLLM 跑得快，但说不清「为什么快」
 
-## 💡 怎么不一样
+## 💡 特点
 
 **站在 AI / Agent 工作场景讲底层。** 不是把 OS 教材抄一遍——为什么 LLM 推理是 memory-bound？为什么 PagedAttention 借鉴 OS 虚拟内存？vLLM 为什么必须用多进程而不是多线程？每个底层概念都映射到 AI 工程师的真实场景。
 
