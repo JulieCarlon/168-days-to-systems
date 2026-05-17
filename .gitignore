@@ -19,3 +19,6 @@ desktop.ini
 # Logs / scratch
 *.log
 .scratch/
+
+# Internal scripts (local-only tooling, not for public)
+_scripts/
