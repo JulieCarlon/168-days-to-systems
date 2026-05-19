@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 09 · 内存分配器：从 buddy 到 jemalloc</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 09 · 内存分配器：从 buddy 到 jemalloc</h1>
+  <div class="meta">Week 02 · 周二 · 2026-05-19 · 主线：操作系统核心 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：你写 <code>x = [1, 2, 3]</code> 的瞬间，Python 在堆上分配了一个 list 对象。但「堆」是谁管的？谁决定 list 落在哪个地址？为什么频繁 <code>malloc/free</code> 会让程序越跑越慢？为什么 PyTorch 推荐你把 <code>jemalloc</code> 预加载（<code>LD_PRELOAD</code>）？今天我们从内核最底层的 <span class="key">buddy 分配器</span>开始，一路向上爬到 <span class="key">slab → glibc 的 ptmalloc → jemalloc/tcmalloc</span>，最后讲清楚 <span class="key">OOM killer</span> 是怎么挑选"祭品进程"的——这关系到你的大模型服务什么时候会被无声杀死。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">内存分配的整体地图：5 层结构</a></li>
+  <li><a href="#s2">内核底座：buddy 系统分配器</a></li>
+  <li><a href="#s3">小对象之王：slab / slub 分配器</a></li>
+  <li><a href="#s4">用户态的两道门：brk 与 mmap</a></li>
+  <li><a href="#s5">glibc ptmalloc：你不知道你在用</a></li>
+  <li><a href="#s6">jemalloc 与 tcmalloc：现代服务的标配</a></li>
+  <li><a href="#s7">内存碎片：内部与外部</a></li>
+  <li><a href="#s8">OOM killer：谁会被处决</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 内存分配的整体地图：5 层结构</h2>
+
+<p>"分配内存"听起来简单，但底下其实是<strong>整整 5 层不同粒度的分配器叠起来的</strong>。先看大图，后面每一节都会展开一层：</p>
+
+<div class="ascii">┌──────────────────────────────────────────────┐
+│ Layer 5: 应用层对象池（Python list / PyTorch tensor caching allocator）│  ← Python / framework 自己管理
+├──────────────────────────────────────────────┤
+│ Layer 4: 用户态 malloc（ptmalloc / jemalloc / tcmalloc）                │  ← 你的 C/C++ 代码用的
+├──────────────────────────────────────────────┤
+│ Layer 3: 系统调用 brk / mmap                                            │  ← 用户态 ↔ 内核的边界
+├──────────────────────────────────────────────┤
+│ Layer 2: 内核对象分配 slab / slub（小内核对象专用）                       │  ← task_struct, inode, ...
+├──────────────────────────────────────────────┤
+│ Layer 1: buddy 系统分配器（以 4KB 物理页为单位）                          │  ← 内核最底层的物理内存账本
+└──────────────────────────────────────────────┘</div>
+
+<p>关键事实：<strong>每一层的目标都不同</strong>。Layer 1 管 GB 级别的物理内存、追求碎片小；Layer 2 服务内核里数以万计的小对象（一个 inode 才 0.5KB），不能浪费整页；Layer 4 要服务用户程序千奇百怪的请求大小，目标是「单次分配延迟极低 + 多线程不抢锁」。理解了这种分工，你就会明白为什么 PyTorch 不直接用 <code>cudaMalloc</code>，而要在上面再写一个 caching allocator——同样的"分层"思想。</p>
+
+<h2 id="s2">2. 内核底座：buddy 系统分配器</h2>
+
+<p>所有内存分配最终都要落到"物理页"上。x86_64 Linux 上一页通常是 <code>4KB</code>。内核维护着所有空闲物理页的账本，这个账本叫 <span class="term">buddy 系统</span>。</p>
+
+<h3>核心思想</h3>
+
+<p>buddy 把空闲内存按"大小阶（order）"分桶：</p>
+
+<ul>
+  <li>order 0：1 个页（4KB）</li>
+  <li>order 1：2 个连续页（8KB）</li>
+  <li>order 2：4 个连续页（16KB）</li>
+  <li>...</li>
+  <li>order 10：1024 个连续页（4MB）</li>
+</ul>
+
+<p>每一阶都有一个空闲链表。需要 16KB？去 order 2 链表摘一个。如果空了？去 order 3 摘一个 32KB 的，<strong>劈成两半</strong>，一半还回 order 2 链表给你，一半也回 order 2 给以后用。这两个"被劈出来的兄弟"就叫 <span class="term">buddy（伙伴）</span>——它们的物理地址只差一个 bit。</p>
+
+<p>释放时反过来：如果你释放一块，<strong>检查它的 buddy 是不是也空闲</strong>。如果是，合并成更大的一块、放到更高阶链表。这就是<span class="key">"分裂合并对称、保持大块可用"</span>的精髓。</p>
+
+<h3>类比</h3>
+
+<p>想象图书馆有 1 个 4MB 书架（order 10）。你借 17KB？管理员把书架劈成 2 个 2MB，再把其中一个劈成 2 个 1MB，一路劈到 32KB（order 3），把这个 32KB 块给你（你浪费了 15KB 的内部碎片）。还书时管理员看你旁边的"伙伴块"还在不在，在就合并、还原成更大的块。整个图书馆的状态永远是若干"<strong>2 的幂次的连续块</strong>"。</p>
+
+<h3>查看你机器的 buddy 状态</h3>
+
+<pre><code># Linux 上看每个 order 还有多少空闲页
+cat /proc/buddyinfo
+# 输出示例（每行是一个 NUMA 节点 + zone）：
+# Node 0, zone Normal  120  85  43  22  10  4  1  0  0  0  0
+#                    ↑order 0..10 各阶的空闲块数</code></pre>
+
+<p>如果你看到 <strong>低阶很多、高阶全是 0</strong>，说明物理内存严重碎片化——以后再申请 2MB 大页（HugePage）就会失败。这是长跑 K8s 节点的典型衰老症状。</p>
+
+<h2 id="s3">3. 小对象之王：slab / slub 分配器</h2>
+
+<p>buddy 最小粒度是 4KB。但内核里到处是<strong>几十字节到几百字节</strong>的小对象——<code>task_struct</code>、<code>dentry</code>、<code>inode</code>、socket buffer……如果每个都占一页，内核自己就把内存吃光了。</p>
+
+<p>所以内核在 buddy 之上再加一层 <span class="term">slab 分配器</span>（现代 Linux 默认是它的简化版 <span class="term">slub</span>）。思想是<span class="key">"按类型预切好"</span>：</p>
+
+<ol>
+  <li>内核启动时为每种小对象建一个 <strong>cache</strong>，比如 <code>task_struct_cache</code>（每个对象 7KB）、<code>inode_cache</code>（每个对象 0.5KB）。</li>
+  <li>每个 cache 从 buddy 申请几页（一个 <em>slab</em>），把这几页切成 N 个等大对象槽位。</li>
+  <li>申请：从对应 cache 取一个空闲槽，几乎零开销，且对象常常已经<strong>构造过</strong>（fields 已置好）——重复利用比 malloc 还快。</li>
+</ol>
+
+<pre><code># 看你内核的 slab 用量
+sudo cat /proc/slabinfo | head -10
+# 或者更友好：
+sudo slabtop
+# 你会看到：
+# OBJS  ACTIVE  USE  OBJ SIZE  SLABS  OBJ/SLAB  CACHE SIZE  NAME
+# 12450 12100   97%  0.19K     593    21        2372K       dentry</code></pre>
+
+<p>如果你以后排查"机器内存被吃光了，但 <code>ps</code> 看用户进程都不大"，<strong>第一反应就是看 slabinfo</strong>——内核自己的小对象（特别是 dentry 和 inode 缓存）可以吃掉几 GB。</p>
+
+<h2 id="s4">4. 用户态的两道门：brk 与 mmap</h2>
+
+<p>现在视角从内核切回用户态。你的进程要分配内存，最终只能通过 syscall 向内核要。用户态拿堆内存<strong>只有两条路</strong>：</p>
+
+<h3>(a) brk / sbrk —— 推堆顶</h3>
+
+<p>每个进程的"堆"（昨天讲的 heap 段）有个边界叫 <span class="term">program break</span>。<code>brk(addr)</code> 系统调用就是「请把堆顶移到 addr」。把它推高就分到内存，推低就释放。</p>
+
+<div class="ascii">     高地址 ↑
+     ┌──────────┐
+     │  栈       │
+     ├──────────┤
+     │  ░░░░░    │
+     ├──────────┤  ← program break（brk 推这里）
+     │  堆       │      malloc 小块在这里
+     │  ↑↑↑      │
+     ├──────────┤
+     │  bss/data│
+     │  text    │
+     └──────────┘ 低地址</div>
+
+<p>简单但局限：<strong>堆是一整块连续区</strong>，中间释放的洞没法还给内核——只有堆顶能推。所以 brk 适合<strong>小而短命</strong>的分配。</p>
+
+<h3>(b) mmap —— 映射独立区域</h3>
+
+<p><code>mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)</code> 是一个完全不同的玩法：在地址空间的 mmap 区（昨天图里栈和堆之间的大空隙）里<strong>另开一块独立映射</strong>。可以单独 <code>munmap()</code> 还给内核，互不影响。</p>
+
+<p>缺点是每次系统调用都有 syscall + 缺页 + TLB 等代价，相对昂贵。所以 mmap 适合<strong>大而独立</strong>的分配（一般阈值 128KB 以上）。</p>
+
+<h3>glibc 的策略</h3>
+
+<table>
+<tr><th>请求大小</th><th>底层走</th><th>能不能还给内核</th></tr>
+<tr><td>&lt; 128KB（默认阈值 <code>M_MMAP_THRESHOLD</code>）</td><td>brk 扩堆，从堆里切</td><td>很难——只有堆顶连续空闲才能 brk 下去</td></tr>
+<tr><td>≥ 128KB</td><td>mmap 单独映射</td><td>容易——free 时直接 munmap</td></tr>
+</table>
+
+<p>这个分界点直接决定了你<strong>程序的内存能不能"还回去"</strong>。Python 进程跑久了内存只增不减，常见原因之一就是大量"中等大小"的分配落在堆里，free 之后还给堆但还不给内核。</p>
+
+<h2 id="s5">5. glibc ptmalloc：你不知道你在用</h2>
+
+<p>当你写 <code>malloc(64)</code>，glibc 里的 <span class="term">ptmalloc2</span>（基于 Doug Lea 的 dlmalloc）接住这个调用。它是 Linux 上 C 程序<strong>默认</strong>的分配器，你的 Python 解释器、PyTorch C 扩展、所有不显式换 malloc 的程序，都在用它。</p>
+
+<h3>核心数据结构</h3>
+
+<ul>
+  <li><strong>chunk</strong>：一个分配单元。结构是 <code>[size 头 (8B)] [用户数据]</code>，相邻 chunk 通过 size 字段串成链。</li>
+  <li><strong>bin（垃圾箱）</strong>：把空闲 chunk 按大小分桶串起来的链表。</li>
+  <li><strong>fastbin</strong>：超小对象（≤ 80B）的快速通道，LIFO，不合并。</li>
+  <li><strong>tcache（thread cache）</strong>：glibc 2.26+ 引入，每个线程私有的小对象缓存，<strong>零锁竞争</strong>。</li>
+  <li><strong>arena</strong>：一组 bin + 一段堆，多线程下可有多个 arena 减少争用。</li>
+</ul>
+
+<h3>分配流程（精简）</h3>
+
+<ol>
+  <li>请求 ≤ tcache 上限（默认 1024B）？看本线程 tcache，有匹配 size 的 → 直接拿，<strong>O(1) 无锁</strong>。</li>
+  <li>tcache 没有？看 fastbin（最近 free 的小块）。</li>
+  <li>没有？查 smallbin / largebin 找最合适的空闲块（best-fit）。</li>
+  <li>都没有？从 top chunk（堆顶大块）切一块给你；不够就 brk / mmap 向内核要。</li>
+</ol>
+
+<div class="note">
+<strong>为什么 glibc 默认是"够用但不出众"</strong>：ptmalloc 的设计偏保守、单线程历史包袱重。多线程下 arena 之间的锁争用、内存释放后归还内核的不积极、tcache 容易被攻击（堆漏洞利用的经典对象）——这些都是它被替换的理由。但它<strong>不会出大问题</strong>，所以仍是默认。
+</div>
+
+<h2 id="s6">6. jemalloc 与 tcmalloc：现代服务的标配</h2>
+
+<p>对追求性能/稳定性的服务（Redis、Cassandra、Firefox、Facebook 几乎所有 C++ 服务、PyTorch 推荐配置），人们会换掉默认 malloc。两大主流：</p>
+
+<table>
+<tr><th>分配器</th><th>出身</th><th>关键设计</th><th>典型场景</th></tr>
+<tr><td><strong>jemalloc</strong></td><td>FreeBSD → Facebook</td><td>多 arena 分散争用、按 size class 精细分桶、积极归还内存（purge）、统计极强</td><td>Redis 默认、Rust 默认、PyTorch 推理推荐</td></tr>
+<tr><td><strong>tcmalloc</strong></td><td>Google</td><td>每线程超大 thread cache、中心 heap 收割、低延迟优先</td><td>Google 全家桶、高并发 web 服务</td></tr>
+</table>
+
+<h3>在你 Python/PyTorch 服务里换 malloc（不改代码）</h3>
+
+<pre><code># Ubuntu 装 jemalloc
+sudo apt-get install libjemalloc2
+
+# 让你的 Python 服务用 jemalloc（LD_PRELOAD 是用户态的"替身术"）
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 \
+    python serve.py
+
+# 大模型推理常用配置：限制碎片
+MALLOC_CONF="background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:0" \
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 \
+    python serve.py</code></pre>
+
+<p>典型收益：Python 长跑服务 RSS（实际占用物理内存）从"只增不减"变成"周期归还"；多线程吞吐+10~30%；P99 延迟更稳。<strong>这是少有的"加一行环境变量就有收益"的优化</strong>。</p>
+
+<div class="note">
+<strong>PyTorch 推理为什么特别关心 malloc</strong>：除 CUDA caching allocator 管 GPU 显存外，host 端（CPU 内存）的张量、tokenizer 缓存、HuggingFace transformers 的预处理仍然走 host malloc。一个长跑的推理服务（几天不重启）在 ptmalloc 下经常出现"RSS 慢慢爬到几十 GB"，换成 jemalloc 后稳定下来。Meta 内部博客和 PyTorch 官方都推荐过这个组合。
+</div>
+
+<h2 id="s7">7. 内存碎片：内部与外部</h2>
+
+<p>所有分配器都要对抗一个共同敌人——<span class="term">碎片化</span>。它有两种长相，机制完全不同：</p>
+
+<h3>内部碎片（internal fragmentation）</h3>
+
+<p>你申请 17 字节，分配器给你一个 24 字节的 chunk（因为有最小对齐和 size class）。<strong>多出来的 7 字节在 chunk 内部浪费</strong>。slab、buddy 都有内部碎片，但通常占比小、可控。</p>
+
+<h3>外部碎片（external fragmentation）</h3>
+
+<p>更阴险。空闲内存总和很大，但都被分割成<strong>不连续的小块</strong>，导致一个"中等大小"的申请无法满足。典型场景：</p>
+
+<div class="ascii">堆中现状（█=已分配 ░=空闲）：
+█████░░░░█████░░░░░░░█████░░░░█████
+空闲总量：14 块
+最大连续空闲：5 块
+现在申请 7 块 → 失败（虽然有 14 块空闲）</div>
+
+<p>典型长跑服务的死法：内存总用量看起来才 30%，但分配 1MB 的请求返回 NULL。<strong>jemalloc 的两个关键参数 <code>dirty_decay_ms</code> / <code>muzzy_decay_ms</code> 就是控制多久把脏页归还内核</strong>，避免长期碎片。</p>
+
+<h3>如何观察</h3>
+
+<pre><code># 一个粗略指标：进程的 VSZ - RSS - 共享映射 ≈ 已申请但未住人的虚拟空间
+ps -o pid,vsz,rss,command -p &lt;PID&gt;
+
+# 详细：看映射粒度
+cat /proc/&lt;PID&gt;/smaps | grep -E "Size:|Rss:|Pss:" | head -30
+
+# jemalloc 自带的运行时统计（需要程序开启）
+MALLOC_CONF=stats_print:true ./your_program</code></pre>
+
+<h2 id="s8">8. OOM killer：谁会被处决</h2>
+
+<p>当物理内存彻底用光、swap 也满、内核已经回收完所有 page cache 还不够时，内核没有别的选择，只能<strong>挑一个进程杀掉</strong>。这个机制叫 <span class="term">OOM killer</span>。理解它对运维 LLM 服务至关重要——你的 7B 模型半夜被无声 kill，多半就是它干的。</p>
+
+<h3>选谁？</h3>
+
+<p>内核为每个进程算一个 <span class="term">oom_score</span>（0~1000），分数越高越容易被选中。基础分主要看：</p>
+
+<ul>
+  <li><strong>占用内存量（RSS + swap）</strong>：吃得越多越可能被杀。</li>
+  <li><strong>运行时长</strong>：长跑的进程稍微"被原谅"。</li>
+  <li><strong>可调权重</strong>：每个进程有一个 <code>/proc/&lt;PID&gt;/oom_score_adj</code>，范围 -1000~+1000，加到基础分上。<strong>-1000 表示永不被杀</strong>，+1000 表示首选。</li>
+</ul>
+
+<pre><code># 看一个进程当前的 oom 分数和调整值
+cat /proc/&lt;PID&gt;/oom_score          # 当前实际分数
+cat /proc/&lt;PID&gt;/oom_score_adj      # 你给它的调整
+
+# 把你的 LLM 服务设成"永不被杀"（root 权限）
+echo -1000 | sudo tee /proc/&lt;PID&gt;/oom_score_adj
+
+# 看历史 OOM 事件
+dmesg | grep -i "killed process"
+sudo journalctl -k | grep -i oom</code></pre>
+
+<h3>OOM 在容器里的特殊性</h3>
+
+<p>在 Docker / K8s 里你常常看不到 host 的 OOM——因为<strong>每个容器有自己的 cgroup 内存上限</strong>，达到上限会触发 <span class="key">cgroup-level OOM</span>，只杀这个容器里的进程。<code>kubectl describe pod</code> 看到 <code>OOMKilled</code> 就是这个：</p>
+
+<pre><code># Pod 描述里这一段非常常见
+Last State:     Terminated
+  Reason:       OOMKilled
+  Exit Code:    137   ← 137 = 128 + 9 (SIGKILL)</code></pre>
+
+<p>所以"K8s LLM 服务凌晨挂掉"的标准排查：先 <code>kubectl describe pod</code> 看是不是 OOMKilled、再看 <code>memory.limit</code> 设了多少、再看实际峰值（用 Prometheus 的 <code>container_memory_working_set_bytes</code>）。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 内存耗尽是 LLM 推理服务最便宜的 DoS</strong>。攻击者只要发一批超长 prompt（或者高并发短 prompt 但 batch 不够），就能让你的 KV cache 暴涨、host 端 tokenizer 缓存暴涨，触发 OOM。今天讲的 <code>oom_score_adj</code> 和 cgroup 限制是<strong>纵深防御的底层一环</strong>——把入口层流量控制不住时，至少别让推理进程被 host 上其他服务连累，也别让一个 Pod 拖垮整个 node。</p>
+
+<p><strong>2. 堆溢出与现代 malloc 的攻防</strong>。Agent 跑用户给的 native 代码时，堆漏洞（UAF、double-free、heap overflow）就是攻击者的入场券。glibc 的 tcache 因为<strong>结构简单、校验弱</strong>，是近年 CTF 和真实 CVE 的高频目标（"tcache poisoning"）。换 jemalloc/tcmalloc 不仅是性能优化——它们的元数据校验更严，对一部分堆攻击是天然抵抗。这是你做 sandbox 时可以默认加的 hardening。</p>
+
+<p><strong>3. 内存碎片是"看不见的容量下降"</strong>。一个长跑 7 天的 LLM 服务，从外面看 RSS 稳定，但实际可用堆空间因为碎片缩水了一半——下一波流量峰值过来就崩。这是<strong>对手主动诱导的攻击面</strong>：精心设计的 prompt 模式让分配器陷入最坏情况。监控指标除了 RSS，还要加 <code>VmPeak</code>、<code>jemalloc stats</code> 里的 retained/fragmentation 比例。</p>
+
+<p><strong>4. 模型权重加载和 mmap 的安全含义</strong>。HuggingFace 的 safetensors 是用 mmap 加载权重的（昨天讲的 mmap 区）。这意味着<strong>权重文件路径和权限</strong>就是攻击面——攻击者如果能替换 safetensors 文件，就等于改了你正在运行的模型权重。检测：把权重做哈希、加 IMA 完整性度量、用只读挂载。</p>
+
+<p><strong>5. OOM 杀错了进程的风险</strong>。多租户 GPU 节点上，你的安全审计代理（监控用户 LLM 调用的 sidecar）如果 oom_score 高于被监控服务，<strong>就会先于被监控对象被杀</strong>——攻击者甚至可能故意触发这种情况来"先解除监控"。永远把审计/安全相关进程的 <code>oom_score_adj</code> 设成强负值，并加监控告警："如果审计进程消失，立即降级被监控服务"。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：换 malloc 看效果</strong></p>
+<p>找一个会持续分配释放的 Python 脚本，跑一段时间用 <code>ps</code> 看 RSS 变化；然后用 <code>LD_PRELOAD</code> 加载 jemalloc 再跑一次，对比：</p>
+<pre><code># 任意一个会循环创建大量字符串/列表的脚本
+cat &gt; churn.py &lt;&lt;'EOF'
+import time
+for i in range(60):
+    bigs = [b"x" * 4096 for _ in range(200_000)]
+    del bigs
+    time.sleep(1)
+EOF
+
+# 基线
+python3 churn.py &amp;
+PID=$!
+for i in 1 2 3 4 5; do ps -o rss= -p $PID; sleep 10; done
+wait
+
+# jemalloc 版（路径按你系统调整）
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 python3 churn.py &amp;
+PID=$!
+for i in 1 2 3 4 5; do ps -o rss= -p $PID; sleep 10; done
+wait</code></pre>
+<p>观察：两次的 RSS 曲线长得不一样。哪一次会"归还更彻底"？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：buddy 和 slab 的真实形态</strong></p>
+<p>在 Linux 机器（或 Docker / VM 里）跑：</p>
+<pre><code># 看 buddy 各阶空闲块
+cat /proc/buddyinfo
+
+# 看 slab 用量 top 10
+sudo slabtop -o -s c | head -15
+
+# 看你某个进程的实际地址空间和映射数量
+cat /proc/self/maps | wc -l
+cat /proc/self/status | grep -E "Vm|Threads"</code></pre>
+<p>问题：找出你机器上占内存最多的 3 个 slab cache，它们分别是什么内核对象？提示——名字像 <code>dentry</code>、<code>inode_cache</code>、<code>kmalloc-1024</code>。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考：OOM 的优先级设计</strong></p>
+<p>你在做一个 LLM Agent 安全网关：</p>
+<ul>
+  <li>进程 A：vLLM 推理引擎（吃显存为主，host 内存 4GB）</li>
+  <li>进程 B：审计代理（监控所有 tool 调用，host 内存 200MB）</li>
+  <li>进程 C：日志收集 sidecar（host 内存 100MB）</li>
+</ul>
+<p>主机突发其他服务挤占内存导致即将 OOM。请设计三个进程的 <code>oom_score_adj</code> 值，并说明：(a) 如果只能保活两个，应该保哪两个？(b) 攻击者最希望谁先死？理由？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 10 · 虚拟内存进阶</strong>。今天我们站在"内存怎么分"的角度看；明天换角度——内存怎么"看起来比物理多"。我们会拆解 page fault 的三类（minor / major / invalid）、COW 在 fork 时的精彩配合、mmap 完全解析（文件映射 vs 匿名映射）、swap 与 page cache 谁先被回收，以及 madvise/mlock 这些进阶武器。
+</div>
+
+</body>
+</html>
