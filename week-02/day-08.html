@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 08 · 虚拟内存与页表</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 08 · 虚拟内存与页表</h1>
+  <div class="meta">Week 02 · 周一 · 2026-05-18 · 主线：操作系统核心 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：上周我们建立了「进程 = 独立的虚拟地址空间 + 资源 + PCB」这个直觉。但留了一个大坑没填：<strong>所谓「独立的虚拟地址空间」到底是怎么变出来的？</strong>两个进程都看到 <code>0x400000</code>，凭什么不会打架？CPU 怎么知道把这个虚拟地址翻译到哪块物理内存？为什么我的 7B 大模型加载完后 <code>VmRSS</code> 显示 14GB，但机器只有 32GB，跑了 4 个进程为什么没爆？今天我们一次性把虚拟内存这套魔法揭开。会回答 7 个问题：<span class="key">内存到底有多慢、虚拟地址 vs 物理地址、MMU 怎么工作、多级页表为什么是 4 级、TLB 为什么决定性能、大页能不能救你、/proc/meminfo 每一行什么意思</span>。读完今天你会突然理解为什么 LLM 推理对内存带宽这么敏感。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">内存层级与延迟数量级：你必须背下来的几个数字</a></li>
+  <li><a href="#s2">物理地址 vs 虚拟地址：CPU 看到的两个世界</a></li>
+  <li><a href="#s3">MMU：把虚拟地址翻译成物理地址的硬件</a></li>
+  <li><a href="#s4">多级页表：为什么 64 位下要分 4 级</a></li>
+  <li><a href="#s5">TLB：MMU 自己的缓存，决定真实性能</a></li>
+  <li><a href="#s6">大页（Huge Page）：减少 TLB miss 的杀手锏</a></li>
+  <li><a href="#s7">读懂 /proc/meminfo：内核眼里的内存账本</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 内存层级与延迟数量级：你必须背下来的几个数字</h2>
+
+<p>讲虚拟内存之前，先建立一个性能直觉。你做 AI 时整天听到「memory-bound」「带宽不够」，但很多人没真正算过这些数字到底是什么量级。</p>
+
+<p>现代计算机的存储不是一层，而是一个金字塔，<strong>越靠近 CPU 越快越贵越小</strong>：</p>
+
+<div class="ascii">           容量          延迟          带宽
+           ────         ────         ────
+寄存器     ~1KB         &lt; 1 ns       极高     ← CPU 一个周期就能访问
+L1 cache   ~32KB        ~1 ns        ~1 TB/s
+L2 cache   ~256KB       ~3 ns        ~500 GB/s
+L3 cache   ~32MB        ~10 ns       ~300 GB/s
+DRAM       几十~几百 GB  ~80-100 ns   ~50 GB/s   ← 这是「内存」，相对 L1 慢 100 倍
+NVMe SSD   几 TB         ~50 us       ~7 GB/s
+HDD        几十 TB       ~10 ms       ~200 MB/s
+网络       --           ~ms 级       ~Gbps
+</div>
+
+<p>有个经典对比把它们放大到人类时间尺度：把 L1 访问当成「1 秒」，那么访问主存大约是「100 秒」，访问 SSD 是「14 小时」，访问网络是「几个月」。<strong>这个差距不是 2 倍 3 倍，是 100 倍 1000 倍</strong>。</p>
+
+<p>所以工程上要永远问一个问题：<span class="key">我访问的数据离 CPU 多近？</span></p>
+
+<p>这套层级直接决定了你后面要看到的一切——从 cache line、TLB、到 LLM 推理为什么 batch=1 时 GPU 利用率不到 5%。今天的主角「虚拟内存」就是在主存（DRAM）和 SSD 之间架起一座桥，让程序"看起来"有比物理内存大得多的空间。</p>
+
+<h2 id="s2">2. 物理地址 vs 虚拟地址：CPU 看到的两个世界</h2>
+
+<p>给你机器里插一根 32GB 的内存条，<strong>物理上</strong>这块 DRAM 被编址为 <code>0x00000000</code> 到 <code>0x7FFFFFFF</code>（32GB = 2³⁵ 字节）。每个字节有一个唯一的<span class="term">物理地址（Physical Address，PA）</span>。这是真实的、硬件电路看到的地址。</p>
+
+<p>但你的 Python 进程看到的不是这个地址。你的进程看到的是<span class="term">虚拟地址（Virtual Address，VA）</span>——一段长得像 <code>0x00007fa8b1c00000</code>、可以从 0 一直编到 2⁴⁸ 甚至 2⁵⁷ 字节的「假地址空间」。</p>
+
+<h3>为什么要分两层？</h3>
+
+<p>这是 OS 设计史上最重要的发明之一。它一次解决了 4 个问题：</p>
+
+<ul>
+  <li><strong>隔离</strong>：进程 A 的虚拟地址 <code>0x400000</code> 和进程 B 的虚拟地址 <code>0x400000</code> 翻译到完全不同的物理地址。A 写到自己的 <code>0x400000</code>，B 的内存毫发无损。<span class="key">这是所有沙箱安全的基石</span>。</li>
+  <li><strong>抽象</strong>：每个进程都"以为"自己独占一大块连续地址空间。你写 C 代码不用关心"哪块物理内存空着"，那是内核的事。</li>
+  <li><strong>过载（overcommit）</strong>：所有进程的虚拟内存加起来可以远大于物理内存。系统只在你<strong>真的</strong>访问某个虚拟页时，才分配一块物理内存（这叫 <span class="term">demand paging</span>）。</li>
+  <li><strong>共享</strong>：两个进程的虚拟地址可以同时映射到<strong>同一块</strong>物理内存。这就是 <code>fork()</code> 的 COW、<code>mmap MAP_SHARED</code>、共享库（libc.so 只在内存里有一份）的实现方式。</li>
+</ul>
+
+<h3>类比：城市的门牌号</h3>
+
+<p>想象一个国家，每个城市都用自己独立的门牌号系统：北京的「中关村大街 1 号」和上海的「中关村大街 1 号」是完全不同的两座楼。但每座楼最终都对应一块真实的土地（物理地址）。<strong>城市 = 进程，门牌号 = 虚拟地址，土地坐标 = 物理地址</strong>，而政府保存的「门牌号 → 土地坐标」对照表就是 <span class="term">页表（Page Table）</span>。</p>
+
+<h2 id="s3">3. MMU：把虚拟地址翻译成物理地址的硬件</h2>
+
+<p>每次 CPU 执行 <code>mov rax, [0x7fa8b1c00000]</code> 这样的指令，它实际要做的事是：</p>
+
+<ol>
+  <li>取到虚拟地址 <code>0x7fa8b1c00000</code></li>
+  <li>把它翻译成物理地址（比如 <code>0x12340000</code>）</li>
+  <li>去 DRAM 的 <code>0x12340000</code> 读 8 字节</li>
+  <li>放进 <code>rax</code> 寄存器</li>
+</ol>
+
+<p>第 2 步——「翻译」——由 CPU 内部一个叫 <span class="term">MMU（Memory Management Unit）</span>的硬件单元完成。<strong>不是 OS，不是软件，是硬件</strong>。OS 只负责<strong>填好那张对照表（页表）</strong>，运行时翻译由 MMU 用电路在纳秒级完成。</p>
+
+<h3>页：翻译的最小单位</h3>
+
+<p>如果对照表精确到字节，那 32GB 内存需要 32G 条记录，谁也存不下。所以硬件规定：<strong>翻译以「页（page）」为单位</strong>。x86_64 默认页大小是 <span class="key">4KB（4096 字节）</span>。</p>
+
+<p>这意味着：虚拟地址的低 12 位（4KB = 2¹²）作为<strong>页内偏移（offset）</strong>不参与翻译，直接照搬到物理地址；高位作为<strong>虚拟页号（VPN）</strong>，通过页表翻译成<strong>物理页号（PPN，又叫 page frame number）</strong>。</p>
+
+<div class="ascii">虚拟地址 (48 位)
+┌──────────────────────────────────────┬──────────────────┐
+│         虚拟页号 VPN (36 位)          │ 页内偏移 (12 位)  │
+└──────────────────────────────────────┴──────────────────┘
+                  │                              │
+                  ↓ 通过页表翻译                  ↓ 不变直接拷贝
+┌──────────────────────────────────────┬──────────────────┐
+│         物理页号 PPN (例如 24 位)     │ 页内偏移 (12 位)  │
+└──────────────────────────────────────┴──────────────────┘
+物理地址 (例如 36 位，对应 64GB 物理内存)
+</div>
+
+<p>每条页表项（PTE）除了存「这个虚拟页对应哪个物理页」，还存着这些<strong>权限位</strong>：</p>
+
+<ul>
+  <li><code>P</code>（Present）：这一页现在在物理内存里吗？如果是 0，访问会触发<span class="term">缺页异常（page fault）</span>，内核接管。</li>
+  <li><code>R/W</code>：可读还是可写。代码段 text 是 R-only；如果写 R-only 页，CPU 抛 SIGSEGV。</li>
+  <li><code>U/S</code>：用户态可访问还是只能内核访问。</li>
+  <li><code>NX</code>（No Execute）：这页可以执行指令吗？防止「数据当代码执行」类攻击的硬件基石。</li>
+  <li><code>D</code>（Dirty）：自上次同步后，这页被写过吗？OS 据此决定是否要写回磁盘。</li>
+  <li><code>A</code>（Accessed）：被访问过吗？OS 据此实现 LRU 替换算法。</li>
+</ul>
+
+<p>这几个位也是<strong>所有内存保护、所有 mmap 标志、所有 KASLR/NX-bit 之类安全特性的硬件基础</strong>。Day 41 讲栈溢出攻击时，我们会回头看 NX 位是怎么挡住 shellcode 执行的。</p>
+
+<h2 id="s4">4. 多级页表：为什么 64 位下要分 4 级</h2>
+
+<p>现在做一道算术。x86_64 用 48 位虚拟地址（实际可访问空间 256 TB）。页大小 4KB（12 位 offset），所以虚拟页号有 36 位，意味着<strong>一个进程理论上有 2³⁶ = 680 亿个虚拟页</strong>。</p>
+
+<p>如果你用一张扁平表存这 680 亿个映射（每条 PTE 8 字节），<strong>光这张表就要 512 GB</strong>。每个进程都要这么大一张表。荒谬。</p>
+
+<h3>层次化是答案</h3>
+
+<p>注意一个事实：<strong>实际程序只用了虚拟地址空间的很小一部分</strong>——可能只摸到几 MB 到几 GB。绝大部分页表项是空的。所以可以用「树」结构：只为真正用到的部分创建子表。</p>
+
+<p>x86_64 用 <span class="term">4 级页表</span>。把 36 位 VPN 切成 4 段，每段 9 位：</p>
+
+<div class="ascii">虚拟地址 (48 位):
+┌────────┬────────┬────────┬────────┬──────────────┐
+│ PML4   │ PDPT   │ PD     │ PT     │  Page Offset │
+│ 9 bits │ 9 bits │ 9 bits │ 9 bits │   12 bits    │
+└────────┴────────┴────────┴────────┴──────────────┘
+   │        │        │        │
+   │        │        │        └──► 在 PT 里第 N 项 → 找到 PPN
+   │        │        └──────────► 在 PD 里第 N 项 → 找到下一级 PT 的物理地址
+   │        └───────────────────► 在 PDPT 里第 N 项 → 找到 PD
+   └────────────────────────────► 在 PML4 里第 N 项 → 找到 PDPT
+
+       根：CR3 寄存器指向当前进程的 PML4 表的物理地址
+</div>
+
+<p>每一级都是一个 4KB 的表（512 项 × 8 字节）。<strong>切换进程时，OS 只要改一个寄存器（CR3），整个地址空间就换了一份</strong>——这就是进程隔离在硬件层面的实现。</p>
+
+<h3>翻译一次要 4 次内存访问</h3>
+
+<p>注意一个可怕的事实：每翻译一个虚拟地址，MMU 要顺着 4 级表走，<strong>访问 4 次内存</strong>（每次 ~100 ns），最后才能访问目标数据（第 5 次内存访问）。一次普通的 <code>x = arr[i]</code> 内部可能要 500 ns？</p>
+
+<p>当然不会。这就引出了 TLB。</p>
+
+<h2 id="s5">5. TLB：MMU 自己的缓存，决定真实性能</h2>
+
+<p>MMU 内部有一个小缓存，叫 <span class="term">TLB（Translation Lookaside Buffer）</span>。它存<strong>最近翻译过的「虚拟页号 → 物理页号」对应关系</strong>。每次翻译时：</p>
+
+<ul>
+  <li><strong>TLB hit</strong>：在 TLB 里找到了，0 次内存访问，1 个 CPU 周期完事。</li>
+  <li><strong>TLB miss</strong>：没找到，得真的走 4 级页表（叫 <span class="term">page walk</span>），4 次内存访问。</li>
+</ul>
+
+<p>现代 CPU 的 TLB 容量很小：</p>
+
+<table>
+<tr><th>层级</th><th>容量（典型）</th><th>覆盖的虚拟内存（4KB 页）</th></tr>
+<tr><td>L1 dTLB（数据）</td><td>64 项</td><td>256 KB</td></tr>
+<tr><td>L1 iTLB（指令）</td><td>64 项</td><td>256 KB</td></tr>
+<tr><td>L2 TLB</td><td>1024-2048 项</td><td>~8 MB</td></tr>
+</table>
+
+<p>关键事实：<span class="key">普通 4KB 页下，TLB 全用满也只能覆盖几 MB 的"热内存"</span>。一旦你的工作集（working set）超过这个大小，TLB miss 暴涨，每次内存访问额外付 4 次 page walk 的代价。</p>
+
+<h3>什么场景会 TLB 抖动</h3>
+
+<ul>
+  <li><strong>大数组随机访问</strong>：跨页跳跃，每次都 TLB miss。LLM 推理里 KV cache 的不规则访问就是典型。</li>
+  <li><strong>大模型权重加载</strong>：Llama-2 70B 量化后 ~35GB，如果用 4KB 页，需要约 870 万条 TLB 映射，TLB 根本装不下。</li>
+  <li><strong>上下文切换</strong>：进程切换时 CR3 一换，整个 TLB 几乎被清空（除非用 PCID 标记）。这是上下文切换昂贵的核心原因之一。</li>
+</ul>
+
+<h3>怎么看你的 TLB miss</h3>
+
+<pre><code># Linux perf 可以直接量化 TLB miss
+perf stat -e dTLB-loads,dTLB-load-misses,iTLB-loads,iTLB-load-misses \
+    python3 your_inference_script.py
+
+# 关注 miss / loads 的比例，超过 1% 就值得调优</code></pre>
+
+<h2 id="s6">6. 大页（Huge Page）：减少 TLB miss 的杀手锏</h2>
+
+<p>既然 4KB 页让 TLB 太捉襟见肘，最直接的办法是：<strong>把页变大</strong>。x86_64 支持 3 种页大小：</p>
+
+<table>
+<tr><th>页大小</th><th>需要几级页表</th><th>单个 TLB 项覆盖</th><th>1024 项 TLB 总覆盖</th></tr>
+<tr><td>4 KB（标准页）</td><td>4 级</td><td>4 KB</td><td>~4 MB</td></tr>
+<tr><td>2 MB（大页 / huge page）</td><td>3 级（跳过 PT）</td><td>2 MB</td><td>~2 GB</td></tr>
+<tr><td>1 GB（巨页 / gigantic page）</td><td>2 级（跳过 PT、PD）</td><td>1 GB</td><td>~1 TB</td></tr>
+</table>
+
+<p>同样 1024 项的 TLB，用 2MB 页覆盖范围是 4KB 页的 <strong>512 倍</strong>；用 1GB 页是 26 万倍。这就是为什么大模型推理引擎（vLLM、TensorRT-LLM）都建议开 huge page。</p>
+
+<h3>Linux 上两种 huge page</h3>
+
+<p><strong>1. 静态预留 HugeTLB</strong>：开机时预留一批 2MB 或 1GB 页，应用通过 <code>mmap(MAP_HUGETLB)</code> 或 <code>hugetlbfs</code> 申请。最稳，性能可控，但用不掉就浪费。</p>
+
+<pre><code># 预留 1024 个 2MB 大页（共 2GB）
+echo 1024 | sudo tee /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+
+# 看预留情况
+grep Huge /proc/meminfo
+# HugePages_Total:    1024
+# HugePages_Free:     1024
+# Hugepagesize:       2048 kB</code></pre>
+
+<p><strong>2. 透明大页 THP（Transparent Huge Pages）</strong>：内核自动把连续的 4KB 页合并成 2MB 页。无需应用改动，但<strong>有抖动风险</strong>——遇到大块写入时，内核要扫描合并，可能突发卡顿。Redis、PG 文档都建议线上<strong>关闭 THP</strong>。LLM 推理场景一般开 <code>madvise</code> 模式（只对显式申请的区域生效）。</p>
+
+<pre><code># 看 THP 状态
+cat /sys/kernel/mm/transparent_hugepage/enabled
+# 输出 [always] madvise never 三选一，方括号是当前选项
+
+# 改成 madvise 模式
+echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled</code></pre>
+
+<div class="note">
+<strong>实践经验</strong>：在用 vLLM 跑 Llama-2 70B 时，开 2MB huge page 大约能让 TLB miss 降一个数量级，端到端推理吞吐提升 5-10%。这种"几行配置就能拿到的免费午餐"在工程上极其值得。
+</div>
+
+<h2 id="s7">7. 读懂 /proc/meminfo：内核眼里的内存账本</h2>
+
+<p>每当你想"我机器到底用了多少内存"，<code>free -h</code> 给你的是表面信息，真相在 <code>/proc/meminfo</code> 里。这个虚拟文件是 Linux 内核每次读取时实时计算出来的内存账本。挑最重要的 12 行解释：</p>
+
+<pre><code>$ cat /proc/meminfo
+MemTotal:        32867432 kB   # 物理内存总量
+MemFree:          2104560 kB   # 完全空闲（注意：不是"可用"！）
+MemAvailable:    18432104 kB   # 真正可用 = Free + 可回收的 cache
+Buffers:           512000 kB   # 文件系统元数据缓存
+Cached:          15234560 kB   # 页缓存（page cache，读过的文件内容）
+SwapTotal:        8388604 kB   # swap 区总量
+SwapFree:         8388604 kB   # swap 空闲
+Active:          12345678 kB   # 最近活跃的页
+Inactive:         5432100 kB   # 不活跃，候选被回收
+Slab:             1234567 kB   # 内核对象池（dentry/inode cache 等）
+PageTables:        102400 kB   # 所有进程的页表自己占的内存
+HugePages_Total:        0      # 静态大页数量
+AnonHugePages:    2097152 kB   # 透明大页用了多少</code></pre>
+
+<h3>3 个最容易踩坑的概念</h3>
+
+<p><strong>① MemFree ≠ 可用内存</strong>。Linux 倾向于把空闲内存全部用作 page cache 加速文件读写。看到 <code>MemFree</code> 只有几百 MB 别紧张，<code>MemAvailable</code> 才是真相。</p>
+
+<p><strong>② Cached 是可以瞬间回收的</strong>。当应用要内存，内核可以丢弃干净的 page cache 立刻腾位置。所以「<code>Cached</code> 占了 15GB」不是问题。但<strong>dirty cache（被写过还没刷盘）不能直接丢</strong>，写入压力大时会卡顿。</p>
+
+<p><strong>③ PageTables 自己也占内存</strong>。一个 4KB 页对应一条 8 字节 PTE。你跑 10 个进程，每个映射了 4GB 内存，光页表大约要 <code>10 × 4GB / 4KB × 8B = 80MB</code>。这就是为什么海量小进程场景下页表本身能涨到 GB 级——这也是大页的另一个好处：<strong>大页让页表项数减少 512 倍</strong>。</p>
+
+<h3>实操：观察一个 Python 进程的内存细节</h3>
+
+<pre><code># 跑一个 Python 进程
+python3 -c "x = [0] * 100_000_000; import time; time.sleep(1000)" &
+PID=$!
+
+# 1. 总览
+cat /proc/$PID/status | grep -E '^Vm|^Rss'
+# VmPeak: 峰值虚拟内存
+# VmSize: 当前虚拟内存（地址空间总量）
+# VmRSS:  常驻物理内存（最关键的数字）
+# VmData: 数据段大小
+# VmStk:  栈大小
+
+# 2. 详细每段
+cat /proc/$PID/smaps | head -40
+# 每个 segment 一段：地址范围、权限、Rss、Pss、Anonymous、AnonHugePages...
+# Pss = 按"共享比例"分摊的内存，最公平的"该进程实际占多少"
+
+# 3. 一行汇总每个进程内存
+ps aux --sort=-rss | head -10</code></pre>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p>今天的虚拟内存知识不是抽象理论，它在 LLM 工程和 Agent 安全里到处出现：</p>
+
+<p><strong>1. vLLM 的 PagedAttention 直接借用 OS 分页思想</strong>。传统推理引擎给每个请求分配一大块连续 KV cache 内存，剩余部分浪费（内部碎片可达 60-80%）。PagedAttention 把 KV cache 切成 16-token 的小 block，用一张"block table"做<strong>虚拟到物理映射</strong>——这跟今天讲的虚拟内存 → 页表 → 物理内存几乎是 1:1 类比。Week 06 周日会专门讲这套设计，今天的页表概念是前置。</p>
+
+<p><strong>2. NX 位是缓冲区溢出攻击的硬件防线</strong>。攻击者经典做法是把 shellcode 塞到栈或堆上，然后控制 EIP 跳过去执行。NX 位让"非代码段不可执行"，这种攻击立刻失败——只能改用 ROP 等更高级技术。你今天看到的页表权限位，每一位背后都是几代攻防的产物。Day 41 内存安全攻防会展开。</p>
+
+<p><strong>3. Agent 沙箱用 mmap + 权限位做强隔离</strong>。可靠的代码沙箱（gVisor、Firecracker、Modal 的执行环境）核心机制之一就是<strong>用独立页表把 guest 内存和 host 内存完全隔开</strong>。理解页表权限位，你才能理解为什么 <code>--privileged</code> Docker 容器、<code>/proc</code> 挂载到容器里这类配置是高危——它们都在<strong>削弱页表层的隔离</strong>。</p>
+
+<p><strong>4. LLM 推理 OOM 诊断必看 /proc/[pid]/status</strong>。生产里"模型加载失败/中途崩"的事故有大半是 OOM Killer 出手。诊断流程：先看 <code>dmesg | grep -i oom</code> 确认是不是被 kill；再看 <code>VmRSS</code> 和 <code>VmHWM</code>（历史峰值）确认进程到底吃了多少；最后看 <code>smaps</code> 找出"哪段"内存占大头（通常是模型权重 mmap、KV cache、PyTorch 内部 allocator）。这套调试链条全部建立在今天的概念上。</p>
+
+<p><strong>5. 多租户 GPU 服务的内存侧信道</strong>。Day 48 会讲 GPU 多租户安全。GPU 显存的虚拟化机制和 CPU 页表非常类似，<strong>显存隔离做得不好就会出现跨用户的内存残留</strong>——前一个用户的 prompt 或权重残留在物理显存里，被下一个用户读到。理解 CPU 虚拟内存的隔离原理，是看懂 GPU 隔离漏洞的基础。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：看穿你机器的内存账本</strong></p>
+<p>Linux 上跑（macOS 上没有 /proc，可以用 <code>vm_stat</code> 替代，下面给两种）：</p>
+<pre><code># Linux
+cat /proc/meminfo | head -25
+free -h
+
+# 然后做个对照表，回答：
+# (a) MemFree 和 MemAvailable 差多少？解释这两者的区别。
+# (b) Buffers + Cached 占总内存多少比例？这部分是"可回收"还是"已占用"？
+# (c) PageTables 占了多少 MB？想想这值的物理含义。
+
+# macOS 替代命令
+vm_stat
+# Pages free / active / inactive / wired down 各是什么</code></pre>
+<p>问题：把上面 (a)(b)(c) 的答案用自己的话写出来，每条不超过两句。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>20 分钟 · 观察：进程视角的虚拟地址空间</strong></p>
+<p>在 Linux 上跑下面这段（macOS 可用 <code>vmmap [PID]</code> 替代 <code>/proc/[pid]/maps</code>）：</p>
+<pre><code>python3 -c "
+import numpy as np
+x = np.zeros(100_000_000, dtype=np.float32)  # ~400 MB
+import time; time.sleep(1000)
+" &amp;
+PID=$!
+
+# 1. 总览
+cat /proc/$PID/status | grep -E '^Vm|^Rss'
+
+# 2. 看完整段表
+cat /proc/$PID/maps | wc -l                  # 一共有多少段
+cat /proc/$PID/maps | grep heap              # 堆在哪
+cat /proc/$PID/maps | grep stack             # 栈在哪
+cat /proc/$PID/maps | grep -c '\.so'         # 加载了多少动态库
+
+# 3. 找出最大的几段
+sort -k1 /proc/$PID/maps | head -5</code></pre>
+<p>问题：VmSize 和 VmRSS 谁大？大多少？解释为什么（提示：demand paging、动态库共享）。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考题：哪种攻击会绕过哪一层</strong></p>
+<p>下面 4 种攻击行为，分别会被「页表的哪一位 / 哪个机制」挡住或不挡住？给每条一句话理由：</p>
+<ol type="A">
+  <li>在栈上写一段 shellcode，让程序跳过去执行</li>
+  <li>修改 text 段的代码，把某个函数的开头几字节改成 jmp</li>
+  <li>读取另一个进程的虚拟地址 <code>0x400000</code> 处的内存</li>
+  <li>通过测量自己内存访问的时间，间接推断同物理机别的 VM 的内存访问模式</li>
+</ol>
+<p>提示：A/B/C 都对应今天讲过的某个具体的页表位或机制；D 是个例外——它不被任何"位"挡住，去查"侧信道"，记住这个词，Week 05 周六我们专门讲。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 09 · 内存分配器</strong>。今天我们站在内核视角看页表；明天换成用户态视角——你的 Python 调 <code>malloc</code> 或申请一个 list，glibc 的 ptmalloc 怎么管理这些字节？brk 和 mmap 各自什么时候用？为什么 jemalloc / tcmalloc 能让多线程程序快几倍？OOM killer 又是按什么规则选择"谁该死"？把今天的「虚拟地址空间是怎么变出来的」和明天的「这块空间是怎么被切分使用的」连起来，你就拿到了完整的内存图景。
+</div>
+
+</body>
+</html>
