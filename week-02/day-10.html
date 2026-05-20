@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 10 · 虚拟内存进阶：page fault、COW、mmap、swap、page cache</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 10 · 虚拟内存进阶：page fault、COW、mmap、swap、page cache</h1>
+  <div class="meta">Week 02 · 周三 · 2026-05-20 · 主线：操作系统核心 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：你的 64 位进程的虚拟地址空间是 <strong>256 TB</strong>，但你机器物理内存可能只有 64 GB。为什么没翻车？为什么 <code>fork()</code> 一个吃了 30GB 的 Python 进程几乎瞬间返回？为什么 <code>cat /proc/meminfo</code> 显示 <code>free</code> 只剩 2GB 但你的服务还能正常分配大块内存？为什么 <code>top</code> 里那个 30GB 大进程的 <code>RES</code> 字段实际只有 6GB？今天我们把昨天讲的"分配"换一个视角，从<span class="key">"内核如何让有限的物理内存看起来无限"</span>切入：<span class="key">page fault 三类 → COW → mmap → swap → page cache → madvise/mlock</span>。这六个概念串起来，你才能真正读懂 Linux 内存监控指标，而不再被 <code>free -h</code> 的数字吓到。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">从昨天回望：分配 ≠ 真的占内存</a></li>
+  <li><a href="#s2">Page fault 三类：minor / major / invalid</a></li>
+  <li><a href="#s3">COW：fork 为什么几乎免费</a></li>
+  <li><a href="#s4">mmap 完全解析：文件映射 vs 匿名映射</a></li>
+  <li><a href="#s5">swap：物理内存的"假肢"</a></li>
+  <li><a href="#s6">page cache：你以为内存满了，其实是缓存</a></li>
+  <li><a href="#s7">madvise / mlock：把内存当资源精细操作</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 从昨天回望：分配 ≠ 真的占内存</h2>
+
+<p>昨天我们站在"分配器"的视角，看 buddy/slab/ptmalloc 怎么把内存切给你。但有一个关键事实昨天没明说——<span class="key">malloc 返回成功，不等于物理内存已经被占用</span>。Linux 默认是 <span class="term">overcommit</span>（超额承诺）的：你 malloc 10GB，内核可能根本没分一页物理内存，只是<strong>在你的虚拟地址空间里画了一块"账目上属于你"的区域</strong>。</p>
+
+<p>真正占用物理页发生在<strong>你第一次去读或写这块虚拟内存</strong>的瞬间。这个瞬间触发的硬件信号就是<span class="term">page fault</span>（缺页异常），CPU 通知内核："这个虚拟地址我查页表没找到映射，你处理一下。"内核要么补一页物理内存挂上去，要么发 SIGSEGV 把你杀掉。</p>
+
+<div class="ascii">malloc(1GB) 那一刻：
+┌──────────────────────────────────────────────┐
+│ 虚拟地址空间   [0x7f...0000 ~ 0x7f...4000_0000]  │  ← 1GB 区域已标记
+│                       ↓                          │
+│ 页表             （还没有 PTE 条目）             │  ← 完全空
+│                       ↓                          │
+│ 物理内存         （0 字节真实占用）              │
+└──────────────────────────────────────────────┘
+
+第一次 *p = 1 那一刻：
+┌──────────────────────────────────────────────┐
+│ CPU 访问 0x7f...0000 → MMU 查页表 → 没找到       │
+│       ↓                                         │
+│ 触发 page fault → 内核接管                       │
+│       ↓                                         │
+│ 内核从 buddy 拿一页 4KB → 填零 → 挂上 PTE        │
+│       ↓                                         │
+│ 重新执行那条指令 → 这次成功                       │
+└──────────────────────────────────────────────┘</div>
+
+<p>这套机制叫 <span class="term">demand paging</span>（按需分页）——<strong>用到才真分</strong>。它是 Linux 内存魔法的基石，下面所有概念都建立在这之上。</p>
+
+<h2 id="s2">2. Page fault 三类：minor / major / invalid</h2>
+
+<p>page fault 不是一个事件，是三种完全不同性格的事件，分清楚它们是读懂内存监控的第一道门。</p>
+
+<h3>(a) Minor fault（轻微缺页）</h3>
+
+<p>页表里没映射，<strong>但要的数据不在磁盘上</strong>——典型场景是首次访问 malloc 出来的匿名页（内核分一页填零）、或者多个进程共享同一物理页（比如 libc，只需要把现有物理页的 PTE 复制一份）。<span class="key">不涉及磁盘 I/O，纯 CPU 开销，几百纳秒级</span>。</p>
+
+<h3>(b) Major fault（重大缺页）</h3>
+
+<p>页表里没映射，<strong>而且需要从磁盘读</strong>。两个典型来源：</p>
+
+<ul>
+  <li>你 mmap 了一个文件，第一次访问某一页时内核要去磁盘读数据。</li>
+  <li>之前因为内存紧张，这一页被换到 swap 了，现在你又访问它，内核要从 swap 读回来。</li>
+</ul>
+
+<p><span class="key">major fault 涉及一次真实磁盘 I/O，开销是 minor fault 的 1000~10000 倍</span>。在 NVMe 上一次约 100μs，在机械盘上是 10ms 级。LLM 服务突然 P99 暴涨，多半就是开始大量 major fault 了。</p>
+
+<h3>(c) Invalid fault（非法缺页）</h3>
+
+<p>访问的地址压根不在进程的虚拟地址空间合法区域里——典型就是空指针解引用、越界访问、释放后再用。<strong>内核发 SIGSEGV，进程死亡</strong>。也就是你熟悉的 segfault。</p>
+
+<h3>怎么看一个进程的 fault 数量</h3>
+
+<pre><code># 查任意进程的 fault 统计
+cat /proc/&lt;PID&gt;/stat | awk '{print "minflt:",$10,"majflt:",$12}'
+
+# 或者用 ps（minflt = 累计 minor，majflt = 累计 major）
+ps -o pid,comm,minflt,majflt -p &lt;PID&gt;
+
+# 实时观察某个程序运行期间的 fault
+/usr/bin/time -v python3 your_script.py
+# 关注输出中的：
+#   Minor (reclaiming a frame) page faults: 123456
+#   Major (requiring I/O) page faults: 5</code></pre>
+
+<p>判断方法：<strong>major fault 持续不为零 = 正在和磁盘较劲</strong>。生产环境如果 majflt 一直在增长，要么 swap 在被频繁使用，要么 mmap 的大文件不在 page cache 里——两种情况都意味着延迟暴涨。</p>
+
+<h2 id="s3">3. COW：fork 为什么几乎免费</h2>
+
+<p>昨天讲 <code>fork()</code> 时一句话带过了 COW，今天展开。问题是：父进程吃了 30GB 内存，<code>fork()</code> 出子进程，难道要复制 30GB？如果真这样，<strong>Redis 做持久化时 fork 一次就要几十秒</strong>，根本不能用。</p>
+
+<h3>真实机制</h3>
+
+<p><code>fork()</code> 时内核做的是：</p>
+
+<ol>
+  <li>给子进程建一个新的 <code>task_struct</code>、新页表。</li>
+  <li>把父进程页表的<strong>每一条 PTE 复制给子进程</strong>，但同时把父子两份 PTE 都标记成"只读"。</li>
+  <li>物理内存<strong>不复制</strong>。父子共享同一批物理页。</li>
+</ol>
+
+<p>所以 fork 的代价 ≈ 页表复制（与<strong>虚拟空间大小</strong>成正比，而不是物理内存），几十毫秒。30GB 进程的页表大约 60MB（按 8 字节 PTE × 1000 万页算），复制这个量级完全 ok。</p>
+
+<h3>分裂的时机</h3>
+
+<p>父或子任意一方<strong>第一次写</strong>某一页时，CPU 检测到只读页被写入，触发 page fault → 内核接管 → 这一刻才真的复制那一页（COW = Copy on Write）：</p>
+
+<div class="ascii">fork 后：
+父进程虚拟页 A  ──┐
+                 ├──→ 物理页 X（只读）
+子进程虚拟页 A  ──┘
+
+父进程写 A：
+父进程虚拟页 A  ──→ 物理页 X'（新分配的副本，可写）
+子进程虚拟页 A  ──→ 物理页 X （还是原来的）</div>
+
+<p>这就是<span class="key">"按需分裂"</span>——只有真的修改的页才会复制，没改的页一辈子共享。Redis 的 RDB 持久化就靠这个：fork 出来的子进程慢慢把内存写入磁盘，主进程继续服务，大多数页其实没被改，所以两边大部分内存共享。</p>
+
+<h3>COW 的隐藏代价</h3>
+
+<p>但 COW 有一个反直觉的坑：<strong>fork 后父进程写得越多，物理内存涨得越快</strong>。Redis 文档里那个"fork 时主进程内存可能翻倍"的警告就是这个原因——极端情况下父子修改的页都不一样，物理占用真的会翻一倍。生产 Redis 实例做 RDB 的瞬间监控内存峰值，就是为了防 COW 触发 OOM。</p>
+
+<h2 id="s4">4. mmap 完全解析：文件映射 vs 匿名映射</h2>
+
+<p>昨天讲 brk vs mmap 是从"用户态拿堆内存的两条路"的角度。今天换角度——<code>mmap</code> 本质是<span class="key">"把一段虚拟地址范围和某个数据源绑定"</span>。数据源不同，得到不同的能力。</p>
+
+<h3>两大类四小种</h3>
+
+<table>
+<tr><th>类型</th><th>flags</th><th>数据源</th><th>典型用途</th></tr>
+<tr><td>匿名 + 私有</td><td><code>MAP_ANONYMOUS | MAP_PRIVATE</code></td><td>无（清零）</td><td>malloc 大块、栈、堆扩展</td></tr>
+<tr><td>匿名 + 共享</td><td><code>MAP_ANONYMOUS | MAP_SHARED</code></td><td>无（清零）</td><td>父子进程共享内存、posix shm</td></tr>
+<tr><td>文件 + 私有</td><td><code>MAP_PRIVATE</code> + fd</td><td>文件</td><td>动态库加载（.so）、COW 文件</td></tr>
+<tr><td>文件 + 共享</td><td><code>MAP_SHARED</code> + fd</td><td>文件</td><td>多进程共享数据、零拷贝 IO、safetensors 加载</td></tr>
+</table>
+
+<h3>mmap 加载大文件 vs 传统 read</h3>
+
+<pre><code># 传统方式
+fd = open("weights.bin", os.O_RDONLY)
+buf = os.read(fd, 10_000_000_000)   # 10GB 全部读到用户态 buffer
+# → 一次性 10GB 拷贝、巨大 RSS、内核 page cache 也复制一份
+
+# mmap 方式
+import mmap
+with open("weights.bin", "rb") as f:
+    mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+    # 虚拟空间分了 10GB，但物理内存 0 字节
+    chunk = mm[100_000_000:100_001_000]
+    # 这一刻才 page fault → 内核从磁盘读这 1KB 所在的页 → 上挂</code></pre>
+
+<p>mmap 的好处：</p>
+
+<ul>
+  <li><strong>按需加载</strong>：只读到的页才进物理内存。10GB 文件你只用 1MB 就只占 1MB。</li>
+  <li><strong>零拷贝共享</strong>：多个进程 mmap 同一个文件 → 共享同一份 page cache → 物理内存只有一份。</li>
+  <li><strong>OS 替你做缓存</strong>：进程死了 page cache 还留着，下次另一个进程 mmap 仍命中。</li>
+</ul>
+
+<p>这就是为什么 <strong>safetensors / GGUF / 大模型权重格式都强烈推荐 mmap 加载</strong>——同机多个 worker 进程共享同一份权重的物理内存，70B 模型只用一份 RAM 就能跑 4 个并行 worker。</p>
+
+<h3>陷阱</h3>
+
+<div class="note">
+<strong>mmap 的隐藏代价</strong>：随机访问 mmap 文件时，每一页第一次访问都是 major fault，磁盘 I/O 是隐藏在普通内存读后面的。对热点不明显的数据，<code>read()</code> 一次性读完反而总延迟更低。判断原则：<strong>顺序读 + 大文件 + 想共享 → mmap；随机读 + 小文件 → read</strong>。
+</div>
+
+<h2 id="s5">5. swap：物理内存的"假肢"</h2>
+
+<p>当物理内存吃紧，内核会把一些<strong>看起来不太热的物理页</strong>写到磁盘上的 swap 分区/文件，腾出物理页给当下的请求。这页被换出的进程对此完全无感——它的虚拟地址还是那个，但 PTE 改成了"在 swap 里第 N 块"。等它下次访问 → major fault → 内核从 swap 读回来 → 重新挂物理页。</p>
+
+<h3>关键指标 swappiness</h3>
+
+<pre><code># 查当前值（默认 60，范围 0~200）
+cat /proc/sys/vm/swappiness
+
+# 数字越大 = 内核越倾向于把匿名页换出去（即使 page cache 还有空间可回收）
+# 数字越小 = 优先回收 page cache，尽量不动匿名页
+
+# 数据库/低延迟服务通常调小
+sudo sysctl -w vm.swappiness=10</code></pre>
+
+<p><span class="key">服务延迟敏感的，几乎都把 swappiness 调到 1~10 甚至完全禁用 swap</span>。原因：一旦你的进程的活跃工作集被换到 swap，每次访问都触发 major fault，延迟从纳秒级跳到毫秒级，相当于慢 10000 倍。</p>
+
+<h3>K8s 与 swap 的恩怨</h3>
+
+<p>K8s 历史上<strong>要求 kubelet 关闭 swap</strong>，否则启动报错——因为 swap 会让 cgroup 的内存计量变得不准、QoS 模型失效。1.22 之后开始有限支持，但生产 LLM 推理集群依然推荐 <code>swapoff -a</code> 完全禁用。这是你部署 vLLM 时 90% 的教程都会让你执行的那条神秘命令的真正原因。</p>
+
+<h3>看 swap 用量</h3>
+
+<pre><code># 全局
+free -h
+# 看 Swap: 行的 used 是否大于 0、是否在涨
+
+# 单进程
+cat /proc/&lt;PID&gt;/status | grep -E "VmSwap|VmRSS"
+
+# 哪些进程 swap 用得最多
+for f in /proc/[0-9]*/status; do
+    awk '/VmSwap|Name/{printf "%s ",$2}END{print ""}' $f
+done | sort -k2 -h -r | head</code></pre>
+
+<h2 id="s6">6. page cache：你以为内存满了，其实是缓存</h2>
+
+<p>新手看到 <code>free -h</code> 显示 <code>used 60GB / free 2GB</code> 立刻紧张："要 OOM 了！"——其实<strong>大部分情况下是 page cache 占走了，不算真的"用掉"</strong>。</p>
+
+<h3>什么是 page cache</h3>
+
+<p>每次你读文件（read 或 mmap），内核都把磁盘上对应的块缓存在内存里。下次同样的读会直接命中内存，不去磁盘。这部分内存就叫 <span class="term">page cache</span>。它属于内核，<strong>没"归属"任何进程</strong>，所以 ps 看进程 RSS 是看不到的。</p>
+
+<p>page cache 的设计哲学是<span class="key">"反正空着也是空着，不如缓存"</span>——所以它会自然涨到吃光"空闲"内存。但它<strong>可被瞬间回收</strong>：内核需要内存做别的事时，丢掉 page cache 即可。所以 page cache 大不是问题，是好事。</p>
+
+<h3>正确读 free -h</h3>
+
+<pre><code>$ free -h
+              total        used        free      shared  buff/cache   available
+Mem:           64Gi        12Gi       2.0Gi       500Mi        50Gi        51Gi
+Swap:          0B          0B         0B</code></pre>
+
+<p>这台机器看起来很紧张，但<strong>关键看最后一列 <code>available</code></strong>——51GB。这才是"如果新进程要内存，内核能立刻腾出来给你的量"。<code>buff/cache</code> 是可回收的（page cache + slab 中的可回收部分），不算真占用。</p>
+
+<div class="note">
+<strong>记住两条铁律</strong>：(1) 只看 <code>free</code> 列会误判，永远看 <code>available</code>；(2) Linux 不存在"内存白白闲置"——闲着也会被 page cache 占满，这是正确行为。如果 <code>available</code> 在持续下降才该警觉。
+</div>
+
+<h3>主动清掉 page cache（调试用，生产慎用）</h3>
+
+<pre><code># sync 把脏页刷盘，否则 drop 会丢数据
+sync
+
+# 1=丢 page cache；2=丢 dentry/inode；3=都丢
+echo 3 | sudo tee /proc/sys/vm/drop_caches</code></pre>
+
+<p>什么时候用？性能基准测试要消除缓存影响时；或者怀疑某个文件被缓存的旧版本污染时。<strong>生产环境绝不要执行</strong>——你会让所有读操作变成磁盘 I/O，延迟瞬间起飞。</p>
+
+<h2 id="s7">7. madvise / mlock：把内存当资源精细操作</h2>
+
+<p>到这里你已经知道内核做了很多"自动决策"——什么时候 page fault、什么时候 swap、什么时候 page cache。但内核不知道你<strong>对未来访问模式的预期</strong>。<code>madvise</code> 和 <code>mlock</code> 就是你给内核的"友情提示"。</p>
+
+<h3>madvise：告诉内核你打算怎么用</h3>
+
+<table>
+<tr><th>建议</th><th>含义</th><th>典型用途</th></tr>
+<tr><td><code>MADV_SEQUENTIAL</code></td><td>我会顺序读</td><td>预读更激进，读完即丢</td></tr>
+<tr><td><code>MADV_RANDOM</code></td><td>我会随机读</td><td>关闭预读，省内存</td></tr>
+<tr><td><code>MADV_WILLNEED</code></td><td>很快要用</td><td>内核预先把页加载进 cache</td></tr>
+<tr><td><code>MADV_DONTNEED</code></td><td>不再需要</td><td>立即释放物理页（但保留映射）</td></tr>
+<tr><td><code>MADV_HUGEPAGE</code></td><td>试着用大页</td><td>提升 TLB 命中</td></tr>
+</table>
+
+<pre><code>// C 示例：mmap 大文件，告诉内核我要顺序读
+void *addr = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+madvise(addr, size, MADV_SEQUENTIAL);   // 内核预读更激进
+madvise(addr, size, MADV_WILLNEED);     // 立刻把热门部分拉进来</code></pre>
+
+<pre><code># Python 也有
+import mmap, os
+with open("weights.bin", "rb") as f:
+    mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+    mm.madvise(mmap.MADV_SEQUENTIAL)
+    # 现在大块顺序读会快很多</code></pre>
+
+<h3>mlock：把页钉在物理内存里</h3>
+
+<p><code>mlock(addr, size)</code> 告诉内核<strong>"这段虚拟内存永远不许被换出去"</strong>。即使系统再缺内存、即使 swappiness 调到 200，这块也碰不到 swap。</p>
+
+<pre><code># 锁定一段地址
+mlock(secret_key_buffer, KEY_SIZE);
+# ... 关键操作 ...
+munlock(secret_key_buffer, KEY_SIZE);
+
+// 锁整个进程的所有页
+mlockall(MCL_CURRENT | MCL_FUTURE);</code></pre>
+
+<p>三个最常见的 mlock 场景：</p>
+
+<ul>
+  <li><strong>低延迟服务</strong>：HFT 交易系统、实时控制器，绝对不能容忍 swap 抖动。</li>
+  <li><strong>密钥保护</strong>：私钥、密码、session token 不希望被换到磁盘（避免取证时被恢复出来）。OpenSSL、libsodium 都默认 mlock 关键 buffer。</li>
+  <li><strong>大模型权重</strong>：保证推理时权重不被驱逐，避免突发 P99 抖动。</li>
+</ul>
+
+<div class="note">
+<strong>mlock 的代价</strong>：被 mlock 的内存就是<strong>真实物理占用</strong>——OS 失去回收弹性。如果你 mlock 了 100GB 但机器只有 128GB，留给其他人的就 28GB，挤别人去 swap 或 OOM。所以 mlock 一定要配合限额（ulimit -l 或 cgroup memory.max）使用。
+</div>
+
+<h3>查看一个进程哪些页被锁了</h3>
+
+<pre><code>cat /proc/&lt;PID&gt;/status | grep -E "VmLck|VmRSS|VmSwap"
+# VmLck = 被 mlock 的字节数</code></pre>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 大模型权重的 mmap 共享是攻击面也是优化点</strong>。生产 LLM 推理服务为了节省内存，会让多个 worker 进程 mmap 同一个 safetensors 文件——物理内存只一份。但这意味着<span class="key">任何能写这个文件的人，等于改了所有 worker 正在运行的模型权重</span>。运行时检测：把权重文件挂只读、加 dm-verity / IMA 完整性度量、定期对内存里的权重做 hash 校验。Agent 安全产品做模型完整性监控时，必须理解 mmap 的语义，否则会被悄悄换权重而不知道。</p>
+
+<p><strong>2. 密钥与 prompt 不应该落到 swap</strong>。你的 Agent 系统拿到用户的 API key、企业内网凭证、敏感 system prompt 后，如果存在普通堆里，进程长跑遇到内存压力可能被换到磁盘——磁盘上的 swap 不加密的话，<strong>任何能读 swap 分区的攻击者都能取回这些秘密</strong>。最佳实践：(a) 关键 buffer 用 <code>mlock</code>；(b) 所在节点强制开 swap 加密（dm-crypt + swap）或禁用 swap；(c) 用完立刻 <code>memset</code> 清零再 free。这是底层 hardening，Python 层做不了，要走 C 扩展或 cffi。</p>
+
+<p><strong>3. Page fault 是侧信道</strong>。fault 数量、fault 时机会泄露<strong>内存访问模式</strong>。学术界已有用 page fault 序列恢复 SGX 飞地内部秘密的攻击。对 Agent 来说更现实的场景：通过观察推理服务的 page fault rate 推断<strong>当前正在处理的 prompt 长度 / 是否命中 KV cache prefix</strong>。共享租户环境里这种侧信道是真实威胁。</p>
+
+<p><strong>4. fork + COW 是 LLM 推理服务初始化的标准模式</strong>。vLLM、HuggingFace TGI 都靠"一个父进程加载完模型 → fork 出 N 个 worker"来快速启动多 worker——靠 COW 让所有 worker 共享只读权重的物理内存。但如果有 worker 偶然写了一下"看起来是只读"的权重区（比如 bug、比如恶意输入触发越界写），COW 会<strong>悄悄复制那一页</strong>，物理内存翻倍。监控这种意外 COW 是 LLM 服务内存暴涨的常见 root cause。</p>
+
+<p><strong>5. OOM、page cache、swap 共同决定了"DoS 多难"</strong>。攻击者要打垮你的推理服务，最便宜的不是直接打到 OOM，而是<span class="key">逼内核疯狂换页</span>——发一批引起大量 host 内存分配（长 prompt、大 batch、复杂 tokenizer 分词）的请求，让活跃工作集超过物理内存，内核开始把权重页换出去，下一次请求又把它换回来。这就是<strong>thrashing（抖动）</strong>。表象不是 OOM，而是 P99 延迟暴涨 100 倍、服务"还活着"但完全不可用。监控指标加上 <code>pgmajfault</code> 速率（<code>vmstat 1</code> 里的 si/so 列），比单纯看 RSS 更早发现这种攻击。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：观察 demand paging 与 major fault</strong></p>
+<p>下面这段 Python 直观地展示了 malloc 后内存不算占用、touch 后才占用：</p>
+<pre><code>cat &gt; demand.py &lt;&lt;'EOF'
+import os, time, ctypes
+PID = os.getpid()
+
+def rss():
+    with open(f"/proc/{PID}/status") as f:
+        for line in f:
+            if line.startswith("VmRSS"):
+                return line.split()[1] + " kB"
+
+print("起始 RSS:", rss())
+
+# 申请 1GB 但不 touch
+buf = ctypes.create_string_buffer(1024 * 1024 * 1024)
+print("申请 1GB 后 RSS:", rss())  # 几乎不涨
+
+# 真的 touch 每一页
+for i in range(0, 1024 * 1024 * 1024, 4096):
+    buf[i] = 1
+print("touch 后 RSS:", rss())  # 涨到 ~1GB
+EOF
+
+# 跑两次，第二次用 /usr/bin/time -v 看 major/minor fault
+python3 demand.py
+/usr/bin/time -v python3 demand.py 2&gt;&amp;1 | grep -E "Maximum resident|Minor|Major"
+</code></pre>
+<p>观察：申请的瞬间 RSS 几乎不变，逐页 touch 后才上涨；minor fault 应该有几十万次，major fault 应该接近 0（数据不在磁盘上）。然后试试用一个 mmap 文件替代 malloc，看 major fault 数量。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：page cache 的真容</strong></p>
+<p>验证"内存看起来满了但其实是 page cache"：</p>
+<pre><code># 起始状态
+free -h
+
+# 制造一个大文件并读一遍（让它进 page cache）
+dd if=/dev/zero of=/tmp/big.bin bs=1M count=2048
+cat /tmp/big.bin &gt; /dev/null
+
+# 再看 free -h，buff/cache 涨了 ~2GB，但 available 几乎没降
+free -h
+
+# 验证 page cache 可被瞬间回收
+sync &amp;&amp; echo 1 | sudo tee /proc/sys/vm/drop_caches
+free -h   # buff/cache 大幅下降，available 不变（说明它"不算真占用"）
+
+# 清理
+rm /tmp/big.bin
+</code></pre>
+<p>问题：(a) 第二次读 <code>cat /tmp/big.bin &gt; /dev/null</code> 比第一次快很多，为什么？(b) 如果你在生产服务器上看到 <code>buff/cache</code> 占了 80% 物理内存，你慌不慌？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考：mlock 的取舍</strong></p>
+<p>你部署一个 LLM Agent 网关，host 内存 128GB，关键组件：</p>
+<ul>
+  <li>模型权重 mmap 加载：30GB</li>
+  <li>用户 session 缓存（含 API key）：2GB</li>
+  <li>审计日志 buffer：500MB</li>
+  <li>其他 worker、tokenizer 缓存等：动态 ~40GB</li>
+</ul>
+<p>你考虑给哪些组件加 <code>mlock</code>？(a) 全 mlock 有什么风险？(b) 只 mlock session 缓存（保护密钥不进 swap）但 swap 关了的话，mlock 还有意义吗？(c) 如果这台机器同时跑推理和 KV cache 服务，应该禁用 swap 还是开 swap 但限制 swappiness？写一份你的决策和理由。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 11 · I/O 模型谱系</strong>。今天我们把"内存怎么被使用"讲透了；明天换 I/O——你的服务怎么<strong>同时</strong>跟 10000 个客户端说话。我们会拆 5 种经典 IO 模型（阻塞/非阻塞/IO 复用/信号驱动/异步）、对比 select/poll/epoll 的内部实现（包括 LT vs ET 模式）、看看新一代 io_uring 怎么把整个范式重写，以及为什么 Reactor 模式几乎统治了现代网络服务。
+</div>
+
+</body>
+</html>
