@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 12 · LAB 内存与 I/O 动手</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+    --lab-bg: #f0f9ff;
+    --lab-border: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--accent); border-radius: 6px; padding: 20px 24px; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .leadin { background: var(--callout-bg); border-left: 3px solid var(--accent-soft); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .lab-block {
+    background: var(--lab-bg);
+    border-left: 4px solid var(--lab-border);
+    padding: 14px 20px;
+    border-radius: 6px;
+    margin: 24px 0;
+  }
+  .lab-block h3 { margin-top: 8px; color: #0369a1; }
+  .lab-step { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .lab-step .label { display: inline-block; background: #0369a1; color: white; font-size: 11px; padding: 1px 8px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+  .expect { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 3px; }
+  .expect strong { color: #92400e; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .connect { background: var(--callout-bg); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent-soft); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+  .warn { background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: #991b1b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 12 · LAB 内存与 I/O 动手 🔧</h1>
+  <div class="meta">Week 02 · 周五 · 2026-05-24 · 主线：操作系统核心 · 预计 30min 阅读 + 1.5h 上机</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：本周前 4 天讲了<span class="key">虚拟内存、页表、TLB、malloc 三件套、page fault、mmap、page cache、5 大 I/O 模型、epoll</span>——满满都是抽象层。今天<strong>全部落到命令和代码上</strong>。我们会用 6 组 LAB 把<span class="key">系统级内存观察（free/vmstat）→ 进程级地址空间观察（/proc/maps、smaps）→ mmap 实战加速大文件 → 用 Python selectors 写一个 epoll 回声服务器 → valgrind/leaks 抓内存泄漏 → 综合：从外到内诊断 LLM 服务的内存</span>串成完整链路。所有命令都标了平台差异——mac 上跑/Linux 跑/Docker 跑——和你的输出对比。
+</div>
+
+<div class="toc">
+<strong>今日实验</strong>
+<ol>
+  <li><a href="#l1">LAB 1：free + vmstat 字段全解读</a></li>
+  <li><a href="#l2">LAB 2：/proc/[pid]/maps 与 smaps 看进程地址空间</a></li>
+  <li><a href="#l3">LAB 3：用 mmap 加速大文件读取</a></li>
+  <li><a href="#l4">LAB 4：Python selectors 写一个 epoll 回声服务器</a></li>
+  <li><a href="#l5">LAB 5：valgrind / leaks 抓内存泄漏</a></li>
+  <li><a href="#l6">LAB 6：综合演练 · 诊断一个内存"过高"的 LLM 服务</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+</ol>
+</div>
+
+<div class="warn">
+<strong>平台说明</strong>：你在 mac 上。<code>/proc</code> 文件系统、<code>vmstat</code>、<code>valgrind</code> 等都是 Linux 专属，mac 上有不同的等价工具（<code>vm_stat</code>、<code>leaks</code>、<code>vmmap</code>）。本文档为每个 LAB 同时给出 <strong>mac 命令</strong>和 <strong>Linux 命令</strong>。强烈建议你开一个 Ubuntu Docker 把 LAB 1-5 在 Linux 上再做一遍：<br>
+<code>docker run --rm -it --privileged ubuntu:22.04 bash</code>，然后 <code>apt update &amp;&amp; apt install -y procps htop sysstat valgrind python3 python3-pip</code>。
+</div>
+
+<h2 id="l1">1. LAB 1：free + vmstat 字段全解读</h2>
+
+<p>这俩工具是你 ssh 到一台陌生机器后的<strong>第一组命令</strong>。30 秒内你就要决定：内存压力大不大、要不要扩容、是不是已经在 swap。今天把每个字段搞清楚。</p>
+
+<div class="lab-block">
+<h3>步骤（Linux 优先；mac 等价命令在每步末尾）</h3>
+
+<div class="lab-step"><span class="label">A</span>看一眼全局内存。</div>
+
+<pre><code># Linux
+free -h
+
+# 你会看到类似：
+#               total        used        free      shared  buff/cache   available
+# Mem:           15Gi       4.2Gi       1.1Gi       320Mi        10Gi        10Gi
+# Swap:         2.0Gi          0B       2.0Gi
+
+# mac 等价
+vm_stat
+# 输出是按 page (4096 / 16384 字节) 计数，要自己乘 page size。
+sysctl hw.memsize hw.pagesize</code></pre>
+
+<div class="expect"><strong>关键解读</strong>：<code>used</code> 不是"用掉了多少"——它<strong>不包括 buff/cache</strong>。真正决定"还能不能再开应用"的是 <span class="key">available</span> 列（buff/cache 大部分可以瞬间回收）。新手最常见的恐慌是看 <code>free</code> 很小就以为要 OOM，其实只要 <code>available</code> 还多就没事——这是 Day 10 page cache 那节讲的"Linux 会用满你所有内存，但都是 cache"。</div>
+
+<div class="lab-step"><span class="label">B</span>vmstat 看动态：内存、swap、IO、CPU 全在一张表。</div>
+
+<pre><code># Linux: 每 1 秒采一次，连采 10 次
+vmstat 1 10
+
+# 输出关键列：
+# procs ----memory---------- ---swap-- -----io---- -system-- ------cpu-----
+#  r  b   swpd   free  buff  cache   si   so    bi    bo   in   cs us sy id wa st
+#  1  0      0   1.1G  120M  9.8G    0    0    12    34  301  847 12  3 84  1  0
+
+# mac 没有 vmstat，但 vm_stat 1 也能周期采样
+vm_stat 1</code></pre>
+
+<div class="expect"><strong>这 18 列里你只需要盯死 5 列</strong>：<code>r</code>=就绪队列长度（&gt;CPU 核数就是 CPU 过载）；<code>si/so</code>=每秒从 swap 读入/写出的 KB（任何非零都是危险信号）；<code>bi/bo</code>=磁盘读写；<code>cs</code>=每秒上下文切换次数（高得离谱说明线程太多）；<code>wa</code>=CPU 等 IO 的百分比。<span class="key">"si 和 so 任意一个不是 0" 就立刻报警</span>——这是 Day 9 swap 那节讲的"swap 一旦激活，性能崩塌"。</div>
+
+<div class="lab-step"><span class="label">C</span>动手制造一次内存压力。</div>
+
+<pre><code># 起一个 Python 程序快速吃 8GB 内存
+python3 -c "
+import time
+buf = bytearray(8 * 1024 * 1024 * 1024)  # 8 GiB
+print('allocated 8GiB, sleeping 30s...')
+time.sleep(30)
+" &amp;
+
+# 另开终端，盯着 free -h 变化
+watch -n 1 free -h
+
+# 同时盯 vmstat
+vmstat 1</code></pre>
+
+<div class="expect"><strong>观察</strong>：<code>used</code> 一路涨，<code>available</code> 跌；如果你的机器内存不够 8GiB，会先看到 buff/cache 被挤压（系统把可丢弃的缓存释放给你），然后 si/so 出现非零（开始 swap），最后可能触发 OOM killer。Day 9 第 7 节 OOM 那段，今天你能亲眼看到了。</div>
+</div>
+
+<h2 id="l2">2. LAB 2：/proc/[pid]/maps 与 smaps</h2>
+
+<p>Day 8 你画了 32 位 / 64 位地址空间的图。今天我们打开一个真实进程，对着图找每段。</p>
+
+<div class="warn">
+<strong>mac 注意</strong>：mac 没有 <code>/proc</code>。等价工具是 <code>vmmap &lt;pid&gt;</code>，输出格式不同但信息量类似。本节用 Linux 演示，mac 用户用 <code>vmmap</code> 替代。
+</div>
+
+<div class="lab-block">
+<h3>步骤（Linux / Linux Docker）</h3>
+
+<div class="lab-step"><span class="label">A</span>挑一个正在跑的进程（拿你自己的 shell）。</div>
+
+<pre><code>echo "我的 shell PID: $$"
+cat /proc/$$/maps | head -30
+
+# 你会看到一堆形如：
+# 555f8c800000-555f8c82c000 r--p 00000000 fd:01 1234567 /usr/bin/bash
+# 7f6a3a000000-7f6a3a02d000 r--p 00000000 fd:01 7654321 /usr/lib/.../libc.so.6
+# 7ffd1c000000-7ffd1c021000 rw-p 00000000 00:00 0       [stack]
+# 7ffd1c0bb000-7ffd1c0be000 r--p 00000000 00:00 0       [vvar]</code></pre>
+
+<div class="expect"><strong>每一行 = 一段 VMA（virtual memory area）</strong>。列含义：<code>起始-结束地址 权限(rwxp) 文件偏移 设备 inode 路径</code>。<code>r--p</code>=只读私有（典型的代码段）；<code>rw-p</code>=可读写私有（堆/栈/匿名映射）；<code>r-xp</code>=可读可执行（旧风格代码段）。<span class="key">注意 [stack]、[heap]、[vvar]、[vdso] 这几个特殊段</span>——这就是 Day 1 第 4 节进程地址空间图里画的那几块。</div>
+
+<div class="lab-step"><span class="label">B</span>对 maps 做统计：进程一共映射了多少 MB？</div>
+
+<pre><code>cat /proc/$$/maps | awk '
+{
+  split($1, a, "-")
+  start = strtonum("0x" a[1])
+  end   = strtonum("0x" a[2])
+  total += end - start
+}
+END { printf "VSZ (虚拟内存大小): %.1f MB\n", total/1024/1024 }'</code></pre>
+
+<div class="expect"><strong>典型 shell</strong> 的 VSZ 在 10-30 MB。这只是"虚拟地址空间用了多大"，不是实际物理占用。<span class="key">VSZ ≠ RSS</span>——这是 Day 8 / Day 10 反复强调的：很多 VMA 是"声明了但没真正读进物理页"的。</div>
+
+<div class="lab-step"><span class="label">C</span>smaps 看每段的真实物理占用。</div>
+
+<pre><code># /proc/[pid]/smaps 给每个 VMA 附加详细统计
+cat /proc/$$/smaps | head -40
+
+# 关键字段:
+# Size:        虚拟大小（= maps 里那行的 end - start）
+# Rss:         实际驻留物理内存大小
+# Pss:         按共享比例分摊的 Rss（多个进程共享的库会被除以共享数）
+# Shared_Clean / Shared_Dirty:  和其他进程共享的页
+# Private_Clean / Private_Dirty: 私有页
+# Swap:        被换出到 swap 的部分</code></pre>
+
+<div class="lab-step"><span class="label">D</span>找出进程里"实际最占内存"的 5 个段。</div>
+
+<pre><code>cat /proc/$$/smaps | awk '
+/^[0-9a-f]+-/ { name=$0; }
+/^Rss:/       { rss=$2; print rss " KB  " name }
+' | sort -rn | head -5</code></pre>
+
+<div class="expect"><strong>预期</strong>：通常排第一的是 <code>[heap]</code> 或某个大共享库（libc）。<span class="key">如果你的 LLM 推理进程做这个统计，第一名一定是某个匿名 rw 段——那就是权重 + KV cache</span>。这也是 Day 11 mmap 模型加载相关讲过的：HuggingFace 的 safetensors 默认就是 mmap 进来的，在 smaps 里会看到一个几十 GB 的 r--p 文件映射段。</div>
+
+<div class="lab-step"><span class="label">E</span>mac 等价。</div>
+
+<pre><code># mac 上用 vmmap
+vmmap $$ | head -40
+# 输出会按 region type 分组（MALLOC / Stack / __TEXT / __DATA / ...），
+# 比 Linux 的 maps 更"语义化"
+
+# 看一个进程所有 region 大小排序
+vmmap $$ -summary</code></pre>
+</div>
+
+<h2 id="l3">3. LAB 3：用 mmap 加速大文件读取</h2>
+
+<p>Day 10 讲了 mmap 把文件映射到进程地址空间，省去 read 的拷贝。今天对比一下 read vs mmap 在"统计一个 1GB 文件里某字符出现次数"上的差距。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>生成一个 1GB 测试文件。</div>
+
+<pre><code># 用 /dev/urandom 写 1GB（mac / Linux 都能跑；慢一点用 zero 也行）
+dd if=/dev/zero of=/tmp/bigfile bs=1M count=1024
+ls -lh /tmp/bigfile  # 应该是 1.0G
+
+# 别忘了清掉 page cache 才能公平测试 (仅 Linux)
+sync; echo 3 &gt; /proc/sys/vm/drop_caches   # 要 root
+# mac 上重启或 purge（要 sudo）
+sudo purge   # mac 等价的清缓存</code></pre>
+
+<div class="lab-step"><span class="label">B</span>方案 1：传统 read 一次性读进来。</div>
+
+<pre><code>cat &gt; /tmp/read_bench.py &lt;&lt;'EOF'
+import time, sys
+path = '/tmp/bigfile'
+target = ord('a')
+
+t0 = time.perf_counter()
+with open(path, 'rb') as f:
+    data = f.read()                  # 整个文件读进 user buffer
+    count = data.count(bytes([target]))
+print(f"read all + count: {time.perf_counter()-t0:.2f}s, count={count}")
+EOF
+
+python3 /tmp/read_bench.py</code></pre>
+
+<div class="expect"><strong>预期</strong>：5-10 秒（首次冷读），内存峰值占用 ~1GB。第二次跑（page cache 已热）会快很多。</div>
+
+<div class="lab-step"><span class="label">C</span>方案 2：mmap 映射，不显式拷贝。</div>
+
+<pre><code>cat &gt; /tmp/mmap_bench.py &lt;&lt;'EOF'
+import time, mmap, os
+path = '/tmp/bigfile'
+
+t0 = time.perf_counter()
+with open(path, 'rb') as f:
+    mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+    count = mm.count(b'a')
+    mm.close()
+print(f"mmap + count: {time.perf_counter()-t0:.2f}s, count={count}")
+EOF
+
+# 先清缓存（如有权限），再跑
+sudo purge   # mac
+# echo 3 | sudo tee /proc/sys/vm/drop_caches   # Linux
+
+python3 /tmp/mmap_bench.py</code></pre>
+
+<div class="expect"><strong>预期</strong>：冷启动下 mmap 不一定快多少（磁盘 IO 一样要做），但 <span class="key">user 内存峰值会显著低</span>——你不再持有一份完整文件副本，OS page cache 才是真正持有者。在多个进程并发处理同一个文件时差距会拉开：mmap 多个进程共享同一份物理页，<code>read</code> 各自拷贝一份。</div>
+
+<div class="lab-step"><span class="label">D</span>用 madvise 进一步提示访问模式。</div>
+
+<pre><code>cat &gt; /tmp/mmap_advise.py &lt;&lt;'EOF'
+import time, mmap, os
+with open('/tmp/bigfile', 'rb') as f:
+    mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+    # 告诉内核我会顺序读 → 内核会更积极地预读后面的页
+    mm.madvise(mmap.MADV_SEQUENTIAL)
+    t0 = time.perf_counter()
+    count = mm.count(b'a')
+    print(f"seq advised: {time.perf_counter()-t0:.2f}s, count={count}")
+    mm.close()
+EOF
+python3 /tmp/mmap_advise.py</code></pre>
+
+<div class="expect"><strong>解读</strong>：madvise 是"我向内核保证我的访问模式，内核以此优化预读 / 回收策略"。<code>MADV_SEQUENTIAL</code> = 顺序读，<code>MADV_RANDOM</code> = 随机访问（关闭预读），<code>MADV_DONTNEED</code> = 用完丢弃（适合大模型 checkpoint 加载完就 evict）。<span class="key">vLLM、HuggingFace transformers 加载 safetensors 时都会用 madvise 优化</span>——下周二讲推理引擎你会再见。</div>
+</div>
+
+<h2 id="l4">4. LAB 4：Python selectors 写 epoll 回声服务器</h2>
+
+<p>Day 11 你学了 5 种 IO 模型，<strong>epoll</strong> 是 Linux 上高并发服务的核心。今天用 Python <code>selectors</code> 模块（自动选最优后端：Linux=epoll，mac=kqueue，Windows=select）写一个能撑 1 万并发的回声服务器——50 行代码。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>先写一个最朴素的"一连接一线程"的版本作为对照。</div>
+
+<pre><code>cat &gt; /tmp/echo_thread.py &lt;&lt;'EOF'
+"""阻塞 + 多线程版：每连接一线程"""
+import socket, threading
+
+def handle(conn, addr):
+    while True:
+        data = conn.recv(4096)
+        if not data: break
+        conn.sendall(data)
+    conn.close()
+
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', 9001))
+s.listen(128)
+print('thread-echo listening on 9001')
+while True:
+    conn, addr = s.accept()
+    threading.Thread(target=handle, args=(conn, addr), daemon=True).start()
+EOF
+
+python3 /tmp/echo_thread.py &amp;</code></pre>
+
+<div class="lab-step"><span class="label">B</span>用 selectors 写 epoll/kqueue 版。</div>
+
+<pre><code>cat &gt; /tmp/echo_epoll.py &lt;&lt;'EOF'
+"""单线程 + selectors（背后是 epoll / kqueue）"""
+import socket, selectors
+
+sel = selectors.DefaultSelector()
+
+def on_accept(server):
+    conn, addr = server.accept()
+    conn.setblocking(False)
+    sel.register(conn, selectors.EVENT_READ, on_read)
+
+def on_read(conn):
+    try:
+        data = conn.recv(4096)
+    except (ConnectionResetError, BlockingIOError):
+        data = None
+    if not data:
+        sel.unregister(conn)
+        conn.close()
+        return
+    conn.sendall(data)
+
+server = socket.socket()
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(('127.0.0.1', 9002))
+server.listen(1024)
+server.setblocking(False)
+sel.register(server, selectors.EVENT_READ, on_accept)
+
+print(f'selectors-echo listening on 9002 (backend: {type(sel).__name__})')
+while True:
+    for key, mask in sel.select(timeout=None):
+        callback = key.data
+        callback(key.fileobj)
+EOF
+
+python3 /tmp/echo_epoll.py &amp;</code></pre>
+
+<div class="expect"><strong>注意打印的 backend</strong>：mac 上是 <code>KqueueSelector</code>，Linux 上是 <code>EpollSelector</code>。Python 替你选好了——这就是 selectors 模块的价值。</div>
+
+<div class="lab-step"><span class="label">C</span>用 <code>nc</code> 手动测一下两个服务器都能跑。</div>
+
+<pre><code>nc 127.0.0.1 9001
+# 输入任何字符串回车，会被回显
+# Ctrl+C 退出
+
+nc 127.0.0.1 9002
+# 同上</code></pre>
+
+<div class="lab-step"><span class="label">D</span>对比并发能力（粗略 benchmark）。</div>
+
+<pre><code># 写一个并发连接 + 收发的客户端
+cat &gt; /tmp/echo_client.py &lt;&lt;'EOF'
+import socket, threading, time, sys
+port = int(sys.argv[1])
+N = int(sys.argv[2])
+
+def one():
+    s = socket.socket()
+    try:
+        s.connect(('127.0.0.1', port))
+        for _ in range(20):
+            s.sendall(b'x'*64)
+            s.recv(64)
+        s.close()
+    except Exception as e:
+        print(e)
+
+t0 = time.perf_counter()
+ts = [threading.Thread(target=one) for _ in range(N)]
+for t in ts: t.start()
+for t in ts: t.join()
+print(f"N={N} port={port}: {time.perf_counter()-t0:.2f}s")
+EOF
+
+# 测 thread 版（容易在 N&gt;500 时崩或变慢）
+python3 /tmp/echo_client.py 9001 500
+
+# 测 epoll 版（同样 500 个并发，更稳更快）
+python3 /tmp/echo_client.py 9002 500
+
+# 加大到 2000 个看差距
+python3 /tmp/echo_client.py 9002 2000</code></pre>
+
+<div class="expect"><strong>预期</strong>：thread 版在 500 并发时已能感到吃力（线程切换 + GIL）；epoll/kqueue 版能轻松撑 2000+ 并发——<span class="key">所有事件在<strong>同一个线程</strong>循环里处理</span>。这就是 Nginx / Redis / Node.js 高并发的秘密。Day 11 第 4 节那张"select vs poll vs epoll 复杂度对比"，今天你跑过两个版本就有手感了。</div>
+
+<div class="lab-step"><span class="label">E</span>清理：杀掉后台服务器。</div>
+
+<pre><code>jobs
+kill %1 %2  # 或者直接 pkill -f echo_</code></pre>
+</div>
+
+<h2 id="l5">5. LAB 5：valgrind / leaks 抓内存泄漏</h2>
+
+<p>Python 本身有 GC，不太容易写出内存泄漏；但如果你用 ctypes 调 C 库、或写 C 扩展、或调用未释放的第三方库，泄漏一样会发生。<code>valgrind</code>（Linux）/ <code>leaks</code>（mac）是定位泄漏的金标准。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>故意写一段 C 代码有泄漏。</div>
+
+<pre><code>cat &gt; /tmp/leak.c &lt;&lt;'EOF'
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+void leak_one() {
+    char *p = malloc(1024);     // 1 KB
+    strcpy(p, "hello leak");
+    // 故意不 free
+}
+
+int main() {
+    for (int i = 0; i &lt; 100; i++) leak_one();
+    return 0;
+}
+EOF
+
+# Linux:
+gcc -g -O0 /tmp/leak.c -o /tmp/leak
+
+# mac (同样的 gcc 命令，clang 兼容):
+clang -g -O0 /tmp/leak.c -o /tmp/leak</code></pre>
+
+<div class="lab-step"><span class="label">B</span>Linux: 用 valgrind 跑。</div>
+
+<pre><code># Linux Docker 里:
+apt install -y valgrind
+valgrind --leak-check=full --show-leak-kinds=all /tmp/leak
+
+# 你会看到类似:
+# ==12345== 102,400 bytes in 100 blocks are definitely lost in loss record ...
+# ==12345==    by 0x4006A2: leak_one (leak.c:5)
+# ==12345==    by 0x4006D9: main      (leak.c:11)</code></pre>
+
+<div class="expect"><strong>valgrind 的 4 种泄漏分级</strong>：<code>definitely lost</code>（找不到指针了，铁定泄漏）；<code>indirectly lost</code>（结构体指针丢了，里面的子结构也连带丢）；<code>possibly lost</code>（指针只指到内部某个偏移，可能是设计的，也可能是 bug）；<code>still reachable</code>（程序退出时还能找到指针，例如全局静态——通常不算 bug）。</div>
+
+<div class="lab-step"><span class="label">C</span>mac: 用 <code>leaks</code>。</div>
+
+<pre><code># mac 自带，无需安装
+MallocStackLogging=1 leaks --atExit -- /tmp/leak
+
+# 输出会列出每个泄漏 block 的 stack trace</code></pre>
+
+<div class="lab-step"><span class="label">D</span>Python 端的内存"泄漏"诊断。</div>
+
+<pre><code># Python 没有真泄漏（GC 兜底），但常见"内存只增不减"是因为
+# 引用没断（全局 dict 一直加 key、closure 持有大对象、event handler
+# 没解绑等）。用 tracemalloc 定位：
+
+cat &gt; /tmp/tracemalloc_demo.py &lt;&lt;'EOF'
+import tracemalloc, time
+
+tracemalloc.start()
+cache = []
+
+def work():
+    cache.append(bytearray(10 * 1024 * 1024))  # 每次 10MB，永不释放
+
+snap1 = tracemalloc.take_snapshot()
+for _ in range(5): work()
+snap2 = tracemalloc.take_snapshot()
+
+# 对比两次快照，看新增分配集中在哪一行
+top = snap2.compare_to(snap1, 'lineno')
+for stat in top[:5]:
+    print(stat)
+EOF
+python3 /tmp/tracemalloc_demo.py</code></pre>
+
+<div class="expect"><strong>预期</strong>：tracemalloc 会精确指出 <code>cache.append(...)</code> 那行是泄漏热点。在生产 LLM 服务里出现"内存随时间线性上涨"，<span class="key">十次有八次是某个 dict / list 越积越大</span>——tracemalloc 是首选工具。<code>objgraph</code> 是补充：能画出对象引用图。</div>
+</div>
+
+<h2 id="l6">6. LAB 6：综合演练 · 诊断一个内存"过高"的 LLM 服务</h2>
+
+<p>把今天 5 个 LAB 串起来。模拟运维场景：业务报告"我们的 LLM 推理服务用了 70GB 内存，是不是泄漏？"——你需要 5 分钟内给出判断。</p>
+
+<div class="lab-block">
+<h3>诊断流程</h3>
+
+<div class="lab-step"><span class="label">1</span>外层先看 <code>free -h</code> 和 <code>vmstat 1 5</code>。</div>
+<p>关注：available 是否充足？si/so 是否为 0？如果 si/so 非零，<strong>性能已经崩了</strong>，先扩内存再说。</p>
+
+<div class="lab-step"><span class="label">2</span>定位到具体 PID：<code>ps aux --sort=-rss | head -10</code>。</div>
+<p>看 RSS 最大的进程，确认是不是 LLM 服务。注意 VSZ 远大于 RSS 是正常的（mmap 模型权重导致虚拟空间巨大）。</p>
+
+<div class="lab-step"><span class="label">3</span>看进程的 smaps，找出占大头的段。</div>
+<pre><code>cat /proc/&lt;pid&gt;/smaps_rollup
+# 这个文件是 smaps 的汇总版（更易读）
+
+# 或拆开看：
+sudo cat /proc/&lt;pid&gt;/smaps | awk '
+/^[0-9a-f]+.*\.safetensors/  { name=$NF; flag=1 }
+/^[0-9a-f]+.*\[heap\]/        { name="[heap]"; flag=1 }
+/^[0-9a-f]+.*\[stack\]/       { name="[stack]"; flag=1 }
+/^[0-9a-f]+/ && !flag         { name="anon"; flag=1 }
+/^Rss:/                       { rss=$2; print rss " KB  " name; flag=0 }
+' | sort -rn | head</code></pre>
+
+<div class="expect"><strong>典型分布</strong>：safetensors 模型映射 ~14GB（7B fp16）、KV cache（匿名 rw 段）几 GB 到几十 GB、Python 堆几百 MB。<span class="key">如果 [heap] 占大头，才是真"内存泄漏嫌疑"</span>；如果是模型映射或 KV cache，那是设计本就如此。</div>
+
+<div class="lab-step"><span class="label">4</span>用 tracemalloc / Py-Spy / memray 跟踪 Python 端动态。</div>
+<pre><code># memray 是 Bloomberg 出品的 Python 内存 profiler，比 tracemalloc 更直观
+pip install memray
+memray run my_llm_server.py
+memray flamegraph memray-*.bin
+# 然后浏览器打开生成的 html，火焰图标识哪行代码持有最多内存</code></pre>
+
+<div class="lab-step"><span class="label">5</span>区分"内存增长"和"内存泄漏"。</div>
+
+<table>
+<tr><th>现象</th><th>是否是泄漏</th><th>常见原因</th></tr>
+<tr><td>启动后稳定在 70GB 不变</td><td>否</td><td>模型 mmap + KV cache 池预分配（vLLM 默认 gpu_memory_utilization=0.9）</td></tr>
+<tr><td>随请求数线性增长，请求结束也不降</td><td>是</td><td>session/历史 dict 持续 append，未做 LRU</td></tr>
+<tr><td>峰值时高，闲时回落</td><td>否</td><td>批处理高峰期 KV cache 占用上去，请求完释放</td></tr>
+<tr><td>分配增长但 RSS 不增</td><td>否</td><td>Python 内部分配器 free 了但没还给 OS（glibc 默认行为）</td></tr>
+<tr><td>SWAP 在涨</td><td>是危机</td><td>不管是不是泄漏，立刻处理：扩容 / 限流 / 调小 gpu_memory_utilization</td></tr>
+</table>
+
+<div class="expect"><strong>给业务的回答模板</strong>：<br>
+"70GB 中 14GB 是模型权重的 mmap 映射（多副本进程共享物理页，不是 70GB × N）；50GB 是 vLLM 预分配的 KV cache 池，<strong>这是配置项</strong>，不是漏；剩下 6GB 是 Python 运行时 + 请求中状态。<span class="key">没有泄漏</span>。如果想降，调小 <code>--gpu-memory-utilization 0.7</code> 或 <code>--max-model-len 8192</code>。"</div>
+</div>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. <code>/proc/[pid]/maps</code> 是 LLM 服务的"X 光片"</strong>。安全审计时，你能用 maps 看清楚一个被攻陷的进程<strong>真正映射了哪些文件</strong>——有没有意外的 <code>.so</code> 被 LD_PRELOAD 注入？模型权重路径是不是被替换？业务 Python 进程是不是悄悄 mmap 了 <code>/etc/shadow</code>？这些只有 maps/smaps 能告诉你。日常巡检脚本应该把 <code>/proc/&lt;pid&gt;/maps</code> 里非白名单文件路径全部告警。</p>
+
+<p><strong>2. epoll 服务模型是 LLM 推理网关的标准形态</strong>。LAB 4 你写的 50 行 selectors 回声服务，把它换成"接受流式 HTTP 请求 → 转发到 vLLM → 把 token 流回写客户端"，就是一个最小可用 LLM 网关。<span class="key">高并发 LLM 服务的瓶颈很少在 epoll 层，几乎全在 GPU</span>——这个直觉是后面 Phase 2 必须的。同时单线程事件循环也意味着<strong>一个慢回调能阻塞全部连接</strong>，这是后面讲 Nginx 反代时要避开的坑。</p>
+
+<p><strong>3. mmap 是模型加载的核心机制，但也是新攻击面</strong>。Llama-2 70B 的 safetensors 文件 140GB，全部 mmap 映射进进程。如果攻击者能往磁盘上"换"一份同名但是恶意权重文件（甚至只是悄悄 bit flip 几个数），下次 page fault 取页时进程内存里就是篡改后的内容——而内存里看起来还和"合法"hash 一致（因为校验通常只在加载时做一次）。<span class="key">这是模型权重供应链攻击在内存层面的延伸</span>。防御：用 <code>fsverity</code> 给整个文件做按页校验，或者首次加载后立刻 <code>mlock</code> 全部映射防止换出再换入。</p>
+
+<p><strong>4. valgrind / leaks 不只是抓泄漏，还是"看看程序到底做了哪些 malloc"的窗口</strong>。Agent 安全产品常需要对一段未知二进制（比如 LLM 生成的可执行文件）做"无害化执行"，<code>valgrind --tool=memcheck</code> 或更强大的 <code>valgrind --tool=helgrind</code> / <code>callgrind</code> 是低成本的<strong>沙箱化分析手段</strong>——比起完整的 ptrace 跟踪开销小很多，又能拿到内存访问模式。明天讲 strace 深入和 eBPF 是更生产级的方案。</p>
+
+<p><strong>5. 内存监控是 P99 抖动的第一嫌疑人</strong>。LLM 推理服务延迟突然抖动，5 分钟诊断顺序：<code>vmstat 1</code> 看 si/so → 看 GPU 利用率（nvidia-smi） → 看进程 RSS 是否在涨 → 看 smaps 区分是 KV cache 增长还是 Python 堆增长 → 看请求队列长度。<span class="key">si/so 任一非零 = 立刻限流 + 扩容，没有第二条路</span>。Day 9 讲 swap 那段：swap 一开就是性能崩塌，对延迟敏感服务等于"宕机"。</p>
+</div>
+
+<h2>📝 今日小结 · 命令速查表</h2>
+
+<p>今天 hands-on 接触的工具及其用途速查表（建议存下来，未来 23 周经常翻）：</p>
+
+<table>
+<tr><th>工具 / 命令</th><th>用途</th><th>平台</th></tr>
+<tr><td><code>free -h</code></td><td>看全机内存余量，重点 available 列</td><td>Linux</td></tr>
+<tr><td><code>vm_stat</code></td><td>mac 等价 free</td><td>mac</td></tr>
+<tr><td><code>vmstat 1</code></td><td>动态采样内存/swap/IO/CPU</td><td>Linux</td></tr>
+<tr><td><code>/proc/[pid]/maps</code></td><td>进程虚拟地址空间所有 VMA</td><td>Linux</td></tr>
+<tr><td><code>/proc/[pid]/smaps</code></td><td>每段 VMA 的 Rss / Pss / Swap 详细统计</td><td>Linux</td></tr>
+<tr><td><code>vmmap &lt;pid&gt;</code></td><td>mac 上的 maps 等价</td><td>mac</td></tr>
+<tr><td><code>mmap.mmap(...)</code></td><td>Python 把文件映射进地址空间</td><td>跨平台</td></tr>
+<tr><td><code>mm.madvise(...)</code></td><td>告诉内核访问模式以优化预读/回收</td><td>跨平台</td></tr>
+<tr><td><code>selectors.DefaultSelector()</code></td><td>跨平台自动选 epoll / kqueue</td><td>跨平台</td></tr>
+<tr><td><code>valgrind --leak-check=full</code></td><td>C/C++ 泄漏检测</td><td>Linux</td></tr>
+<tr><td><code>leaks --atExit --</code></td><td>mac 等价 valgrind 泄漏检测</td><td>mac</td></tr>
+<tr><td><code>tracemalloc / memray</code></td><td>Python 内存增长定位</td><td>跨平台</td></tr>
+<tr><td><code>sudo purge</code> / <code>drop_caches</code></td><td>清 page cache（公平 benchmark）</td><td>mac / Linux</td></tr>
+</table>
+
+<h2>🧪 今日小练习</h2>
+
+<ol>
+  <li><strong>动手</strong>：起一个 <code>python3 -c "while True: pass"</code> 进程，用 <code>cat /proc/&lt;pid&gt;/smaps</code>（Linux）或 <code>vmmap &lt;pid&gt;</code>（mac）观察它的 [heap]、[stack]、加载的 libpython.so 段。把这三段的 Rss 加起来，看是否接近 <code>ps -o rss=</code> 输出。如果不一致，差异在哪几段？</li>
+  <li><strong>观察</strong>：在 LAB 4 启动 epoll 回声服务器后，用 <code>ss -tnp | grep 9002</code>（Linux）或 <code>lsof -i :9002</code>（mac）看一下它的连接数随客户端数变化。再用 <code>cat /proc/&lt;pid&gt;/status | grep VmRSS</code>，看 1000 并发连接时 server 的 RSS 是多少。每连接 server 端大约消耗多少内存？</li>
+  <li><strong>思考</strong>：今天 LAB 3 你看到 mmap 和 read 在"全文件统计字符"任务上差距不大。在什么访问模式下 mmap 会<strong>显著优于</strong> read？什么模式下 mmap 反而<strong>更差</strong>？请各列举一个真实场景（提示：随机访问、超出物理内存大小、写后 fsync 等）。</li>
+</ol>
+
+<div class="next">
+<strong>明日预告 · Day 13 · 周六 🔐 · 系统调用追踪与 eBPF 入门</strong>。本周第二个安全主线专题，4 小时密集。今天你用 strace（在 Day 5 也用过）能跟单进程 syscall，但生产环境跑 strace 会让目标进程慢 20-50%，不现实。明天讲 eBPF：在内核里以"事件驱动 + JIT 编译"方式跑用户写的 hook，零拷贝、几乎零开销地观察整机所有进程的 syscall / 网络 / 调度 / 内存事件。会动手用 <code>bpftrace</code> 写一些 one-liner，比如"统计全机 60 秒内打开了哪些文件" / "看哪个进程在 exec 反弹 shell 模式的命令"。这是 Agent 安全产品在<strong>沙箱逃逸检测</strong>和<strong>异常行为告警</strong>上的核心底座——周六上完你能跟蓝队同事聊 Falco 和 Tetragon 内部是怎么工作的。
+</div>
+
+</body>
+</html>
