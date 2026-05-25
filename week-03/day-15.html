@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 15 · 网络分层与 IP</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 15 · 网络分层与 IP</h1>
+  <div class="meta">Week 03 · 周一 · 2026-05-25 · 主线：网络协议栈 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：从今天开始我们进入网络主题。你用了多年 <code>requests.get()</code>，但可能从来没真正回答过这个问题——「从你按下回车到对方机器收到一个 HTTP 请求，中间到底经过了多少层、加了多少帧头、走了多少次路由？」今天我们把网络协议栈的<strong>下半截</strong>讲清楚：物理层和数据链路层做什么、IP 包是怎么寻址的、ICMP 和 ARP 这两个常被忽视但极其关键的辅助协议、IPv4 地址枯竭后 CIDR 和 NAT 怎么救场、IPv6 又是怎么回事。今天结束时你应该能回答：<span class="key">「为什么我的 192.168.1.x 地址全世界几亿台机器都在用，却不会冲突？」</span>
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">OSI 七层 vs TCP/IP 四层：理论与实践的差异</a></li>
+  <li><a href="#s2">物理层 + 数据链路层：比特和帧的世界</a></li>
+  <li><a href="#s3">IP 头解剖：每个字节都在干什么</a></li>
+  <li><a href="#s4">ICMP：网络的"听诊器"</a></li>
+  <li><a href="#s5">ARP：IP 到 MAC 的最后一公里</a></li>
+  <li><a href="#s6">IPv4 寻址与 CIDR：子网划分的数学</a></li>
+  <li><a href="#s7">NAT 与 IPv6：地址枯竭的两条解药</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. OSI 七层 vs TCP/IP 四层：理论与实践的差异</h2>
+
+<p>讲网络必然要从「分层」讲起。计算机网络面对的问题极其复杂——电信号、物理介质、寻址、路由、可靠传输、应用语义——一锅炖肯定不行，所以人们把它切成<span class="term">协议栈（protocol stack）</span>，每一层只处理自己关心的事，对上下层各暴露干净接口。</p>
+
+<p>历史上有两套分层方案：</p>
+
+<div class="ascii">       OSI 七层 (1984 ISO 标准)         TCP/IP 四层 (实际工程使用)
+       ┌─────────────────────┐           ┌─────────────────────┐
+       │  7. 应用层           │           │                     │
+       │  6. 表示层           │  ────►   │  应用层              │  HTTP / DNS / SSH
+       │  5. 会话层           │           │                     │
+       ├─────────────────────┤           ├─────────────────────┤
+       │  4. 传输层           │  ────►   │  传输层              │  TCP / UDP
+       ├─────────────────────┤           ├─────────────────────┤
+       │  3. 网络层           │  ────►   │  网络层 (Internet)   │  IP / ICMP / ARP
+       ├─────────────────────┤           ├─────────────────────┤
+       │  2. 数据链路层       │           │                     │
+       │  1. 物理层           │  ────►   │  网络接口层          │  Ethernet / Wi-Fi
+       └─────────────────────┘           └─────────────────────┘
+              (考试用)                          (工程用)</div>
+
+<p>OSI 模型是 ISO 1984 年的标准，理论纯粹但太啰嗦——会话层和表示层在真实软件里几乎找不到对应实体。<strong>实际工程师讲网络都用 TCP/IP 四层模型</strong>（也叫 DoD 模型），因为它和实际跑的协议一一对应：</p>
+
+<ul>
+  <li><strong>应用层</strong>：HTTP、DNS、SSH、SMTP、gRPC——你能看见数据有"意义"的层</li>
+  <li><strong>传输层</strong>：TCP（可靠流）、UDP（不可靠包）——给数据加端口号区分应用</li>
+  <li><strong>网络层（Internet 层）</strong>：IP、ICMP、ARP——给数据加地址，让它能跨网段</li>
+  <li><strong>网络接口层</strong>：Ethernet、Wi-Fi——把比特送到下一跳</li>
+</ul>
+
+<p>分层有一个核心规则：<span class="key">每一层只和"对端的同一层"对话，下层只是搬运工</span>。你的浏览器和服务器在"HTTP 层"对话，它们都"以为"自己直接连着对方；实际上 HTTP 数据被 TCP 包了一层、又被 IP 包了一层、又被 Ethernet 包了一层，物理上走的是光纤铜缆 Wi-Fi。这种"逐层封装"叫 <span class="term">encapsulation</span>，是网络协议栈的最基本操作。</p>
+
+<div class="ascii">发送端封装过程：
+                                         (从上往下加头)
+   你的 HTTP 数据   ┌──────────────────────────────┐
+                  │  GET / HTTP/1.1 ...           │
+                  └──────────────────────────────┘
+   传输层加 TCP 头  ┌────┬─────────────────────────┐
+                  │TCP │  HTTP 数据                │
+                  └────┴─────────────────────────┘
+   网络层加 IP 头   ┌────┬────┬─────────────────────┐
+                  │IP  │TCP │  HTTP 数据            │
+                  └────┴────┴─────────────────────┘
+   链路层加帧头帧尾 ┌────┬────┬────┬────────────┬───┐
+                  │ETH │IP  │TCP │  HTTP       │CRC│
+                  └────┴────┴────┴────────────┴───┘
+                  ↓ 物理层把它变成电/光/无线信号</div>
+
+<p>接收端反过来，每层剥一层头、看头里的信息决定怎么处理、把负载交给上一层。这就是<strong>整个互联网最基本的工作模式</strong>。</p>
+
+<h2 id="s2">2. 物理层 + 数据链路层：比特和帧的世界</h2>
+
+<p>这两层在 TCP/IP 模型里被合并为「网络接口层」。它们关心一个非常具体的问题：<strong>怎么把一串 0/1 比特从这台机器送到「物理上相邻」的另一台机器</strong>。"物理相邻"指的是用一根线、一段光纤、或一个 Wi-Fi 信道直接连着。</p>
+
+<h3>物理层：电信号、光信号、电磁波</h3>
+
+<p>物理层管的是「比特怎么变成物理信号」。一根网线里，0 和 1 用不同的电压表示；光纤里用激光的有/无表示；Wi-Fi 用不同频率/相位的电磁波表示。这层我们做应用工程师的基本不碰，了解几个关键概念即可：</p>
+
+<ul>
+  <li><strong>带宽</strong>：单位时间能传的比特数，单位 bps（不是 byte/s！）。家庭宽带说"千兆"指 1000 Mbps = 125 MB/s。</li>
+  <li><strong>编码方式</strong>：曼彻斯特编码、4B/5B、8b/10b……目的是保证时钟同步、错误检测。</li>
+  <li><strong>双工</strong>：全双工（同时收发）vs 半双工（只能轮流）。现代以太网都是全双工。</li>
+</ul>
+
+<h3>数据链路层：MAC 地址 + 帧</h3>
+
+<p>有了物理传比特的能力，数据链路层负责把比特组装成<span class="term">帧（frame）</span>，并解决"在一个局域网里谁是谁"。它的核心概念是 <span class="term">MAC 地址</span>。</p>
+
+<p>每张网卡出厂时被烧录一个全球唯一的 48 位地址，写成 6 个十六进制字节，比如 <code>aa:bb:cc:11:22:33</code>。前 3 个字节是厂商代码（OUI），后 3 个字节是该厂商自己分的。理论上全球不会重，实际上虚拟网卡随便造。</p>
+
+<p>以太网帧的结构很简单：</p>
+
+<div class="ascii">┌──────────┬──────────┬──────┬─────────────────────────┬─────┐
+│ 目的 MAC │ 源 MAC   │ 类型 │  Payload (上层数据)       │ CRC │
+│  6 字节  │  6 字节  │ 2字节│   46 - 1500 字节         │4 字节│
+└──────────┴──────────┴──────┴─────────────────────────┴─────┘
+                     ↑
+              0x0800 = IPv4
+              0x86DD = IPv6
+              0x0806 = ARP</div>
+
+<p>几个关键事实：</p>
+
+<ul>
+  <li><span class="key">Payload 上限 1500 字节</span>——这个数字叫 <span class="term">MTU（Maximum Transmission Unit）</span>。IP 包如果超过会被分片，所以你看到 TCP 实际的 MSS 通常是 1460（1500 - 20 IP 头 - 20 TCP 头）。</li>
+  <li>MAC 地址只在<strong>同一个广播域</strong>有意义。出了你家路由器，下一跳的设备根本看不到你的源 MAC——它在路由时已经被改写了。</li>
+  <li>以太网最早是"广播 + CSMA/CD"——所有人都在一根线上喊话，谁听到对自己的就接收。现代交换机网络用 MAC 地址表点对点投递，但 ARP 等协议仍然依赖广播。</li>
+</ul>
+
+<p>在你机器上看自己的 MAC 地址：</p>
+
+<pre><code># macOS
+ifconfig en0 | grep ether
+# Linux
+ip link show eth0
+# 看 link/ether 那一行</code></pre>
+
+<h2 id="s3">3. IP 头解剖：每个字节都在干什么</h2>
+
+<p>从这一节开始进入<strong>网络层</strong>——互联网真正"互联"的核心。IP（Internet Protocol）解决的问题是：<strong>怎么把一个包从地球的一端送到另一端，途中跨过几十个不认识彼此的网络</strong>。</p>
+
+<p>IPv4 头长这样（20 字节最小，可选项最多 60 字节）：</p>
+
+<div class="ascii"> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|Version|  IHL  |  ToS/DSCP   |          Total Length          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|         Identification        |Flags|      Fragment Offset   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     TTL       |   Protocol    |         Header Checksum       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Source Address                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Destination Address                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Options (可选, 0-40 字节)                  |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+</div>
+
+<p>每个字段都有故事。挑最重要的几个讲：</p>
+
+<table>
+<tr><th>字段</th><th>含义</th><th>为什么重要</th></tr>
+<tr><td>Version</td><td>4 (IPv4) 或 6 (IPv6)</td><td>路由器据此选择处理逻辑</td></tr>
+<tr><td>TTL</td><td>Time To Live，每经一跳减 1，到 0 丢弃</td><td>防止包在网络里无限循环。traceroute 就是利用它工作的</td></tr>
+<tr><td>Protocol</td><td>上层协议号：6=TCP, 17=UDP, 1=ICMP</td><td>接收端用它决定把 payload 交给哪个内核模块</td></tr>
+<tr><td>Source / Dest Address</td><td>32 位 IPv4 地址</td><td>互联网寻址的核心</td></tr>
+<tr><td>Identification + Flags + Frag Offset</td><td>分片重组用</td><td>大包要分片时用这三个字段重组</td></tr>
+<tr><td>Header Checksum</td><td>头部校验和</td><td>只校验头，不校验 payload（payload 由 TCP/UDP 校验）</td></tr>
+</table>
+
+<p>关于 <strong>TTL</strong> 多说一句。它的设计哲学非常巧妙：<span class="key">不需要全局的"包路径记录"，只用一个递减计数器就避免了路由环路</span>。Linux 默认 TTL 是 64，Windows 是 128，路由器看到 TTL=0 时不仅会丢包，还会发一个 ICMP "Time Exceeded" 通知发送方——这就是 <code>traceroute</code> 的实现机制：故意发 TTL=1, 2, 3... 的包，收集每一跳路由器的回执。</p>
+
+<h2 id="s4">4. ICMP：网络的"听诊器"</h2>
+
+<p><span class="term">ICMP（Internet Control Message Protocol）</span>是 IP 协议的好搭档。IP 本身是"尽力而为"的——包发出去能不能到、丢了你都不知道。ICMP 就是补这个洞的：它负责<strong>报告网络异常和诊断信息</strong>。</p>
+
+<p>ICMP 不是独立协议，它跑在 IP 之上（Protocol=1），但又不是传输层——它是网络层自己的辅助协议。最常见的 ICMP 报文类型：</p>
+
+<table>
+<tr><th>类型</th><th>名称</th><th>什么时候发</th></tr>
+<tr><td>0 / 8</td><td>Echo Reply / Echo Request</td><td>就是 ping 用的</td></tr>
+<tr><td>3</td><td>Destination Unreachable</td><td>目标不可达（无路由 / 端口关闭 / 防火墙拒绝）</td></tr>
+<tr><td>5</td><td>Redirect</td><td>路由器告诉你"你该走另一条路"</td></tr>
+<tr><td>11</td><td>Time Exceeded</td><td>TTL 用完 → traceroute 靠它</td></tr>
+<tr><td>12</td><td>Parameter Problem</td><td>IP 头里某个字段有问题</td></tr>
+</table>
+
+<p><strong>ping 是怎么工作的</strong>：发一个 ICMP Echo Request（type=8），对方收到回一个 Echo Reply（type=0）。RTT 就是这个来回的时间。如果某一跳的防火墙禁了 ICMP，ping 就不通——但 TCP 80 可能还是通的，所以"ping 不通"≠"网络不通"。</p>
+
+<pre><code># 一个 ping 实战
+ping -c 4 1.1.1.1
+
+# 输出
+64 bytes from 1.1.1.1: icmp_seq=0 ttl=58 time=12.3 ms
+                              ↑          ↑
+                       对方剩余 TTL  RTT
+# ttl=58 说明这个包经过了 64-58=6 跳路由（假设对方初始 TTL=64）</code></pre>
+
+<p><strong>traceroute</strong> 更精彩。它发一连串 UDP 包（Linux）或 ICMP 包（macOS/Windows），TTL 从 1 递增：</p>
+
+<ol>
+  <li>TTL=1 → 第 1 跳路由器减为 0，丢包，发回 ICMP Time Exceeded → 我们记录下它的 IP</li>
+  <li>TTL=2 → 第 2 跳路由器减为 0，同上 → 记录第 2 跳</li>
+  <li>... 直到 TTL 足够大到达目的地，目的地回 ICMP Echo Reply 或 Port Unreachable</li>
+</ol>
+
+<p>用一根"灵敏的探针"绘制出整条路径，这是计算机网络最优美的设计之一。</p>
+
+<h2 id="s5">5. ARP：IP 到 MAC 的最后一公里</h2>
+
+<p>这里有一个非常重要、但很多人讲不清楚的细节：<strong>路由器之间用 IP 地址路由，但同一个局域网内部、网卡和网卡之间的实际通信用 MAC 地址</strong>。所以发包前你必须知道"下一跳那台机器的 MAC 是什么"。<span class="term">ARP（Address Resolution Protocol）</span>就是干这事的。</p>
+
+<p>场景：你的笔记本 (192.168.1.10) 要访问 1.1.1.1。流程是：</p>
+
+<ol>
+  <li>你的内核查路由表，发现 1.1.1.1 不在 192.168.1.0/24 子网，必须走默认网关 192.168.1.1（你家路由器）</li>
+  <li>所以这个包的「下一跳」是 192.168.1.1。你需要它的 MAC 地址才能装在以太网帧的"目的 MAC"字段里</li>
+  <li>查本地 ARP 缓存。如果没有，发一个 <strong>ARP 广播</strong>：「谁是 192.168.1.1？告诉 192.168.1.10」</li>
+  <li>局域网内所有机器都收到，但只有 192.168.1.1（路由器）会回应：「我是 192.168.1.1，MAC 是 aa:bb:cc:dd:ee:ff」</li>
+  <li>你的机器把 (192.168.1.1 → MAC) 记入 ARP 缓存（默认 60 秒），然后填好帧头发出去</li>
+</ol>
+
+<p>这里有个非常关键的点：<span class="key">以太网帧的"目的 MAC"是下一跳的 MAC，不是最终目的地的 MAC！</span> 但 IP 头里的"目的 IP"始终是最终目的地。每经过一跳路由器，帧头被剥掉重写，IP 头保持不变（除 TTL 减 1）。</p>
+
+<p>看你自己机器的 ARP 表：</p>
+
+<pre><code># macOS / Linux 都一样
+arp -a
+# 输出示例：
+# ? (192.168.1.1) at aa:bb:cc:dd:ee:ff on en0 ifscope [ethernet]
+# ? (192.168.1.20) at 11:22:33:44:55:66 on en0 ifscope [ethernet]</code></pre>
+
+<div class="note">
+<strong>ARP 欺骗 (ARP Spoofing)</strong>：ARP 协议没有任何认证。我可以在你的局域网里持续发广播「我是 192.168.1.1，MAC 是我的」，你的机器就会把流量发给我而不是真正的路由器。这是中间人攻击最经典的实现方式。咖啡厅 Wi-Fi 上千万小心。Week 03 Sat 我们会更深入抓包分析这类攻击。
+</div>
+
+<h2 id="s6">6. IPv4 寻址与 CIDR：子网划分的数学</h2>
+
+<p>IPv4 地址是 32 位的，写成 4 个点分十进制：<code>192.168.1.10</code>。理论上有 2³² ≈ 43 亿个地址，但实际可用远少于此（去掉私有段、组播段、保留段后只有约 36 亿，且 2011 年就分完了）。</p>
+
+<h3>历史的分类制（A/B/C 类）</h3>
+
+<p>早期把 IP 地址按首字节分类：A 类（首位 0，1600 万主机）、B 类（10 开头，6 万主机）、C 类（110 开头，254 主机）。这种粗粒度划分浪费严重——你给一个公司分一个 B 类，6 万个地址用不完；给一个 C 类又太少。1993 年弃用了分类制，改用 CIDR。</p>
+
+<h3>CIDR：可变长前缀</h3>
+
+<p><span class="term">CIDR（Classless Inter-Domain Routing）</span>的核心：地址写成 <code>IP/前缀长度</code>，前缀部分是网络号，后缀部分是主机号。</p>
+
+<p>例子：<code>192.168.1.0/24</code></p>
+
+<ul>
+  <li>前 24 位 (<code>192.168.1</code>) 是网络号</li>
+  <li>后 8 位 (<code>.0</code> 到 <code>.255</code>) 是主机号，共 256 个，其中：
+    <ul>
+      <li><code>192.168.1.0</code> 是网络地址（保留）</li>
+      <li><code>192.168.1.255</code> 是广播地址（保留）</li>
+      <li>可用主机地址 254 个</li>
+    </ul>
+  </li>
+</ul>
+
+<p>对应的<strong>子网掩码</strong>是 <code>255.255.255.0</code>（前 24 位 1，后 8 位 0）。掩码和 CIDR 是等价表达。</p>
+
+<p>常见 CIDR 速查表（一定要背下来）：</p>
+
+<table>
+<tr><th>CIDR</th><th>掩码</th><th>可用主机数</th><th>用途</th></tr>
+<tr><td>/8</td><td>255.0.0.0</td><td>1677<MASK:CN_USCC:0AjAOlcRDhUJsfRPCB8wAVCu5wsX-bMTSJpYS6INEqCK6Vu4Ftw8YxlNXgZS5Wcl></td><td>大型 ISP / 国家分配</td></tr>
+<tr><td>/16</td><td>255.255.0.0</td><td>65534</td><td>大公司 / 校园网</td></tr>
+<tr><td>/24</td><td>255.255.255.0</td><td>254</td><td>小型办公网 / 家用</td></tr>
+<tr><td>/30</td><td>255.255.255.252</td><td>2</td><td>点对点链路（路由器互联）</td></tr>
+<tr><td>/32</td><td>255.255.255.255</td><td>1</td><td>单个主机路由</td></tr>
+</table>
+
+<h3>三个私有地址段（RFC 1918）</h3>
+
+<p>这些地址在公网上不会被路由，专门留给私有网络使用：</p>
+
+<ul>
+  <li><code>10.0.0.0/8</code> — 大型企业、K8s Pod 网络常用</li>
+  <li><code>172.16.0.0/12</code> — 中型网络（172.16.0.0 ~ 172.31.255.255）</li>
+  <li><code>192.168.0.0/16</code> — 家用路由器默认</li>
+</ul>
+
+<p>你家路由器是 192.168.1.1，你公司是 10.0.x.x，全世界几亿台机器都用这些地址<strong>而不冲突</strong>——因为它们只在自己的局域网里有效，出口到公网时被 NAT 转成共享的公网 IP。这就引出下一节。</p>
+
+<h2 id="s7">7. NAT 与 IPv6：地址枯竭的两条解药</h2>
+
+<h3>NAT：让一个公网 IP 后面藏一堆机器</h3>
+
+<p><span class="term">NAT（Network Address Translation）</span>的基本思想：你家路由器有一个公网 IP（比如 <code>114.x.x.x</code>，运营商分给你的），内网有几十个设备（手机、电脑、电视）都用 192.168.1.x。当某个设备访问外网时，路由器把<strong>源 IP 改写</strong>为自己的公网 IP，<strong>记录这次转换</strong>；外面回包来了，路由器查表，把<strong>目的 IP 改回</strong>原始内网地址。</p>
+
+<p>实际用的是 <span class="term">NAPT（Network Address Port Translation）</span>——不仅改 IP，还改端口，用 (内网 IP, 内网端口) ↔ (公网 IP, 新端口) 的映射区分不同会话。</p>
+
+<div class="ascii">内网设备                    NAT 路由器                       公网
+192.168.1.10:5432  ───►  改为 114.x.x.x:33001  ───►  www.example.com:443
+192.168.1.11:5432  ───►  改为 114.x.x.x:33002  ───►  www.example.com:443
+                         ↑
+                  NAT 表 (conntrack):
+                  114.x.x.x:33001 ↔ 192.168.1.10:5432
+                  114.x.x.x:33002 ↔ 192.168.1.11:5432</div>
+
+<p>NAT 极大缓解了 IPv4 地址枯竭，但也带来了麻烦：</p>
+
+<ul>
+  <li><strong>打破了端到端原则</strong>。两台都在 NAT 后面的机器很难直连，需要"打洞"或中转服务器（这就是 WebRTC / STUN/TURN 存在的理由）。</li>
+  <li><strong>有状态</strong>。NAT 设备要维护 conntrack 表，大流量时内存压力大；连接不活动时表项过期，长连接需要心跳保活。</li>
+  <li><strong>对协议不友好</strong>。某些应用层协议（FTP 主动模式、SIP）会在数据里嵌入 IP 地址，NAT 必须深度解析才能正确改写。</li>
+</ul>
+
+<h3>IPv6：彻底重做地址</h3>
+
+<p>IPv6 的核心改动：地址从 32 位扩到 128 位，理论上有 2¹²⁸ ≈ 3.4×10³⁸ 个地址——「地球上每平方毫米都能分到 ~6.7×10²³ 个」。地址写成 8 组 4 位十六进制：</p>
+
+<pre><code>2001:0db8:85a3:0000:0000:8a2e:0370:7334
+# 可以缩写：连续的 0 段用 :: 替代（只能用一次）
+2001:db8:85a3::8a2e:370:7334</code></pre>
+
+<p>IPv6 的特点：</p>
+
+<ul>
+  <li><strong>地址极其充裕</strong>，理论上每个设备都可以有公网 IP，不再需要 NAT</li>
+  <li><strong>头部简化</strong>，固定 40 字节，去掉了校验和、分片字段（分片推到端节点）</li>
+  <li><strong>SLAAC 自动配置</strong>，设备根据网卡 MAC 自动生成地址，不需要 DHCP</li>
+  <li><strong>取消广播</strong>，改用组播；ARP 被 <span class="term">NDP（Neighbor Discovery Protocol）</span>替代</li>
+  <li><strong>内置 IPsec</strong> 支持（实际上 IPv4 也广泛部署了 IPsec）</li>
+</ul>
+
+<p>看你机器上的 IPv6 地址：</p>
+
+<pre><code>ifconfig en0 | grep inet6
+# fe80:: 开头的是链路本地地址，只在同一网段有效
+# 2xxx:: 开头的是全球单播地址，公网可达</code></pre>
+
+<p>现实是 IPv6 部署了 30 年还没完全替代 IPv4——双栈 + NAT64 + 6to4 等各种过渡方案常年并存。但对你做云原生 / Agent 服务有几个直接影响：<strong>K8s 默认 IPv4，但越来越多云厂商支持 dual-stack；某些海外服务（GCP / Hetzner）IPv6 又便宜又快；现代 LLM API 客户端要考虑 IPv6 fallback</strong>。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p>网络层是 Agent 安全产品最绕不开的一层。今天的概念会反复出现：</p>
+
+<p><strong>1. SSRF 攻击的核心是"误用 IP 寻址"</strong>。攻击者诱导你的 Agent 发请求到 <code>http://169.254.169.254/</code>（云元数据服务）、<code>http://127.0.0.1:6379</code>（本地 Redis）、<code>http://10.0.0.x/admin</code>（内网管理面）。防御的关键是<strong>在网络层做出站过滤</strong>：明确禁止 Agent 进程访问私有段（10/8、172.16/12、192.168/16、127/8、169.254/16、240/4）。你今天对 CIDR 的理解就是写这种过滤策略的基础。Day 18 我们会更系统讲。</p>
+
+<p><strong>2. Agent 沙箱必须考虑网络隔离</strong>。一个能上网的沙箱本质上等于裸奔——攻击者可以让 Agent "去某地下载恶意载荷再执行"。Docker / K8s 的 NetworkPolicy 本质上是基于 IP/端口的访问控制；更细的可以用 eBPF 在 syscall 层拦截 connect()。Week 11 讲 K8s 时会落到具体配置。</p>
+
+<p><strong>3. 反弹 shell 的本质是出站 TCP 连接</strong>。所有 C2 框架的设计前提都是「内网到外网的出站连接通常没人管」。如果你的生产环境对所有出站连接走白名单（只允许必要域名 + IP 段），相当于切掉了一大类后渗透手段。Day 27 周六会专门讲反弹 shell 和 C2，今天的 IP 寻址是基础。</p>
+
+<p><strong>4. ARP 欺骗对自部署 LLM 推理集群是真实威胁</strong>。多租户共享物理网络时，恶意租户可以 ARP 欺骗劫持你的推理 API 流量，拿到 prompt 和 response（即使是 HTTPS，攻击者也能拿到流量元数据做时序分析、推断对话内容）。云上的 VPC 已经基本杜绝了这类攻击，但物理机房自建集群要小心交换机配置（启用 DAI - Dynamic ARP Inspection）。</p>
+
+<p><strong>5. 速率限制和 IP 信誉是 LLM API 滥用防御的第一道线</strong>。攻击者用免费 LLM 服务挖矿、跑生成式垃圾邮件、做对抗样本研究，都需要发大量请求。基于源 IP 段的速率限制（区分公网 IP、云厂商 IP、住宅代理 IP、TOR 出口节点）是性价比最高的防御。理解 CIDR 让你能写出"对某个 ASN 整段限速"这种策略。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>10 分钟 · 动手：观察你自己的网络栈</strong></p>
+<p>在 mac 终端运行下列命令：</p>
+<pre><code># 1. 看你所有网卡的 IP 和 MAC
+ifconfig
+
+# 2. 看你的路由表（默认网关是哪台机器？）
+netstat -nr | head -20
+
+# 3. 看你机器的 ARP 缓存
+arp -a
+
+# 4. ping 默认网关看 RTT
+ping -c 4 $(netstat -nr | awk '/^default/{print $2; exit}')</code></pre>
+<p>问题：找出你机器上有几张网卡（包括虚拟的 lo0、utun*），它们各自的 IP 段是什么？为什么 lo0 的 IP 是 127.0.0.1？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>15 分钟 · 观察：traceroute 一个外网地址</strong></p>
+<p>挑两个目标分别 traceroute：</p>
+<pre><code># 一个国内站点
+traceroute www.baidu.com
+
+# 一个海外站点
+traceroute www.cloudflare.com
+
+# 限制最大跳数，避免一直跑
+traceroute -m 20 1.1.1.1</code></pre>
+<p>问题：每一跳的延迟是怎么变化的？为什么有些跳显示 <code>* * *</code>（星号）？提示：复习今天讲的 TTL 和 ICMP——某些路由器会禁止回 Time Exceeded，或者优先处理转发而不回 ICMP。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考题</strong></p>
+<p>你在公司部署了一个 LLM Agent 服务，运行在 K8s Pod 里。Pod 的 IP 是 10.244.3.17（K8s 内部网段），节点的 IP 是 10.0.5.20，集群通过 NAT 网关 114.x.x.x 出公网。</p>
+<p>当 Agent 调用 OpenAI API 时，OpenAI 看到的源 IP 是哪个？为什么？</p>
+<p>追加问题：如果 Agent 被 indirect prompt injection 攻陷，试图连接 <code>http://169.254.169.254/latest/meta-data/iam/security-credentials/</code>（AWS 元数据服务），哪一层最适合做拦截？为什么不应该靠"应用层 URL 校验"作为唯一防线？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 16 · TCP 深入：三次握手、四次挥手、拥塞控制全解</strong>。今天我们讲了网络层「怎么寻址」，明天我们上升到传输层，讲清楚 TCP 这个被誉为"互联网基石"的协议——它是怎么用"不可靠的 IP 包"搭出"可靠的字节流"的。你会理解为什么 TIME_WAIT 要等 2MSL、为什么 BBR 比 Cubic 在高带宽链路更快、以及 SO_REUSEPORT 这个在高性能服务里被滥用的选项。
+</div>
+
+</body>
+</html>
