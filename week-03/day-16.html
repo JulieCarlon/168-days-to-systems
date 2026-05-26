@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 16 · TCP 深入</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 16 · TCP 深入：握手、挥手、拥塞控制全解</h1>
+  <div class="meta">Week 03 · 周二 · 2026-05-26 · 主线：网络协议栈 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：TCP 是互联网的"承重柱"。你写的每一行 <code>requests.get()</code>、每一次 <code>psycopg2</code> 连数据库、每一个 vLLM 的 HTTP 请求，底下都是 TCP 在搬运字节。但 TCP 又是个"魔法"——它能在丢包率 5% 的网络上、在跨大洋 150ms 的高延迟链路上、在和几十个并发流抢带宽的拥堵骨干网上，仍然给应用层一个"干净有序无丢失的字节流"。今天我们把这个魔法拆开：<span class="key">它怎么用三次握手建立信任、怎么用滑动窗口平衡发送速率、怎么用拥塞控制感知网络状况、为什么 TIME_WAIT 必须等 2MSL</span>。今天结束你应该能回答："为什么我的 Python TCP 服务重启后报 'Address already in use'？" 和 "我的 LLM 推理客户端在弱网下 TTFT 抖动很大，从 TCP 角度怎么诊断？"
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">TCP 头解剖：每一位都有用</a></li>
+  <li><a href="#s2">三次握手：为什么不是两次也不是四次</a></li>
+  <li><a href="#s3">四次挥手 + TIME_WAIT 与 2MSL</a></li>
+  <li><a href="#s4">TCP 状态机：11 个状态串起来</a></li>
+  <li><a href="#s5">滑动窗口：流量控制的本质</a></li>
+  <li><a href="#s6">拥塞控制：Reno、Cubic、BBR 的演进</a></li>
+  <li><a href="#s7">Nagle、delayed ACK 与 SO_REUSEPORT</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. TCP 头解剖：每一位都有用</h2>
+<p>昨天讲 IP 头时我们说"IP 是尽力而为的"——丢包不通知、乱序不重排、重复不去重。TCP 把这一堆烂摊子收拾干净，让应用层只看到"一条干净的字节流"。它能做到这一点，全靠头里那 20 字节（最少）+ 可选项的结构。</p>
+
+<div class="ascii"> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|         Source Port           |       Destination Port        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Sequence Number                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Acknowledgment Number                     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Off |Rsvd | C E U A P R S F |          Window Size            |
+|     |     | W C R C S S Y I |                                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|        Checksum               |        Urgent Pointer         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Options (0 - 40 字节)                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+</div>
+
+<p>关键字段一个个讲：</p>
+
+<table>
+<tr><th>字段</th><th>位数</th><th>作用</th></tr>
+<tr><td>Source / Dest Port</td><td>各 16 位</td><td>定位"这个连接是哪个进程的"。IP 找机器，端口找进程</td></tr>
+<tr><td>Sequence Number</td><td>32 位</td><td><strong>本报文段第一个字节</strong>在整个字节流里的编号。TCP 把字节流编号——这是它能保证有序的核心</td></tr>
+<tr><td>Acknowledgment Number</td><td>32 位</td><td>告诉对方"我下一个期望收到的字节编号"。表示 ack 号之前的字节已经全部正确收到</td></tr>
+<tr><td>Data Offset (Off)</td><td>4 位</td><td>TCP 头长度（4 字节为单位），因为有可选项所以是变长</td></tr>
+<tr><td>Flags</td><td>9 个标志位</td><td>SYN/ACK/FIN/RST/PSH/URG/CWR/ECE/NS——后面详细讲</td></tr>
+<tr><td>Window Size</td><td>16 位</td><td><span class="key">流量控制窗口</span>——"我现在还能接收多少字节"。配合 Window Scale 可放大到 1GB</td></tr>
+<tr><td>Checksum</td><td>16 位</td><td>覆盖 TCP 头 + payload + 伪头部（含 IP 地址）。注意 IP 头只校验自己</td></tr>
+<tr><td>Options</td><td>0-40 字节</td><td>MSS / Window Scale / SACK / Timestamps——TCP 几乎所有现代特性都靠它扩展</td></tr>
+</table>
+
+<p>9 个标志位需要重点记忆：</p>
+
+<ul>
+  <li><span class="term">SYN</span>（synchronize）：建立连接的请求</li>
+  <li><span class="term">ACK</span>（acknowledgment）：确认号有效。建立连接之后几乎所有包都带 ACK</li>
+  <li><span class="term">FIN</span>（finish）：发送方没数据了，要关闭这个方向</li>
+  <li><span class="term">RST</span>（reset）：异常中止连接——比"礼貌的 FIN"凶猛</li>
+  <li><span class="term">PSH</span>（push）：催促接收端立即把数据交给应用层（实践中大多数实现自己决定）</li>
+  <li><span class="term">URG</span>（urgent）：紧急数据指针——基本上没人用，安全研究里偶尔做绕过</li>
+  <li><span class="term">CWR / ECE / NS</span>：ECN（显式拥塞通知）相关，现代网络越来越重要</li>
+</ul>
+
+<p>记住一个核心事实：<span class="key">TCP 是"字节流"协议，不是"消息"协议</span>。你 <code>send(b"hello")</code> 一次，对方 <code>recv()</code> 可能一次拿到 5 字节、也可能拆成 "he" + "llo"，更可能和下一次 send 的数据黏在一起。TCP 只保证"按序到达、不丢不重复"，但不保证"消息边界"。这就是为什么应用层协议（HTTP、gRPC）都要自己定义长度前缀或定界符——所谓"粘包"问题本质上是新手不理解字节流语义。</p>
+
+<h2 id="s2">2. 三次握手：为什么不是两次也不是四次</h2>
+
+<p>TCP 连接建立用 3 次报文交换，俗称<span class="term">三次握手（three-way handshake）</span>。我们用一个最常见的场景说明：你的客户端要连服务器的 443 端口。</p>
+
+<div class="ascii">     Client                                Server
+       |                                       |
+       |    1. SYN, seq=x                      |
+       |---------------------------------&gt;|   (Client: SYN_SENT)
+       |                                       |
+       |    2. SYN+ACK, seq=y, ack=x+1         |
+       |&lt;---------------------------------|   (Server: SYN_RCVD)
+       |                                       |
+       |    3. ACK, seq=x+1, ack=y+1           |
+       |---------------------------------&gt;|   (双方: ESTABLISHED)
+       |                                       |
+       |     (现在可以发应用数据了)              |</div>
+
+<p>每一步在做什么：</p>
+
+<ol>
+  <li><strong>Client → Server: SYN, seq=x</strong>。客户端选一个随机初始序号 x（ISN, Initial Sequence Number），发 SYN 包。这个随机化非常关键——固定 ISN 会带来连接劫持风险（早期 TCP 漏洞）。Linux 内核用基于时间和四元组哈希的方式生成 ISN。</li>
+  <li><strong>Server → Client: SYN+ACK, seq=y, ack=x+1</strong>。服务器收到，分配一个连接结构，选自己的随机 ISN y，回 SYN+ACK。<code>ack=x+1</code> 的意思是"我已经确认收到了 x 这一位，下次请发 x+1"。</li>
+  <li><strong>Client → Server: ACK, seq=x+1, ack=y+1</strong>。客户端确认服务器的 SYN。三次结束后，双方都知道对方的 ISN，也都"确认对方能收到自己的包"。</li>
+</ol>
+
+<h3>为什么不是两次？</h3>
+
+<p>核心理由：<span class="key">网络可能延迟、重复</span>。如果只有两次握手，下面的故障场景就会发生：</p>
+
+<p>客户端发了一个 SYN，但因为网络抖动滞留了，客户端等了一会重发了第二个 SYN，正常建立了连接，做完业务关掉了。结果<strong>那个滞留的 SYN 在很久之后才到达服务器</strong>。如果只有"两次握手"（服务器收到 SYN 就认为建立成功），服务器会傻乎乎地为这个已经死透了的连接分配资源、回复数据。三次握手的第三个 ACK 等于"客户端再次确认这次 SYN 是真的"，能识别出滞留 SYN——客户端没在这个连接上，不会发第三个 ACK。</p>
+
+<h3>为什么不是四次？</h3>
+
+<p>第二步把 Server 的 SYN 和对 Client SYN 的 ACK 合并在一个包里了（"捎带确认"），所以省了一次。如果拆开就是四次，但完全没必要。</p>
+
+<h3>SYN flood 攻击</h3>
+
+<div class="note">
+<strong>SYN flood</strong> 是经典 DoS 攻击。攻击者大量伪造源 IP 发 SYN，服务器为每个 SYN 分配半连接队列（SYN_RCVD 状态），但永远等不到第三个 ACK。半连接队列满了之后正常用户也连不上。Linux 的防御：<code>net.ipv4.tcp_syncookies=1</code>——服务器不真分配资源，而是把状态编码在 SYN+ACK 的 seq 号里（cookie），等真的 ACK 回来再验证。代价是丢一些 TCP 选项，但能抵御 flood。
+</div>
+
+<h2 id="s3">3. 四次挥手 + TIME_WAIT 与 2MSL</h2>
+
+<p>建立要 3 步，关闭要 4 步——因为 TCP 是<strong>全双工</strong>的，每个方向都要单独关闭。</p>
+
+<div class="ascii">     Client                                Server
+       |                                       |
+       |    1. FIN, seq=u                      |
+       |---------------------------------&gt;|  (Client: FIN_WAIT_1)
+       |                                       |  (Server: CLOSE_WAIT)
+       |    2. ACK, ack=u+1                    |
+       |&lt;---------------------------------|  (Client: FIN_WAIT_2)
+       |                                       |
+       |     (Server 可能还要发剩余数据)         |
+       |                                       |
+       |    3. FIN, seq=v                      |
+       |&lt;---------------------------------|  (Server: LAST_ACK)
+       |                                       |
+       |    4. ACK, ack=v+1                    |
+       |---------------------------------&gt;|  (Server: CLOSED)
+       |                                       |
+   (TIME_WAIT 状态等 2MSL)                       |
+       |                                       |
+   CLOSED                                       |</div>
+
+<p>四步的剧本：</p>
+
+<ol>
+  <li><strong>Client 发 FIN</strong>：「我没数据了，要关闭。」</li>
+  <li><strong>Server 回 ACK</strong>：「我知道你要关。」此时 Server 可能还有数据要发完。</li>
+  <li><strong>Server 发 FIN</strong>：「我也没数据了，可以关了。」</li>
+  <li><strong>Client 回 ACK</strong>：「行，再见。」</li>
+</ol>
+
+<p>这里有一个非常关键、面试必问的状态——<span class="term">TIME_WAIT</span>。主动关闭的一方（这里是 Client）在发出最后一个 ACK 后，必须等 <span class="key">2 * MSL（Maximum Segment Lifetime，通常是 2 分钟，所以 2MSL = 4 分钟）</span>才能真正关闭。Linux 默认 MSL = 60 秒，所以 TIME_WAIT 是 60 秒。</p>
+
+<h3>为什么要等 2MSL？两个理由</h3>
+
+<ol>
+  <li><strong>保证最后一个 ACK 能到对方</strong>。如果这个 ACK 丢了，Server 会重发 FIN。Client 必须还在 TIME_WAIT 状态才能识别这个 FIN 并重发 ACK。MSL 是一个包在网络中的最长生存时间，2*MSL 保证"任何一个迟到的 FIN 都能被处理"。</li>
+  <li><strong>让本连接所有"幽灵包"在网络中消亡</strong>。如果立刻关闭并立刻重新用同样的四元组（源 IP + 源端口 + 目的 IP + 目的端口）建新连接，旧连接残留在网络中的包可能被新连接误收。等 2MSL 之后所有旧包早就被路由器丢弃了。</li>
+</ol>
+
+<h3>TIME_WAIT 引发的实战问题</h3>
+
+<p>你常会看到 <code>Address already in use</code> 错误，尤其是服务器重启时。原因：Server 端口 8080 被一堆 TIME_WAIT 占着，60 秒内 bind 不上。解决方法：</p>
+
+<pre><code># Python 服务器代码
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # 允许 TIME_WAIT 端口被重用
+s.bind(('0.0.0.0', 8080))
+s.listen()</code></pre>
+
+<p>更激进的内核选项 <code>net.ipv4.tcp_tw_reuse=1</code>（用 timestamp 区分新旧连接，允许 TIME_WAIT 端口被作为客户端源端口）。注意 <code>tcp_tw_recycle</code> 已经在 Linux 4.12 被删除，因为它和 NAT 不兼容会导致诡异问题——千万别在网上抄旧教程开这个。</p>
+
+<h2 id="s4">4. TCP 状态机：11 个状态串起来</h2>
+
+<p>把上面建立 + 关闭加起来，TCP 一共有 11 个状态。把它们画成图：</p>
+
+<div class="ascii">                     +---------+
+                     | CLOSED  |
+                     +---------+
+                       |    ^
+       passive open    |    | close
+          (listen)     |    |
+                       v    |
+                     +---------+
+                     | LISTEN  |&lt;-----+
+                     +---------+      |
+                       |              |
+                       | recv SYN     |
+                       | send SYN+ACK |
+                       v              |
+                     +---------+      |
+                     |SYN_RCVD |------+
+                     +---------+   recv ACK
+                       |
+                       | recv ACK
+                       v
+                     +-----------+
+                     |ESTABLISHED|&lt;---- 数据传输都在这
+                     +-----------+
+                       |       |
+                  close|       |recv FIN
+                       v       v
+                +-----------+  +-----------+
+                |FIN_WAIT_1 |  |CLOSE_WAIT |
+                +-----------+  +-----------+
+                       |             |
+                  recv ACK           |close
+                       v             v
+                +-----------+  +-----------+
+                |FIN_WAIT_2 |  |LAST_ACK   |
+                +-----------+  +-----------+
+                       |             |
+                  recv FIN          recv ACK
+                       v             v
+                +-----------+    CLOSED
+                |TIME_WAIT  |
+                +-----------+
+                       |
+                 等 2MSL
+                       v
+                    CLOSED</div>
+
+<p>实战中诊断网络问题，第一步就是看 socket 状态。常用命令：</p>
+
+<pre><code># 看所有 TCP 连接 + 状态
+ss -tan | head -20
+# 或者老一点的
+netstat -tan | head -20
+
+# 输出大概长这样：
+# State        Recv-Q  Send-Q   Local Address:Port   Peer Address:Port
+# LISTEN       0       128      0.0.0.0:8080         0.0.0.0:*
+# ESTAB        0       0        10.0.1.5:54321       142.250.80.46:443
+# TIME-WAIT    0       0        10.0.1.5:54320       142.250.80.46:443
+
+# 统计每种状态有多少个
+ss -tan | awk '{print $1}' | sort | uniq -c</code></pre>
+
+<p>常见的"状态异常"问题：</p>
+<ul>
+  <li>大量 <strong>CLOSE_WAIT</strong>：通常是<strong>你的代码忘记 close()</strong>。对方发 FIN 了，但你的应用层没调用 close()，所以一直停在 CLOSE_WAIT。常见于 connection pool 配置错误。</li>
+  <li>大量 <strong>TIME_WAIT</strong>：你是大量短连接的<strong>主动关闭方</strong>。考虑用长连接 / keep-alive / 连接池。</li>
+  <li>大量 <strong>SYN_RECV</strong>：可能正在被 SYN flood，或者后端处理太慢导致 backlog 满。</li>
+</ul>
+
+<h2 id="s5">5. 滑动窗口：流量控制的本质</h2>
+
+<p>TCP 不可能一次把所有数据都怼给对方——对方的内核缓冲可能装不下，应用层可能读得很慢。<span class="term">滑动窗口（sliding window）</span>就是协调发送方和接收方速度的核心机制。</p>
+
+<p>接收方在每个 ACK 包里告诉发送方"我现在还能再收 W 字节"——这个 W 就是<span class="term">接收窗口（rwnd）</span>，由内核接收缓冲区剩余空间决定。发送方维护一个"未确认数据 + 待发数据"的窗口，长度不超过 rwnd。</p>
+
+<div class="ascii">                  发送方字节流视角：
+   已确认 (可丢弃)  | 已发未确认 |   可发未发    | 不可发
+   ◄──────────────►|◄─────────►|◄────────────►|
+                   |           |              |
+                   SND.UNA     SND.NXT        SND.UNA + W
+                                              (W = 接收窗口大小)
+                            ◄────── 滑动 ──────►
+                              收到 ACK 后窗口右移</div>
+
+<p>当 ACK 回来确认了一些字节，窗口左边界右移（"滑动"），右边界也跟着右移（如果接收窗口没缩小）。这样发送方就能持续不断地发新数据。</p>
+
+<h3>Window Scale 选项</h3>
+
+<p>原始 TCP 头里 Window Size 只有 16 位，最大 64KB。在 10Gbps 跨大洋链路上，64KB / 200ms RTT ≈ 2.6 Mbps——根本跑不满带宽。RFC 1323 加了 <strong>Window Scale</strong> 选项（握手时协商），把窗口逻辑放大 2^N 倍，最大可达 1GB。现代 Linux 默认开启，跨数据中心 TLS 长连接能真正用满带宽就靠它。</p>
+
+<h3>Zero Window 问题</h3>
+
+<p>如果接收方应用层完全不读，缓冲区会被填满，最终 rwnd=0。发送方收到 Window Size=0 后必须停发，进入<strong>Zero Window 状态</strong>，定期发"Window Probe"探测对方是否有空间了。如果应用一直不读，连接会一直挂在这——这就是为什么"接收方处理慢"会反压到发送方。在 LLM 推理服务里，如果客户端读得慢，服务端会被 TCP 反压，最终 tokio/async runtime 的写任务也会卡住。</p>
+
+<h2 id="s6">6. 拥塞控制：Reno、Cubic、BBR 的演进</h2>
+
+<p>滑动窗口解决的是<strong>端到端速度匹配</strong>，但还有一个更难的问题：<strong>中间网络的拥塞</strong>。路由器队列满了会丢包，所有发送方都拼命发就只会让大家都丢包。1986 年互联网经历过著名的"拥塞崩溃"（congestion collapse），Van Jacobson 提出拥塞控制算法，这是 TCP 设计上最了不起的成就之一。</p>
+
+<p>核心思想：发送方除了维护 rwnd（流量控制），还维护一个<span class="term">拥塞窗口（cwnd）</span>，<strong>实际发送窗口 = min(rwnd, cwnd)</strong>。cwnd 不是对方告诉你的，而是发送方<strong>根据丢包/延迟自己推断网络拥塞状况</strong>得出的。</p>
+
+<h3>Reno（经典算法）</h3>
+
+<p>1990 年代的标准。四个阶段：</p>
+
+<ul>
+  <li><strong>慢启动 (Slow Start)</strong>：cwnd 从 1 MSS（或 10 MSS，IW10）开始，<strong>每收到一个 ACK 就 +1 MSS</strong>——本质是每个 RTT 翻倍，指数增长。</li>
+  <li><strong>拥塞避免 (Congestion Avoidance)</strong>：cwnd 超过 ssthresh 阈值后，改为<strong>每个 RTT +1 MSS</strong>——线性增长。</li>
+  <li><strong>快速重传 (Fast Retransmit)</strong>：收到 3 个重复 ACK 认为某个包丢了，立刻重传而不等超时。</li>
+  <li><strong>快速恢复 (Fast Recovery)</strong>：丢包后 cwnd 减半（而不是回到 1），继续拥塞避免阶段。</li>
+</ul>
+
+<p>Reno 的 cwnd 曲线是经典的"锯齿状"——线性增加、丢包减半、再线性增加。简单优雅，但有问题：<strong>把丢包等同于拥塞</strong>。在无线网络/弱网下，丢包很多时候是物理层错误而不是拥塞，Reno 会过度退让。</p>
+
+<h3>Cubic（Linux 默认，2006-）</h3>
+
+<p>Cubic 用三次曲线代替线性增长。丢包后 cwnd 从一个"目标值"附近用 cubic 函数恢复——刚开始增长快、接近目标时变慢、超过目标后又快速试探。这让 Cubic 在高带宽长延迟（BDP 大）的链路上比 Reno 高效得多，但本质上还是<strong>"被丢包驱动"</strong>。</p>
+
+<h3>BBR（Google, 2016-）</h3>
+
+<p>BBR（Bottleneck Bandwidth and RTT）跳出了"丢包=拥塞"的思维。它持续测量两个指标：</p>
+<ul>
+  <li><strong>BtlBw</strong>：瓶颈链路带宽（用一段时间的最大送达速率估算）</li>
+  <li><strong>RTprop</strong>：最小往返时延（用历史最小 RTT 估算）</li>
+</ul>
+
+<p>理论上把<strong>cwnd 调到 BtlBw * RTprop</strong>恰好可以填满瓶颈链路而不让路由器排队。BBR 不需要等到丢包就主动调整速率，所以在<strong>有 buffer bloat、有随机丢包的链路</strong>上吞吐显著高于 Cubic。YouTube 全面切到 BBR 后，吞吐提升 4%，RTT 中位数下降 33%。</p>
+
+<pre><code># 看你当前用的算法
+sysctl net.ipv4.tcp_congestion_control
+# 看可用的
+sysctl net.ipv4.tcp_available_congestion_control
+# 切换到 BBR
+sudo sysctl -w net.ipv4.tcp_congestion_control=bbr</code></pre>
+
+<div class="note">
+<strong>BBR 在生产中的两个注意点</strong>：<br>
+1. BBR v1 和 Cubic 共存时会"抢"——BBR 不退让，对 Cubic 流不公平。BBR v2/v3 修复了这个。<br>
+2. 对短连接（HTTP 短查询）BBR 没什么用，因为还没测出 BtlBw 连接就结束了。对 LLM 流式推理（长连接、持续推数据）BBR 才能真正发挥优势。
+</div>
+
+<h2 id="s7">7. Nagle、delayed ACK 与 SO_REUSEPORT</h2>
+
+<h3>Nagle 算法</h3>
+
+<p>问题：早期 telnet 一个字符一个字符发，每个字节 1B 数据要带 40B 的 TCP+IP 头——99%以上的带宽浪费。Nagle 算法（1984）：<strong>有未确认数据时，攒小包，直到攒够 MSS 或所有数据被 ACK</strong>。</p>
+
+<p>但 Nagle 和 delayed ACK 配对会很糟。</p>
+
+<h3>Delayed ACK</h3>
+
+<p>接收方收到数据不立即回 ACK，等最多 40-200ms（看实现）：希望应用层这段时间内能产生回包，把 ACK"捎带"在数据包里。两个减少包数的优化。</p>
+
+<h3>Nagle + delayed ACK 的悲剧</h3>
+
+<p>发送方：「我有小包，但有数据没 ACK，攒着」<br>
+接收方：「我收到了，但等会儿再 ACK，希望捎带数据」<br>
+→ 互相等，最坏情况要等 200ms 才能发出去。</p>
+
+<p>这就是为什么<strong>所有低延迟应用都要关 Nagle</strong>：</p>
+
+<pre><code># Python
+import socket
+s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)</code></pre>
+
+<p>HTTP/2、gRPC、Redis 客户端、所有 RPC 框架默认都开 TCP_NODELAY。LLM 流式推理服务（SSE/WebSocket）也必须关。</p>
+
+<h3>SO_REUSEPORT</h3>
+
+<p>Linux 3.9+ 引入的选项。多个进程/线程可以同时 <code>bind()</code> 同一个端口，内核根据四元组哈希把进来的连接分发给不同 socket。在多核高并发服务里是<strong>事实标准</strong>：</p>
+
+<ul>
+  <li>避免 accept 惊群（thundering herd）</li>
+  <li>把连接均匀分布到 worker 进程</li>
+  <li>无需用户态负载均衡逻辑</li>
+</ul>
+
+<p>Nginx worker、Envoy worker、Caddy、Tokio runtime 默认都用 SO_REUSEPORT。注意它和 <code>SO_REUSEADDR</code> 不是一回事：</p>
+
+<table>
+<tr><th>选项</th><th>作用</th></tr>
+<tr><td><code>SO_REUSEADDR</code></td><td>允许 bind 一个 TIME_WAIT 状态的端口；多个监听器不能同时跑</td></tr>
+<tr><td><code>SO_REUSEPORT</code></td><td>多个监听器可以同时 bind 同一端口，内核分发连接</td></tr>
+</table>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. LLM 流式推理的 TTFT 抖动多半是 TCP 问题</strong>。你的 SSE/HTTP 流式响应突然卡 200ms，第一怀疑就是 Nagle + delayed ACK。第二怀疑是 TCP_NOTSENT_LOWAT 调得不对导致 write buffer 溢出。第三怀疑是中间路由器的 buffer bloat 让 BBR 也来不及反应。诊断顺序：客户端到服务端的 RTT → tcpdump 抓握手和小包行为 → 检查 cwnd 和 ssthresh（<code>ss -i</code>）。</p>
+
+<p><strong>2. TCP 状态泄露是慢速 DoS 的载体</strong>。Slowloris 类攻击保持大量半开连接、慢慢发字节、慢慢读响应，把服务器的 socket 槽位耗光。Agent 服务（尤其是长推理任务）天然脆弱：单次推理可能 30 秒，攻击者只要发 1000 个慢请求就能压垮一个普通配置。防御：客户端总数限流 + 单连接超时 + 单连接最低速率限制（Nginx 的 <code>client_body_timeout</code>、<code>send_timeout</code>、<code>limit_rate</code>）。</p>
+
+<p><strong>3. RST 注入 / TCP 劫持是早期但仍存在的攻击面</strong>。攻击者如果能猜中 seq 号或在路径上抓包，可以伪造 RST 强行断开连接、或者注入应用层数据。HTTPS 防止了"看内容"，但 RST 注入只需要看 IP 头和能猜 seq。GFW 的"重置连接"用的就是这个。对自部署模型 API，全部走 TLS + 启用 TCP-AO（RFC 5925）能极大缓解。</p>
+
+<p><strong>4. TIME_WAIT 耗尽是 Agent 调用上游 API 的隐藏雷</strong>。你写一个 Agent 频繁短连接调 OpenAI API，每次结束都进 TIME_WAIT，60 秒内本机源端口（~28K 个）耗尽——新连接 bind 失败。表现是"间歇性 connection refused"。修复：用 connection pool（requests 库的 <code>Session</code>、httpx 的 <code>Client</code>、aiohttp 的 <code>ClientSession</code>），保持长连接复用。这也是为什么生产环境强制 HTTP keep-alive。</p>
+
+<p><strong>5. 拥塞控制能成为侧信道</strong>。BBR 测出来的 BtlBw 和 RTprop 会泄露路径信息——攻击者通过观测你和某 IP 的 cwnd 变化可以推断你访问了哪些站点（即使是 HTTPS）。学术界对此有研究（TCP-based traffic fingerprinting）。对极敏感的 Agent 流量，可以考虑加 padding 或走 QUIC 0-RTT 上的混淆传输。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：观察一次完整 TCP 握手</strong></p>
+<p>用 tcpdump 抓一次 HTTPS 握手包（Linux 用 <code>tcpdump</code>，macOS 同样）：</p>
+<pre><code># 抓和某站点 443 的所有包，限制 20 个，详细输出
+sudo tcpdump -nn -i any -c 20 'host example.com and port 443' -S
+
+# 然后另开一个终端
+curl -sI https://example.com -o /dev/null
+
+# 观察输出的 Flags 字段：
+#   [S]    = SYN
+#   [S.]   = SYN+ACK
+#   [.]    = ACK
+#   [P.]   = PSH+ACK
+#   [F.]   = FIN+ACK
+#   [R]    = RST</code></pre>
+<p>问题：找出你抓到的握手三步（[S]、[S.]、[.]），把每一步的 seq 号和 ack 号写下来，验证 ack 总是上一步 seq+1。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：你机器上的连接状态分布</strong></p>
+<pre><code># 看每种状态多少个
+ss -tan | awk 'NR&gt;1{print $1}' | sort | uniq -c | sort -rn
+
+# 看哪些进程在 listen
+sudo ss -tlnp
+
+# 看具体某个连接的拥塞控制信息（关键诊断）
+ss -tio | head -20
+# 输出中会看到 cwnd:10 ssthresh:7 send 10Mbps rtt:5/2 等</code></pre>
+<p>问题：你机器上 TIME_WAIT 大概有多少个？哪个进程开的 listen 端口最多？挑一条 ESTAB 连接看 <code>ss -tio</code>，它用的拥塞控制算法是什么、cwnd 多大？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考题</strong></p>
+<p>场景：你部署了一个 vLLM 服务在 K8s 上，前面挂了 Nginx Ingress。某客户报告"流式响应有时候每个 token 之间会卡 200ms"。你已经确认 vLLM 本身的 token 生成是稳定的 50ms 一个。</p>
+<p>问题：从 TCP 角度列出至少 3 个可能的原因，分别怎么验证、怎么修复？提示——考虑 Nagle、delayed ACK、TCP_NOTSENT_LOWAT、HTTP/2 的 frame size、Nginx 的 buffer 设置。</p>
+<p>追加问题：如果客户端在 4G 弱网下使用，cwnd 在小，第一个 token 之后才进入慢启动后期——这一点对 LLM 流式输出有什么影响？BBR 能改善吗？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 17 · UDP + HTTP 演进：从 HTTP/1.0 一路到 HTTP/3 QUIC</strong>。今天我们讲了 TCP 这个"可靠"的协议；明天我们看看它的反面——UDP 这个"什么都不管"的协议——以及为什么 Google 在 HTTP/3 里干脆抛弃了 TCP，用 UDP + QUIC 重做了一遍传输层。你会理解为什么 QUIC 能 0-RTT、为什么 HPACK 压缩 header、HTTP/2 的多路复用为什么救不了"队头阻塞"。
+</div>
+
+</body>
+</html>
