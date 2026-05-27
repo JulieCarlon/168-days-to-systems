@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Article 5 · CoT 是怎么变成资产的，又是怎么被偷的</title>
+<style>
+:root {
+  --bg: #f8fafc;
+  --ink: #1e293b;
+  --muted: #64748b;
+  --accent: #1e40af;
+  --accent-2: #2563eb;
+  --accent-soft: #bfdbfe;
+  --line: #e2e8f0;
+  --card: #ffffff;
+  --code-bg: #f1f5f9;
+  --callout-bg: #eff6ff;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  line-height: 1.78;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+  font-size: 16px;
+}
+header.hdr {
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 18px;
+  margin-bottom: 28px;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+header.hdr .pill {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+h1 {
+  font-size: 28px;
+  line-height: 1.35;
+  margin: 12px 0 8px;
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 {
+  border-left: 4px solid var(--accent);
+  padding-left: 12px;
+  font-size: 22px;
+  margin-top: 38px;
+  margin-bottom: 14px;
+  color: var(--accent);
+}
+h3 {
+  font-size: 17px;
+  margin-top: 22px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+p { margin: 12px 0; }
+.lede {
+  background: var(--callout-bg);
+  border-left: 4px solid var(--accent-2);
+  padding: 14px 18px;
+  border-radius: 4px;
+  color: var(--ink);
+  margin: 18px 0 28px;
+}
+.term { color: var(--accent); font-weight: 600; }
+code {
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13.5px;
+}
+pre {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 14px 18px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+pre code { background: none; padding: 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+th, td {
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  text-align: left;
+}
+th {
+  background: var(--callout-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+ul, ol { padding-left: 26px; }
+li { margin: 6px 0; }
+sup.cite {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+}
+.references {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 16px 22px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  margin-top: 36px;
+}
+.references h3 { margin-top: 0; color: var(--accent); }
+.references ol { padding-left: 22px; margin: 0; }
+.references li { margin: 8px 0; }
+.references a { color: var(--accent); text-decoration: none; }
+.references a:hover { text-decoration: underline; }
+.references .arxiv {
+  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 12px;
+}
+.callout {
+  background: var(--callout-bg);
+  border-left: 3px solid var(--accent-2);
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin: 16px 0;
+}
+.next {
+  margin-top: 40px;
+  padding-top: 18px;
+  border-top: 2px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <span class="pill">Article 5</span><span class="pill">Week 02 · 周三</span><span class="pill">专题</span>
+  <span>主题：CoT 窃取攻击 · 预计 1 小时</span>
+  <h1>CoT 是怎么变成资产的，又是怎么被偷的</h1>
+</header>
+
+<div class="lede">
+推理模型把"思考过程"显式化为 Chain-of-Thought 之后，这些中间 token 就从"过程产物"变成了"训练数据资产"。本文梳理这条资产化路径上四个相互独立又彼此咬合的问题：CoT 在训练管线里的位置、为什么它在 2026 年突然变贵、有哪些方法可以把它抽出去、防御侧目前能做到哪一步。
+</div>
+
+<h2>§ 1 本质：CoT 为什么是"被压缩过的探索结果"</h2>
+
+<p>把 Chain-of-Thought 视作"模型说出来的中间步骤"是不够准确的描述。在 DeepSeek-R1 这一代 reasoning model 的训练管线里，高质量 CoT 实际上是 reinforcement learning 阶段"上亿次 rollout 中被验证保留"的结果<sup class="cite">[1]</sup>。一条 RL 生成的 CoT，背后是模型尝试了多条推理路径、被 verifier（数学结果、单元测试、奖励模型）剔除掉绝大部分后，留下的成功样本。</p>
+
+<p>这一性质让 CoT 在数据维度上具有不可替代性：</p>
+
+<ul>
+  <li><span class="term">问题与答案</span>在公开数据集（GSM8K、MATH、HumanEval）里已经过剩，几乎无成本</li>
+  <li><span class="term">中间推理步骤</span>则必须靠下面三种路径之一获取：人工标注、模型生成 + 过滤、或 RL 涌现 + rejection sampling</li>
+  <li>其中只有第三条能产出 <span class="term">SOTA 级别</span>的 CoT —— 因为它隐含了模型"权衡 + 自我修正 + 拒绝错误路径"的高阶模式</li>
+</ul>
+
+<p>换句话说，<span class="term">CoT 不是文本，是压缩过的搜索结果</span>。这一点决定了它的稀缺性、可迁移性，以及——在攻击者眼里——它的价值。</p>
+
+<h2>§ 2 缘由：从"显式输出"到"摘要遮蔽"的策略转向</h2>
+
+<p>2024 年 9 月 o1 发布是 CoT 暴露策略的分水岭。在此之前，CoT 主要被视作"可解释性工具"：让模型把推理写出来，方便用户验证与调试。o1 第一次将完整 raw CoT 在 API 和 UI 层都隐藏起来，只对用户暴露一份由另一个模型生成的"摘要 CoT"<sup class="cite">[2]</sup>。</p>
+
+<p>这一策略后来被 Anthropic 与 Google 跟进。理由不是"为了用户体验"，而是商业 IP 保护：</p>
+
+<ol>
+  <li><span class="term">完整 CoT 接近 1:1 的训练数据</span>——一旦被大规模抓取，可直接用作 SFT 数据训练学生模型</li>
+  <li><span class="term">摘要后的 CoT 信息密度大幅下降</span>——抓取者拿到的是被"再压缩"后的版本，蒸馏效果理论上会衰减</li>
+  <li><span class="term">完整 CoT 还可能泄露 system prompt 与安全策略的内部表征</span>，引发链式风险</li>
+</ol>
+
+<p>但摘要并不等于不可恢复。2026 年 3 月发表的 "How to Steal Reasoning Without Reasoning Traces" 证明：只用最终答案 + 摘要 CoT，就可以训一个 inverter 反推出 81% token 还原率的完整 trace<sup class="cite">[3]</sup>。这一结果让摘要策略的有效性受到严重挑战。</p>
+
+<div class="callout">
+<strong>策略层的取舍</strong>：暴露完整 CoT → 可解释性最高但 IP 风险最大；摘要 CoT → 平衡可读性与一定程度的反蒸馏；完全隐藏 CoT → IP 保护最强但失去 reasoning model 的核心卖点。当前主流厂商落在第二档，但这一档正在被 trace inversion 类攻击侵蚀。
+</div>
+
+<h2>§ 3 训练管线里 CoT 的具体位置</h2>
+
+<p>以 DeepSeek-R1 公开技术报告为参考<sup class="cite">[1]</sup>，reasoning model 的训练大致分五段，CoT 在每一段的角色不同：</p>
+
+<table>
+<thead><tr><th>阶段</th><th>数据形态</th><th>规模量级</th><th>CoT 角色</th></tr></thead>
+<tbody>
+<tr><td>Pretraining</td><td>互联网 token</td><td>10T+ tokens</td><td>隐式，不显式标注</td></tr>
+<tr><td>Cold-start SFT</td><td>少量长 CoT 示范</td><td>几千条</td><td>教会 <code>&lt;think&gt;</code> 格式与基础推理模式</td></tr>
+<tr><td>Reasoning RL</td><td>题目 + verifier</td><td>百万题 × N rollouts</td><td>大规模生成 + 自然涌现</td></tr>
+<tr><td>Rejection sampling + SFT</td><td>(question, CoT, answer)</td><td>~800K 条</td><td>把 RL 学到的"固化"为监督数据</td></tr>
+<tr><td>Distillation</td><td>(question, CoT, answer)</td><td>几十万 - 百万</td><td>把能力转移给小模型</td></tr>
+</tbody>
+</table>
+
+<p>这张表的关键启示是：<span class="term">如果能跳过 Stage 1-3 直接进入 Stage 4 或 5，整个训练成本可以下降两到三个数量级</span>。"跳过"的前提是手里有一份高质量 (question, CoT, answer) 数据。这就是攻击者瞄准的目标。</p>
+
+<h2>§ 4 攻击方法谱系</h2>
+
+<p>目前公开文献与产业事件可观察到的 CoT 抽取攻击大致分七类，按"对模型暴露面假设"递减排序：</p>
+
+<h3>4.1 大规模 API 抽取（Direct Query）</h3>
+<p>最朴素：分布式批量调用目标 API，覆盖多种 query 类别，把所有返回的 CoT（或摘要）收集起来。Anthropic 在 2026 年 2 月披露的事件中记录到约 24,000 个虚假账户在其 API 上发起约 1,600 万次问询，单一目的即为推理数据抽取<sup class="cite">[4]</sup>。攻击门槛低，但受限于厂商的限流、sybil 检测、与 service terms。</p>
+
+<h3>4.2 Prompted Externalization</h3>
+<p>通过精心设计的 prompt 让模型主动"verbose 化"自己的推理。典型模板包括"假设作为助教向学生讲解每一步"、"展示你心中的 scratchpad"、"以教学场景输出完整 derivation"。这一类方法实际上是 prompt engineering 在抽取场景下的复用，与 jailbreak 攻击的 roleplay 范式同源。</p>
+
+<h3>4.3 Many-shot CoT Elicitation</h3>
+<p>把若干长 CoT 示范放进 context，利用 in-context learning 的模仿倾向让模型也输出同样详细的 CoT。这是从 Anthropic 自己的 Many-shot Jailbreaking 工作<sup class="cite">[5]</sup>迁移过来的思路：只要 context 内能装下足够多的示范，模型行为就会被这些示范牵引。</p>
+
+<h3>4.4 多轮 Reasoning Unfolding</h3>
+<p>第一轮拿到摘要回答，后续轮次依次追问 "为什么这一步"、"具体怎么算的"、"如果用 scratchpad 会写什么"。每一轮都在把藏起来的推理外化。这一路径几乎不触发安全审查，因为表面上是"合作 + 教学"的对话语境。</p>
+
+<h3>4.5 Trace Inversion</h3>
+<p>2026 年 3 月的核心论文 "How to Steal Reasoning Without Reasoning Traces" 首次系统化这一方向<sup class="cite">[3]</sup>。其方法不依赖 prompt 工程，而是在公开数据上训一个 inverter：</p>
+<pre><code>输入: (question, summary_CoT, final_answer)
+        ↑ 仅商业 API 暴露的部分
+   inverter (在公开 reasoning datasets 上训)
+        ↓
+输出: 预测的 full CoT
+</code></pre>
+<p>实验上对 DeepSeek-R1 traces 达到约 81% 的 token recovery rate 与 52.79 的 token-overlap F1。把 inverted traces 用于微调 Qwen-2.5-7B-Instruct 后，在 MATH500 上从 56.8% 提升到 77.6%，JEEBench 从 11.7% 提升到 42.3%<sup class="cite">[3]</sup>。这一结果意味着：商业 API 的"摘要遮蔽"策略在 ML 攻击面前并不可靠。</p>
+
+<h3>4.6 侧信道（Side-Channel）</h3>
+<p>不去抓 CoT 内容，转而通过元信息推断：API 返回的 <code>reasoning_tokens</code> 计数、响应时延、token-by-token streaming 的间隔、暴露的 logprobs 分布等，可以反推 CoT 长度、复杂度乃至候选 token 集合。这一路径目前学术工作较少，是开放的研究方向。</p>
+
+<h3>4.7 Adversarial Suffix for CoT Elicitation</h3>
+<p>把 GCG<sup class="cite">[6]</sup>这一类对抗优化 jailbreak 方法的目标函数从"输出 affirmative 答复"换成"输出尽可能长 / 详细的 CoT"，理论上可以得到无需提示工程的自动化抽取后缀。这一方向公开论文极少，是 jailbreak 方法迁移到 CoT 抽取的自然延伸。</p>
+
+<h2>§ 5 经济学视角：偷 vs 训的成本曲线</h2>
+
+<p>把上述方法放到训练成本上对比：</p>
+
+<table>
+<thead><tr><th>目标</th><th>自建成本（粗略）</th><th>抽取成本（粗略）</th></tr></thead>
+<tbody>
+<tr><td>800K 条 cold-start 级 CoT</td><td>$M 级（含人工标注）</td><td>$1K - $10K（仅 API 调用）</td></tr>
+<tr><td>800K 条 RL 级高质量 CoT</td><td>$10M+（含算力 + RL infra）</td><td>$10K - $100K（含 sybil + inversion 训练）</td></tr>
+<tr><td>新建 reasoning model（从头）</td><td>$50M+</td><td>不适用，但蒸馏可达 90% 能力，成本两个数量级以下</td></tr>
+</tbody>
+</table>
+
+<p>这一成本曲线解释了三件事：</p>
+
+<ol>
+  <li>为什么 2026 年初出现工业级抽取 campaign：经济上"偷"对"训"形成压倒性优势</li>
+  <li>为什么 OpenAI / Anthropic / Google 罕见地<span class="term">联合</span>对外披露——单家公司压不住这种规模</li>
+  <li>为什么 DeepSeek-R1-Distill 等开源蒸馏模型能在多个 benchmark 接近 teacher：CoT 蒸馏的 ROI 在所有 ML 训练范式中是最高的之一</li>
+</ol>
+
+<div class="callout">
+<strong>一个被忽视的点</strong>：偷来的 CoT 对垂直领域模型同样有价值。即使最终目标是训"医疗推理模型"或"车机推理模型"，通用 reasoning model 的 CoT 仍是不可替代的 "reasoning prior"——因为推理能力本身是跨领域可迁移的，垂直数据只提供 domain knowledge，无法替代推理骨架。
+</div>
+
+<h2>§ 6 防御侧的进展</h2>
+
+<p>目前公开可见的反抽取 / 反蒸馏技术大致三类：</p>
+
+<h3>6.1 输出层遮蔽</h3>
+<p>摘要 CoT、随机化输出顺序、限制 reasoning_tokens 数等。已被 trace inversion 部分突破<sup class="cite">[3]</sup>。</p>
+
+<h3>6.2 内容层重构</h3>
+<p>2025 年 10 月的 "Information-Preserving Reformulation of Reasoning Traces for Antidistillation"<sup class="cite">[7]</sup>提出：在保持对用户可读性的同时，重写 CoT 使其在蒸馏后导致学生模型性能退化。这一思路与传统 ML 中的 data poisoning 防御对偶。</p>
+
+<h3>6.3 访问层管控</h3>
+<p>Rate limiting、sybil detection、异常 query pattern 识别。属于运营 + 安全的传统手段，对工业级 campaign 仍有效，但门槛在持续上升。</p>
+
+<h3>6.4 法律与合规</h3>
+<p>OpenAI、Anthropic 已在服务条款中明确禁止使用其 output 训练竞品<sup class="cite">[2]</sup>。但在跨境与开源蒸馏链路上，强制执行的难度可想而知。</p>
+
+<h2>§ 7 与本周 Theory + Practice 的串联</h2>
+
+<p>本周前两篇分别讲了 PPO 的目标函数与 TRL 上手训 reward model。这两条线在 CoT 抽取问题上以一种意外的方式交汇：</p>
+
+<ul>
+  <li><span class="term">PPO / GRPO 等 RL 阶段</span>是 CoT 的"生产线"。生产成本越高，被抽取的动机越强</li>
+  <li><span class="term">Reward Model</span>本身也面临被反推的风险——通过对同一 prompt 的多次 sampling，可以反推 RM 的偏好分布</li>
+  <li>整个 RL 管线的<span class="term">输出</span>，在 reasoning model 时代第一次同时具有"产品价值"和"训练数据价值"。这一双重属性是过去 SFT 时代不存在的</li>
+</ul>
+
+<h2>§ 8 局限与开放问题</h2>
+
+<ol>
+  <li><span class="term">质量天花板</span>：所有抽取攻击的产出都受 teacher 模型能力上限制约。学生模型无法靠纯蒸馏超越 teacher，除非加入额外的 RL</li>
+  <li><span class="term">长尾覆盖</span>：抽取覆盖的是 teacher "愿意 verbose 输出"的部分，对罕见领域、安全边界附近的推理样本难以覆盖</li>
+  <li><span class="term">检测的猫鼠游戏</span>：sybil 与 query pattern 检测会持续演进，攻击方也会用更精细的分布拟合反制</li>
+  <li><span class="term">水印化方向</span>：在 CoT token 分布里嵌入可验证的水印，是目前学术探索中的开放方向，尚无工业部署</li>
+  <li><span class="term">侧信道研究空白</span>：基于响应时延、reasoning_tokens 计数的统计攻击，目前几乎没有系统论文</li>
+</ol>
+
+<h2>§ 9 思考题</h2>
+
+<p><strong>问：</strong>如果一家厂商完全隐藏 reasoning_tokens 计数（连"消耗了多少 reasoning token"都不告诉用户），是否能彻底防御 CoT 抽取攻击？</p>
+
+<p><strong>答：</strong>不能。理由有三：</p>
+<ul>
+  <li>响应时延仍然泄露推理复杂度（虽然噪声更大）</li>
+  <li>Prompted Externalization 与 Multi-turn Unfolding 这两类不依赖元信息的攻击仍然可行</li>
+  <li>Trace Inversion 类方法只需要 (question, final_answer)，连摘要都不一定必要——只是没有摘要时 token recovery rate 会下降</li>
+</ul>
+<p>真正的防御只能是<span class="term">多层叠加</span>：访问层管控 + 内容层重构 + 输出层遮蔽 + 法律 + 水印。任一单点都不构成完整防御。</p>
+
+<div class="references">
+<h3>参考文献</h3>
+<ol>
+  <li>DeepSeek-AI, "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning", <span class="arxiv">arXiv:2501.12948</span> (2025). <a href="https://arxiv.org/abs/2501.12948">https://arxiv.org/abs/2501.12948</a></li>
+  <li>OpenAI, "Learning to Reason with LLMs" (o1 system card and accompanying policy statements), September 2024. <a href="https://openai.com/index/learning-to-reason-with-llms/">openai.com</a></li>
+  <li>Zhang T. et al., "How to Steal Reasoning Without Reasoning Traces", <span class="arxiv">arXiv:2603.07267</span> (2026). 代码：<a href="https://github.com/Tingwei-Zhang/Trace_Inversion_Attack">github.com/Tingwei-Zhang/Trace_Inversion_Attack</a></li>
+  <li>Anthropic, "Detecting and Countering Misuse of AI: February 2026 Report" （三方联合披露 reasoning 数据抽取 campaign 的产业报告）。</li>
+  <li>Anil C. et al., "Many-shot Jailbreaking", Anthropic Research, 2024. <a href="https://www.anthropic.com/research/many-shot-jailbreaking">anthropic.com/research/many-shot-jailbreaking</a></li>
+  <li>Zou A. et al., "Universal and Transferable Adversarial Attacks on Aligned Language Models" (GCG), <span class="arxiv">arXiv:2307.15043</span> (2023).</li>
+  <li>"Information-Preserving Reformulation of Reasoning Traces for Antidistillation", <span class="arxiv">arXiv:2510.11545</span> (2025).</li>
+  <li>Huang Z. et al., "O1 Replication Journey -- Part 2: Surpassing O1-preview through Simple Distillation, Big Progress or Bitter Lesson?", <span class="arxiv">arXiv:2411.16489</span> (2024).</li>
+  <li>"Marco-o1 v2: Towards Widening The Distillation Bottleneck for Reasoning Models", <span class="arxiv">arXiv:2503.01461</span> (2025).</li>
+  <li>Trend Micro Research, "Exploiting DeepSeek-R1: Breaking Down Chain of Thought Security", March 2025. <a href="https://www.trendmicro.com/en_us/research/25/c/exploiting-deepseek-r1.html">trendmicro.com</a></li>
+</ol>
+</div>
+
+<div class="next">
+下一篇预告（周五 · Hot）：GRPO vs PPO ——DeepSeek 为什么把价值网络拿掉。
+</div>
+
+</body>
+</html>
