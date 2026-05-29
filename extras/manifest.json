@@ -9,6 +9,11 @@
       "path": "cot-research/cot-extraction-long.html",
       "label": "⭐ CoT 抽取 · 深度版",
       "topic": "从经济学到方法学的全景（9500 字）"
+    },
+    {
+      "path": "sql-cheatsheet/sql-queries-cheatsheet.html",
+      "label": "🗃️ SQL 查询语句大全",
+      "topic": "SELECT / JOIN / 窗口函数 / 18 个业务模式（10000 字）"
     }
   ]
 }

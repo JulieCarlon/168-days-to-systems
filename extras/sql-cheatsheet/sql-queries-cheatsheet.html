@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL 查询语句大全 · 从基础到窗口函数的完整速查</title>
+<style>
+:root {
+  --bg: #fafbfc;
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --card: #ffffff;
+  --code-bg: #f1f5f9;
+
+  --blue: #2563eb;
+  --blue-soft: #dbeafe;
+  --blue-bg: #eff6ff;
+
+  --green: #059669;
+  --green-soft: #d1fae5;
+  --green-bg: #ecfdf5;
+
+  --amber: #d97706;
+  --amber-soft: #fde68a;
+  --amber-bg: #fffbeb;
+
+  --rose: #e11d48;
+  --rose-soft: #fecdd3;
+  --rose-bg: #fff1f2;
+
+  --purple: #7c3aed;
+  --purple-soft: #ddd6fe;
+  --purple-bg: #f5f3ff;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+  line-height: 1.78;
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 40px 28px 80px;
+  font-size: 16px;
+}
+header.hdr {
+  border-bottom: 3px solid var(--blue);
+  padding-bottom: 22px;
+  margin-bottom: 36px;
+}
+header.hdr .meta {
+  font-size: 12.5px;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  margin-bottom: 14px;
+}
+header.hdr .pill {
+  display: inline-block;
+  background: var(--blue-soft);
+  color: var(--blue);
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 11.5px;
+  margin-right: 6px;
+}
+header.hdr .pill.long { background: var(--amber-soft); color: var(--amber); }
+header.hdr .pill.hot { background: var(--rose-soft); color: var(--rose); }
+h1 {
+  font-size: 32px;
+  line-height: 1.3;
+  margin: 8px 0 12px;
+  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+header.hdr .sub { font-size: 15.5px; color: var(--ink-2); margin-top: 6px; }
+h2 {
+  margin: 56px 0 18px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--purple) 100%);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+h2 .badge {
+  background: rgba(255,255,255,0.25);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+h3 {
+  font-size: 19px;
+  margin-top: 30px;
+  margin-bottom: 10px;
+  color: var(--blue);
+  font-weight: 700;
+  padding-left: 12px;
+  border-left: 4px solid var(--blue);
+}
+h4 { font-size: 15.5px; margin-top: 20px; margin-bottom: 6px; color: var(--ink); font-weight: 700; }
+p { margin: 12px 0; color: var(--ink-2); }
+.lede {
+  background: var(--blue-bg);
+  border-left: 5px solid var(--blue);
+  padding: 18px 22px;
+  border-radius: 6px;
+  color: var(--ink);
+  margin: 20px 0 32px;
+  font-size: 15.5px;
+}
+.lede strong { color: var(--blue); }
+.tldr {
+  background: #fff;
+  border: 2px solid var(--green);
+  border-radius: 10px;
+  padding: 18px 22px;
+  margin: 22px 0;
+  position: relative;
+}
+.tldr::before {
+  content: "TL;DR";
+  position: absolute;
+  top: -12px;
+  left: 18px;
+  background: var(--green);
+  color: #fff;
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.tldr p { margin: 6px 0; color: var(--ink); }
+.callout {
+  margin: 18px 0;
+  padding: 14px 18px 14px 56px;
+  border-radius: 8px;
+  position: relative;
+  font-size: 15px;
+}
+.callout::before { position: absolute; left: 16px; top: 14px; font-size: 22px; }
+.callout.insight { background: var(--blue-bg); border-left: 4px solid var(--blue); }
+.callout.insight::before { content: "💡"; }
+.callout.warn { background: var(--amber-bg); border-left: 4px solid var(--amber); }
+.callout.warn::before { content: "⚠️"; }
+.callout.key { background: var(--green-bg); border-left: 4px solid var(--green); }
+.callout.key::before { content: "🎯"; }
+.callout.note { background: #f8fafc; border-left: 4px solid var(--muted); }
+.callout.note::before { content: "📌"; }
+.callout.danger { background: var(--rose-bg); border-left: 4px solid var(--rose); }
+.callout.danger::before { content: "🚨"; }
+.callout strong { color: var(--ink); }
+blockquote.pull {
+  margin: 24px 0;
+  padding: 22px 28px 22px 60px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--purple);
+  border-radius: 8px;
+  font-size: 17px;
+  font-style: italic;
+  color: var(--ink);
+  position: relative;
+  line-height: 1.65;
+}
+blockquote.pull::before {
+  content: "❝";
+  position: absolute;
+  left: 16px;
+  top: 8px;
+  font-size: 42px;
+  color: var(--purple-soft);
+  line-height: 1;
+}
+.term {
+  color: var(--blue);
+  font-weight: 600;
+  background: linear-gradient(180deg, transparent 65%, var(--blue-soft) 65%);
+  padding: 0 2px;
+}
+code {
+  background: var(--code-bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13.5px;
+  color: #be185d;
+}
+pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 16px 0;
+  border-left: 4px solid var(--blue);
+}
+pre code { background: none; padding: 0; color: inherit; }
+pre .k { color: #f472b6; font-weight: 700; }
+pre .s { color: #86efac; }
+pre .n { color: #fbbf24; }
+pre .c { color: #94a3b8; font-style: italic; }
+pre .t { color: #67e8f9; }
+.table-wrap {
+  overflow-x: auto;
+  margin: 18px 0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 14.5px;
+}
+th, td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+th {
+  background: linear-gradient(135deg, var(--blue) 0%, var(--purple) 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: 0.3px;
+  border-bottom: 2px solid var(--blue);
+}
+tbody tr:nth-child(even) { background: #f8fafc; }
+tbody tr:hover { background: var(--blue-bg); }
+ul, ol { padding-left: 26px; margin: 12px 0; color: var(--ink-2); }
+li { margin: 6px 0; }
+ul li::marker { color: var(--blue); }
+ol li::marker { color: var(--blue); font-weight: 700; }
+sup.cite {
+  color: var(--blue);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 1px 4px;
+  background: var(--blue-soft);
+  border-radius: 3px;
+}
+.toc {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 26px;
+  margin: 28px 0 36px;
+  font-size: 14.5px;
+}
+.toc h3 {
+  margin: 0 0 12px;
+  border: none;
+  padding: 0;
+  font-size: 15px;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.toc ol {
+  padding-left: 0;
+  margin: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 30px;
+}
+.toc li {
+  margin: 5px 0;
+  padding-left: 0;
+  break-inside: avoid;
+  counter-increment: toc-counter;
+}
+.toc li::before {
+  content: counter(toc-counter, decimal-leading-zero);
+  display: inline-block;
+  width: 28px;
+  color: var(--blue);
+  font-weight: 700;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+}
+.toc { counter-reset: toc-counter; }
+.toc a { color: var(--ink-2); text-decoration: none; }
+.toc a:hover { color: var(--blue); }
+.row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 18px 0;
+}
+.row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin: 18px 0;
+}
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+.card h4 { margin-top: 0; color: var(--blue); }
+.card p { margin: 6px 0; font-size: 14.5px; }
+.stat {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 18px;
+  text-align: center;
+}
+.stat .num {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--blue);
+  font-family: ui-monospace, monospace;
+  display: block;
+}
+.stat .label { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.glossary {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 26px;
+  margin: 16px 0;
+}
+.glossary dt { font-weight: 700; color: var(--blue); margin-top: 14px; font-size: 14.5px; }
+.glossary dt:first-child { margin-top: 0; }
+.glossary dd { margin: 4px 0 0 0; color: var(--ink-2); font-size: 14px; line-height: 1.6; }
+.references {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 22px 28px;
+  font-size: 13.5px;
+  line-height: 1.75;
+  margin-top: 40px;
+}
+.references h2 {
+  background: none;
+  color: var(--blue);
+  padding: 0;
+  margin: 0 0 16px;
+  font-size: 18px;
+  border-bottom: 2px solid var(--blue);
+  padding-bottom: 8px;
+  border-radius: 0;
+  display: block;
+}
+.references ol { padding-left: 24px; margin: 0; }
+.references li { margin: 8px 0; color: var(--ink-2); }
+.references a { color: var(--blue); text-decoration: none; }
+.references a:hover { text-decoration: underline; }
+.next {
+  margin-top: 40px;
+  padding: 16px 22px;
+  border-radius: 8px;
+  background: var(--purple-bg);
+  border-left: 4px solid var(--purple);
+  font-size: 14.5px;
+  color: var(--ink-2);
+}
+.next strong { color: var(--purple); }
+@media (max-width: 760px) {
+  .row-2, .row-3 { grid-template-columns: 1fr; }
+  .toc ol { columns: 1; }
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="meta">
+    <span class="pill">Bonus</span><span class="pill long">SQL 速查</span><span class="pill hot">~10,000 字 · 2-3 小时</span>
+  </div>
+  <h1>SQL 查询语句大全 🗃️</h1>
+  <div class="sub">从基础 SELECT 到窗口函数 / 递归 CTE / 注入防御，一份扁平可查阅的完整参考。</div>
+</header>
+
+<div class="lede">
+本文按"<strong>查询语句</strong> → <strong>结构</strong> → <strong>模式</strong> → <strong>优化与安全</strong>"四块组织，覆盖 SELECT / JOIN / GROUP BY / 子查询 / CTE / 窗口函数 / DDL / DML 全谱系，外加 18 个常用业务模式（Top-N、分页、运行总计、漏斗等）。最后单独有 SQL 注入红队视角、各方言速查表、术语表。<br>面向：已经知道 SQL 是什么、想要一份能反复回看的参考。
+</div>
+
+<div class="tldr">
+<p>🔹 <strong>SELECT 查询执行顺序</strong>：FROM → WHERE → GROUP BY → HAVING → SELECT → DISTINCT → ORDER BY → LIMIT</p>
+<p>🔹 <strong>JOIN 五种核心</strong>：INNER / LEFT / RIGHT / FULL / CROSS，外加 SELF JOIN（同表自联）和 LATERAL（横向应用）</p>
+<p>🔹 <strong>窗口函数 = SQL 现代化的分水岭</strong>：能用一行替代复杂的子查询 + 自联</p>
+<p>🔹 <strong>CTE</strong>（WITH 子句）是可读性的关键；递归 CTE 能跑层级 / 图遍历</p>
+<p>🔹 <strong>注入防御只有一句话</strong>：永远参数化，永远不要拼 SQL 字符串</p>
+</div>
+
+<div class="toc">
+<h3>📚 目录</h3>
+<ol>
+  <li><a href="#sec-1">SELECT 完整骨架</a></li>
+  <li><a href="#sec-2">WHERE 子句</a></li>
+  <li><a href="#sec-3">JOIN 七种姿势</a></li>
+  <li><a href="#sec-4">GROUP BY + 聚合函数</a></li>
+  <li><a href="#sec-5">ORDER BY + LIMIT + 分页</a></li>
+  <li><a href="#sec-6">子查询全谱系</a></li>
+  <li><a href="#sec-7">CTE 与递归 CTE</a></li>
+  <li><a href="#sec-8">窗口函数全集</a></li>
+  <li><a href="#sec-9">集合操作</a></li>
+  <li><a href="#sec-10">NULL 完整处理</a></li>
+  <li><a href="#sec-11">CASE WHEN 与条件表达式</a></li>
+  <li><a href="#sec-12">字符串 + 日期 + 数值函数</a></li>
+  <li><a href="#sec-13">DDL：CREATE / ALTER / DROP</a></li>
+  <li><a href="#sec-14">DML：INSERT / UPDATE / DELETE / UPSERT</a></li>
+  <li><a href="#sec-15">索引、视图、事务</a></li>
+  <li><a href="#sec-16">18 个高频业务模式</a></li>
+  <li><a href="#sec-17">性能优化要点</a></li>
+  <li><a href="#sec-18">SQL 注入防御与红队视角</a></li>
+  <li><a href="#sec-19">PostgreSQL / MySQL / SQLite 方言差异</a></li>
+  <li><a href="#sec-20">术语表 + 参考</a></li>
+</ol>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-1"><span class="badge">01</span> SELECT 完整骨架</h2>
+
+<h3>1.1 SQL 查询执行顺序（核心 · 必须背）</h3>
+
+<p>写出来的顺序 ≠ 执行顺序。SQL 查询的<strong>逻辑执行顺序</strong>是：</p>
+
+<pre><code><span class="k">FROM</span>     表 + JOIN              <span class="c">-- 1. 先确定数据来源</span>
+<span class="k">WHERE</span>    行级过滤              <span class="c">-- 2. 在聚合前剔除不要的行</span>
+<span class="k">GROUP BY</span> 分组                  <span class="c">-- 3. 聚合的"桶"</span>
+<span class="k">HAVING</span>   组级过滤              <span class="c">-- 4. 在聚合后剔除不要的组</span>
+<span class="k">SELECT</span>   选列 / 计算列         <span class="c">-- 5. 投影</span>
+<span class="k">DISTINCT</span> 去重                  <span class="c">-- 6.</span>
+<span class="k">ORDER BY</span> 排序                  <span class="c">-- 7.</span>
+<span class="k">LIMIT</span>    取前 N                 <span class="c">-- 8.</span>
+</code></pre>
+
+<div class="callout key">
+<strong>实战意义</strong>：能用 WHERE 过滤就不要等到 HAVING 才过滤——WHERE 在聚合前，能少处理大量数据。
+</div>
+
+<h3>1.2 最完整的 SELECT 模板</h3>
+
+<pre><code><span class="k">SELECT</span> [<span class="k">ALL</span> | <span class="k">DISTINCT</span>]
+       <span class="t">column1</span>, <span class="t">column2</span>, <span class="k">AGG</span>(<span class="t">column3</span>) <span class="k">AS</span> <span class="t">alias</span>
+<span class="k">FROM</span>   <span class="t">table1</span>
+<span class="k">JOIN</span>   <span class="t">table2</span> <span class="k">ON</span>  <span class="t">table1.id</span> = <span class="t">table2.t1_id</span>
+<span class="k">WHERE</span>  条件
+<span class="k">GROUP BY</span> <span class="t">column1</span>
+<span class="k">HAVING</span> <span class="k">AGG</span>(<span class="t">column3</span>) &gt; <span class="n">10</span>
+<span class="k">ORDER BY</span> <span class="t">column1</span> [<span class="k">ASC</span>|<span class="k">DESC</span>]
+<span class="k">LIMIT</span> <span class="n">100</span> <span class="k">OFFSET</span> <span class="n">200</span>;
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-2"><span class="badge">02</span> WHERE 子句</h2>
+
+<h3>2.1 全部条件运算符</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>类别</th><th>语法</th><th>例子</th></tr></thead>
+<tbody>
+<tr><td>比较</td><td><code>=  &lt;&gt;  !=  &lt;  &gt;  &lt;=  &gt;=</code></td><td><code>price &gt;= 100</code></td></tr>
+<tr><td>范围</td><td><code>BETWEEN a AND b</code></td><td><code>age BETWEEN 18 AND 65</code></td></tr>
+<tr><td>集合</td><td><code>IN (...)</code> / <code>NOT IN (...)</code></td><td><code>city IN ('北京', '上海')</code></td></tr>
+<tr><td>模糊</td><td><code>LIKE 'abc%'</code> / <code>'%abc%'</code></td><td><code>name LIKE 'Zhu%'</code></td></tr>
+<tr><td>正则</td><td><code>~</code> / <code>REGEXP</code>（方言不一）</td><td><code>email ~ '^.+@.+$'</code></td></tr>
+<tr><td>NULL</td><td><code>IS NULL</code> / <code>IS NOT NULL</code></td><td><code>phone IS NULL</code></td></tr>
+<tr><td>布尔</td><td><code>AND  OR  NOT</code></td><td><code>a AND (b OR c)</code></td></tr>
+<tr><td>存在</td><td><code>EXISTS (...)</code></td><td>见 §6.5</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>2.2 LIKE 通配符</h3>
+
+<table>
+<tr><th>符号</th><th>含义</th><th>例子</th></tr>
+<tr><td><code>%</code></td><td>匹配 0 个或多个字符</td><td><code>'Z%' → "Zhu", "Zhang"</code></td></tr>
+<tr><td><code>_</code></td><td>匹配恰好 1 个字符</td><td><code>'Z_u' → "Zhu", 但不匹配 "Zhou"</code></td></tr>
+<tr><td><code>ILIKE</code> (PostgreSQL)</td><td>不区分大小写</td><td><code>name ILIKE 'zhu%'</code></td></tr>
+</table>
+
+<div class="callout warn">
+<code>LIKE '%xxx%'</code>（开头通配）<strong>无法用 B-tree 索引</strong>，全表扫描。考虑改用全文索引（PG 的 <code>tsvector</code>、MySQL 的 <code>FULLTEXT</code>）。
+</div>
+
+<h3>2.3 IN 与 NOT IN 的 NULL 陷阱</h3>
+
+<pre><code><span class="c">-- 看起来正常,但 NULL 会让你失望:</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">users</span>
+<span class="k">WHERE</span> <span class="t">id</span> <span class="k">NOT IN</span> (<span class="n">1</span>, <span class="n">2</span>, <span class="k">NULL</span>);
+<span class="c">-- 结果: 0 行！因为 id != NULL 永远是 NULL (不是 TRUE)</span>
+
+<span class="c">-- 正确做法:</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">users</span>
+<span class="k">WHERE</span> <span class="t">id</span> <span class="k">NOT IN</span> (<span class="n">1</span>, <span class="n">2</span>)
+  <span class="k">AND</span> <span class="t">id</span> <span class="k">IS NOT NULL</span>;
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-3"><span class="badge">03</span> JOIN 七种姿势</h2>
+
+<h3>3.1 五种核心 JOIN</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>JOIN 类型</th><th>含义</th><th>视觉</th></tr></thead>
+<tbody>
+<tr><td><strong>INNER JOIN</strong></td><td>两边都有匹配的行</td><td>A ∩ B</td></tr>
+<tr><td><strong>LEFT JOIN</strong></td><td>左表全保留，右表没匹配 → NULL</td><td>A（含未匹配）</td></tr>
+<tr><td><strong>RIGHT JOIN</strong></td><td>右表全保留，左表没匹配 → NULL</td><td>B（含未匹配）</td></tr>
+<tr><td><strong>FULL OUTER JOIN</strong></td><td>两边都保留，缺失方 → NULL</td><td>A ∪ B</td></tr>
+<tr><td><strong>CROSS JOIN</strong></td><td>笛卡尔积（每行配每行）</td><td>A × B</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>3.2 代码示例</h3>
+
+<pre><code><span class="c">-- 表准备</span>
+users(id, name)
+orders(id, user_id, amount)
+
+<span class="c">-- INNER JOIN: 只要有订单的用户</span>
+<span class="k">SELECT</span> u.<span class="t">name</span>, o.<span class="t">amount</span>
+<span class="k">FROM</span>   <span class="t">users</span> u
+<span class="k">INNER JOIN</span> <span class="t">orders</span> o <span class="k">ON</span> o.<span class="t">user_id</span> = u.<span class="t">id</span>;
+
+<span class="c">-- LEFT JOIN: 所有用户,包括没下单的(amount 为 NULL)</span>
+<span class="k">SELECT</span> u.<span class="t">name</span>, o.<span class="t">amount</span>
+<span class="k">FROM</span>   <span class="t">users</span> u
+<span class="k">LEFT JOIN</span> <span class="t">orders</span> o <span class="k">ON</span> o.<span class="t">user_id</span> = u.<span class="t">id</span>;
+
+<span class="c">-- "反 JOIN": 找出从未下单的用户</span>
+<span class="k">SELECT</span> u.<span class="t">name</span>
+<span class="k">FROM</span>   <span class="t">users</span> u
+<span class="k">LEFT JOIN</span> <span class="t">orders</span> o <span class="k">ON</span> o.<span class="t">user_id</span> = u.<span class="t">id</span>
+<span class="k">WHERE</span>  o.<span class="t">id</span> <span class="k">IS NULL</span>;
+</code></pre>
+
+<h3>3.3 两种特殊 JOIN</h3>
+
+<h4>SELF JOIN（同表自联）</h4>
+
+<pre><code><span class="c">-- 找出员工与其经理的对应关系</span>
+<span class="k">SELECT</span> e.<span class="t">name</span> <span class="k">AS</span> <span class="t">employee</span>,
+       m.<span class="t">name</span> <span class="k">AS</span> <span class="t">manager</span>
+<span class="k">FROM</span>   <span class="t">employees</span> e
+<span class="k">LEFT JOIN</span> <span class="t">employees</span> m <span class="k">ON</span> m.<span class="t">id</span> = e.<span class="t">manager_id</span>;
+</code></pre>
+
+<h4>LATERAL JOIN（横向应用 · PostgreSQL）</h4>
+
+<pre><code><span class="c">-- 对每个用户,关联他的最近 3 笔订单</span>
+<span class="k">SELECT</span> u.<span class="t">name</span>, o.*
+<span class="k">FROM</span>   <span class="t">users</span> u
+<span class="k">CROSS JOIN LATERAL</span> (
+    <span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">orders</span>
+    <span class="k">WHERE</span> <span class="t">user_id</span> = u.<span class="t">id</span>
+    <span class="k">ORDER BY</span> <span class="t">created_at</span> <span class="k">DESC</span>
+    <span class="k">LIMIT</span> <span class="n">3</span>
+) o;
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-4"><span class="badge">04</span> GROUP BY + 聚合函数</h2>
+
+<h3>4.1 全部聚合函数</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>函数</th><th>含义</th><th>NULL 处理</th></tr></thead>
+<tbody>
+<tr><td><code>COUNT(*)</code></td><td>行数</td><td>不忽略</td></tr>
+<tr><td><code>COUNT(col)</code></td><td>非 NULL 行数</td><td>忽略 NULL</td></tr>
+<tr><td><code>COUNT(DISTINCT col)</code></td><td>不同值的数量</td><td>忽略 NULL</td></tr>
+<tr><td><code>SUM(col)</code></td><td>求和</td><td>忽略 NULL</td></tr>
+<tr><td><code>AVG(col)</code></td><td>平均（=SUM/COUNT）</td><td>忽略 NULL</td></tr>
+<tr><td><code>MIN/MAX(col)</code></td><td>最小/最大</td><td>忽略 NULL</td></tr>
+<tr><td><code>STRING_AGG(col, ',')</code> / <code>GROUP_CONCAT</code></td><td>字符串拼接</td><td>忽略 NULL</td></tr>
+<tr><td><code>ARRAY_AGG(col)</code></td><td>聚成数组（PG）</td><td>保留 NULL</td></tr>
+<tr><td><code>JSON_AGG(col)</code></td><td>聚成 JSON 数组（PG）</td><td>保留 NULL</td></tr>
+<tr><td><code>BOOL_AND/OR(col)</code></td><td>逻辑与/或</td><td>忽略 NULL</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>4.2 GROUP BY 经典用法</h3>
+
+<pre><code><span class="c">-- 每个用户的订单数 + 总金额</span>
+<span class="k">SELECT</span> <span class="t">user_id</span>,
+       <span class="k">COUNT</span>(*) <span class="k">AS</span> <span class="t">order_count</span>,
+       <span class="k">SUM</span>(<span class="t">amount</span>) <span class="k">AS</span> <span class="t">total</span>
+<span class="k">FROM</span>   <span class="t">orders</span>
+<span class="k">GROUP BY</span> <span class="t">user_id</span>;
+
+<span class="c">-- 多列分组</span>
+<span class="k">SELECT</span> <span class="t">user_id</span>, <span class="t">status</span>, <span class="k">COUNT</span>(*)
+<span class="k">FROM</span>   <span class="t">orders</span>
+<span class="k">GROUP BY</span> <span class="t">user_id</span>, <span class="t">status</span>;
+</code></pre>
+
+<h3>4.3 GROUP BY 进阶：ROLLUP / CUBE / GROUPING SETS</h3>
+
+<pre><code><span class="c">-- 按 (city, product) 分组,同时计算 city 小计 + 总计</span>
+<span class="k">SELECT</span> <span class="t">city</span>, <span class="t">product</span>, <span class="k">SUM</span>(<span class="t">sales</span>)
+<span class="k">FROM</span>   <span class="t">sales</span>
+<span class="k">GROUP BY</span> <span class="k">ROLLUP</span> (<span class="t">city</span>, <span class="t">product</span>);
+
+<span class="c">-- 等价于:</span>
+GROUP BY GROUPING SETS (
+  (city, product),
+  (city),
+  ()
+);
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-5"><span class="badge">05</span> ORDER BY + LIMIT + 分页</h2>
+
+<h3>5.1 ORDER BY 完整语法</h3>
+
+<pre><code><span class="k">ORDER BY</span>
+  <span class="t">price</span> <span class="k">DESC</span>,                    <span class="c">-- 主排序</span>
+  <span class="t">name</span> <span class="k">ASC</span>,                      <span class="c">-- 次排序</span>
+  <span class="k">CASE</span> <span class="k">WHEN</span> <span class="t">status</span>=<span class="s">'urgent'</span> <span class="k">THEN</span> <span class="n">0</span> <span class="k">ELSE</span> <span class="n">1</span> <span class="k">END</span>;  <span class="c">-- 自定义排序</span>
+
+<span class="c">-- NULL 排序</span>
+<span class="k">ORDER BY</span> <span class="t">price</span> <span class="k">DESC NULLS LAST</span>;
+<span class="k">ORDER BY</span> <span class="t">price</span> <span class="k">ASC NULLS FIRST</span>;
+</code></pre>
+
+<h3>5.2 分页两种姿势</h3>
+
+<h4>OFFSET + LIMIT（最常见但慢）</h4>
+
+<pre><code><span class="c">-- 第 5 页,每页 20 条</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">posts</span>
+<span class="k">ORDER BY</span> <span class="t">created_at</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="n">20</span> <span class="k">OFFSET</span> <span class="n">80</span>;
+</code></pre>
+
+<div class="callout warn">
+<strong>OFFSET 大数性能差</strong>：OFFSET 100000 数据库要先扫前 10w 行再丢掉。深翻页用<strong>游标分页</strong>。
+</div>
+
+<h4>游标分页（Keyset Pagination · 推荐）</h4>
+
+<pre><code><span class="c">-- 第一页</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">posts</span>
+<span class="k">ORDER BY</span> <span class="t">id</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="n">20</span>;
+
+<span class="c">-- 下一页 (用上一页最后一条的 id)</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">posts</span>
+<span class="k">WHERE</span>  <span class="t">id</span> &lt; <span class="n">12345</span>            <span class="c">-- 上一页最后一条 id</span>
+<span class="k">ORDER BY</span> <span class="t">id</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="n">20</span>;
+</code></pre>
+
+<div class="callout key">
+游标分页用索引 seek 替代 sort，<strong>OFFSET 1,000,000 时性能差距可达 100×+</strong>。
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-6"><span class="badge">06</span> 子查询全谱系</h2>
+
+<h3>6.1 标量子查询（返回单个值）</h3>
+
+<pre><code><span class="c">-- 每个商品价格相对于平均价格的差</span>
+<span class="k">SELECT</span> <span class="t">name</span>,
+       <span class="t">price</span> - (<span class="k">SELECT AVG</span>(<span class="t">price</span>) <span class="k">FROM</span> <span class="t">products</span>) <span class="k">AS</span> <span class="t">diff</span>
+<span class="k">FROM</span>   <span class="t">products</span>;
+</code></pre>
+
+<h3>6.2 列子查询（IN）</h3>
+
+<pre><code><span class="c">-- 找出有 VIP 订单的用户</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">users</span>
+<span class="k">WHERE</span>  <span class="t">id</span> <span class="k">IN</span> (<span class="k">SELECT</span> <span class="t">user_id</span> <span class="k">FROM</span> <span class="t">orders</span> <span class="k">WHERE</span> <span class="t">vip</span>=<span class="k">true</span>);
+</code></pre>
+
+<h3>6.3 行子查询</h3>
+
+<pre><code><span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">products</span>
+<span class="k">WHERE</span>  (<span class="t">category</span>, <span class="t">price</span>) = (<span class="s">'书'</span>, <span class="n">99</span>);
+</code></pre>
+
+<h3>6.4 派生表 / 子查询作 FROM</h3>
+
+<pre><code><span class="k">SELECT</span> t.<span class="t">user_id</span>, t.<span class="t">total</span>
+<span class="k">FROM</span> (
+  <span class="k">SELECT</span> <span class="t">user_id</span>, <span class="k">SUM</span>(<span class="t">amount</span>) <span class="k">AS</span> <span class="t">total</span>
+  <span class="k">FROM</span>   <span class="t">orders</span>
+  <span class="k">GROUP BY</span> <span class="t">user_id</span>
+) t
+<span class="k">WHERE</span> t.<span class="t">total</span> &gt; <span class="n">1000</span>;
+</code></pre>
+
+<h3>6.5 EXISTS / NOT EXISTS（推荐用法）</h3>
+
+<pre><code><span class="c">-- 有订单的用户</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">users</span> u
+<span class="k">WHERE</span> <span class="k">EXISTS</span> (
+  <span class="k">SELECT</span> <span class="n">1</span> <span class="k">FROM</span> <span class="t">orders</span> o
+  <span class="k">WHERE</span> o.<span class="t">user_id</span> = u.<span class="t">id</span>
+);
+
+<span class="c">-- 没下过单的用户</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">users</span> u
+<span class="k">WHERE</span> <span class="k">NOT EXISTS</span> (
+  <span class="k">SELECT</span> <span class="n">1</span> <span class="k">FROM</span> <span class="t">orders</span> o
+  <span class="k">WHERE</span> o.<span class="t">user_id</span> = u.<span class="t">id</span>
+);
+</code></pre>
+
+<div class="callout insight">
+<strong>EXISTS vs IN 的选择</strong>：
+<ul style="margin:8px 0 0">
+  <li>子查询结果集小 → IN 更直观</li>
+  <li>子查询结果集大 / 有 NULL 风险 / 需要相关子查询 → EXISTS 更稳</li>
+  <li>大多数现代数据库优化器会把两者优化成同样的执行计划</li>
+</ul>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-7"><span class="badge">07</span> CTE 与递归 CTE</h2>
+
+<h3>7.1 普通 CTE（提高可读性）</h3>
+
+<pre><code><span class="k">WITH</span> <span class="t">high_spenders</span> <span class="k">AS</span> (
+  <span class="k">SELECT</span> <span class="t">user_id</span>, <span class="k">SUM</span>(<span class="t">amount</span>) <span class="k">AS</span> <span class="t">total</span>
+  <span class="k">FROM</span>   <span class="t">orders</span>
+  <span class="k">GROUP BY</span> <span class="t">user_id</span>
+  <span class="k">HAVING</span> <span class="k">SUM</span>(<span class="t">amount</span>) &gt; <span class="n">10000</span>
+)
+<span class="k">SELECT</span> u.<span class="t">name</span>, h.<span class="t">total</span>
+<span class="k">FROM</span>   <span class="t">users</span> u
+<span class="k">JOIN</span>   <span class="t">high_spenders</span> h <span class="k">ON</span> h.<span class="t">user_id</span> = u.<span class="t">id</span>;
+</code></pre>
+
+<h3>7.2 多 CTE 链式</h3>
+
+<pre><code><span class="k">WITH</span>
+  <span class="t">step1</span> <span class="k">AS</span> (<span class="k">SELECT</span> ... <span class="k">FROM</span> ...),
+  <span class="t">step2</span> <span class="k">AS</span> (<span class="k">SELECT</span> ... <span class="k">FROM</span> <span class="t">step1</span>),
+  <span class="t">step3</span> <span class="k">AS</span> (<span class="k">SELECT</span> ... <span class="k">FROM</span> <span class="t">step2</span>)
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">step3</span>;
+</code></pre>
+
+<h3>7.3 递归 CTE（处理层级 / 树 / 图）</h3>
+
+<pre><code><span class="c">-- 找出某个员工的所有下级 (任意层级)</span>
+<span class="k">WITH RECURSIVE</span> <span class="t">subordinates</span> <span class="k">AS</span> (
+  <span class="c">-- 锚定 (anchor)</span>
+  <span class="k">SELECT</span> <span class="t">id</span>, <span class="t">name</span>, <span class="t">manager_id</span>, <span class="n">1</span> <span class="k">AS</span> <span class="t">level</span>
+  <span class="k">FROM</span>   <span class="t">employees</span>
+  <span class="k">WHERE</span>  <span class="t">id</span> = <span class="n">42</span>           <span class="c">-- 起始员工</span>
+
+  <span class="k">UNION ALL</span>
+
+  <span class="c">-- 递归部分</span>
+  <span class="k">SELECT</span> e.<span class="t">id</span>, e.<span class="t">name</span>, e.<span class="t">manager_id</span>, s.<span class="t">level</span> + <span class="n">1</span>
+  <span class="k">FROM</span>   <span class="t">employees</span> e
+  <span class="k">JOIN</span>   <span class="t">subordinates</span> s <span class="k">ON</span> e.<span class="t">manager_id</span> = s.<span class="t">id</span>
+)
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">subordinates</span>;
+</code></pre>
+
+<div class="callout key">
+递归 CTE 是 SQL <strong>处理树结构、图遍历、生成序列、爬层级</strong>的核心武器。学会它能解决 80% "看似要写循环"的问题。
+</div>
+
+<h3>7.4 生成数字序列（递归 CTE 妙用）</h3>
+
+<pre><code><span class="c">-- 生成 1 到 100</span>
+<span class="k">WITH RECURSIVE</span> <span class="t">nums</span>(<span class="t">n</span>) <span class="k">AS</span> (
+  <span class="k">SELECT</span> <span class="n">1</span>
+  <span class="k">UNION ALL</span>
+  <span class="k">SELECT</span> <span class="t">n</span> + <span class="n">1</span> <span class="k">FROM</span> <span class="t">nums</span> <span class="k">WHERE</span> <span class="t">n</span> &lt; <span class="n">100</span>
+)
+<span class="k">SELECT</span> <span class="t">n</span> <span class="k">FROM</span> <span class="t">nums</span>;
+
+<span class="c">-- PostgreSQL 简化版:</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="k">generate_series</span>(<span class="n">1</span>, <span class="n">100</span>);
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-8"><span class="badge">08</span> 窗口函数全集 ⭐</h2>
+
+<blockquote class="pull">
+窗口函数 = SQL 现代化的分水岭。能优雅完成"对每行计算一个相对于某个窗口的值"——比如排名、累计、相对前一行、移动平均。是替代复杂自联和子查询的<strong>核心武器</strong>。
+</blockquote>
+
+<h3>8.1 通用语法</h3>
+
+<pre><code><span class="t">function</span>() <span class="k">OVER</span> (
+  [<span class="k">PARTITION BY</span> <span class="t">分组列</span>]
+  [<span class="k">ORDER BY</span> <span class="t">排序列</span>]
+  [<span class="k">ROWS|RANGE BETWEEN</span> <span class="t">起点</span> <span class="k">AND</span> <span class="t">终点</span>]
+)
+</code></pre>
+
+<h3>8.2 排名类函数</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>函数</th><th>遇到相等怎么办</th></tr></thead>
+<tbody>
+<tr><td><code>ROW_NUMBER()</code></td><td>给每行一个唯一序号（即使值相同）</td></tr>
+<tr><td><code>RANK()</code></td><td>相同值同名次，下一名次跳号（1, 2, 2, 4）</td></tr>
+<tr><td><code>DENSE_RANK()</code></td><td>相同值同名次，不跳号（1, 2, 2, 3）</td></tr>
+<tr><td><code>NTILE(N)</code></td><td>等分为 N 组（用于百分位）</td></tr>
+<tr><td><code>PERCENT_RANK()</code></td><td>百分比排名 0-1</td></tr>
+<tr><td><code>CUME_DIST()</code></td><td>累积分布</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre><code><span class="c">-- 每个分类下按价格排名前 3 名</span>
+<span class="k">SELECT</span> *
+<span class="k">FROM</span> (
+  <span class="k">SELECT</span> *,
+         <span class="k">ROW_NUMBER</span>() <span class="k">OVER</span> (
+           <span class="k">PARTITION BY</span> <span class="t">category</span>
+           <span class="k">ORDER BY</span> <span class="t">price</span> <span class="k">DESC</span>
+         ) <span class="k">AS</span> <span class="t">rn</span>
+  <span class="k">FROM</span> <span class="t">products</span>
+) t
+<span class="k">WHERE</span> <span class="t">rn</span> &lt;= <span class="n">3</span>;
+</code></pre>
+
+<h3>8.3 取相邻行：LAG / LEAD</h3>
+
+<pre><code><span class="c">-- 每笔订单 + 该用户上一笔订单的金额</span>
+<span class="k">SELECT</span> <span class="t">user_id</span>, <span class="t">amount</span>,
+       <span class="k">LAG</span>(<span class="t">amount</span>, <span class="n">1</span>) <span class="k">OVER</span> (
+         <span class="k">PARTITION BY</span> <span class="t">user_id</span>
+         <span class="k">ORDER BY</span> <span class="t">created_at</span>
+       ) <span class="k">AS</span> <span class="t">prev_amount</span>
+<span class="k">FROM</span>   <span class="t">orders</span>;
+
+<span class="c">-- 下一笔金额</span>
+<span class="k">LEAD</span>(<span class="t">amount</span>, <span class="n">1</span>) <span class="k">OVER</span> (...)
+</code></pre>
+
+<h3>8.4 首尾值：FIRST_VALUE / LAST_VALUE / NTH_VALUE</h3>
+
+<pre><code><span class="k">SELECT</span> <span class="t">user_id</span>, <span class="t">order_date</span>,
+       <span class="k">FIRST_VALUE</span>(<span class="t">amount</span>) <span class="k">OVER</span> (
+         <span class="k">PARTITION BY</span> <span class="t">user_id</span>
+         <span class="k">ORDER BY</span> <span class="t">order_date</span>
+       ) <span class="k">AS</span> <span class="t">first_order</span>
+<span class="k">FROM</span> <span class="t">orders</span>;
+</code></pre>
+
+<h3>8.5 累计 / 移动窗口</h3>
+
+<pre><code><span class="c">-- 累计销售额 (running total)</span>
+<span class="k">SELECT</span> <span class="t">date</span>, <span class="t">sales</span>,
+       <span class="k">SUM</span>(<span class="t">sales</span>) <span class="k">OVER</span> (
+         <span class="k">ORDER BY</span> <span class="t">date</span>
+         <span class="k">ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</span>
+       ) <span class="k">AS</span> <span class="t">running_total</span>
+<span class="k">FROM</span> <span class="t">daily_sales</span>;
+
+<span class="c">-- 7 天移动平均</span>
+<span class="k">SELECT</span> <span class="t">date</span>, <span class="t">sales</span>,
+       <span class="k">AVG</span>(<span class="t">sales</span>) <span class="k">OVER</span> (
+         <span class="k">ORDER BY</span> <span class="t">date</span>
+         <span class="k">ROWS BETWEEN</span> <span class="n">6</span> <span class="k">PRECEDING AND CURRENT ROW</span>
+       ) <span class="k">AS</span> <span class="t">moving_avg_7d</span>
+<span class="k">FROM</span> <span class="t">daily_sales</span>;
+</code></pre>
+
+<h3>8.6 窗口帧边界关键字</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>关键字</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>UNBOUNDED PRECEDING</code></td><td>分区开始</td></tr>
+<tr><td><code>N PRECEDING</code></td><td>前 N 行</td></tr>
+<tr><td><code>CURRENT ROW</code></td><td>当前行</td></tr>
+<tr><td><code>N FOLLOWING</code></td><td>后 N 行</td></tr>
+<tr><td><code>UNBOUNDED FOLLOWING</code></td><td>分区结束</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-9"><span class="badge">09</span> 集合操作</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>操作</th><th>含义</th><th>去重</th></tr></thead>
+<tbody>
+<tr><td><code>UNION</code></td><td>并集</td><td>是</td></tr>
+<tr><td><code>UNION ALL</code></td><td>并集</td><td>否（更快，推荐用 ALL 除非确实要去重）</td></tr>
+<tr><td><code>INTERSECT</code></td><td>交集</td><td>是</td></tr>
+<tr><td><code>EXCEPT</code> / <code>MINUS</code></td><td>差集（A 有 B 没有）</td><td>是</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre><code><span class="k">SELECT</span> <span class="t">id</span>, <span class="t">name</span> <span class="k">FROM</span> <span class="t">vip_users</span>
+<span class="k">UNION ALL</span>
+<span class="k">SELECT</span> <span class="t">id</span>, <span class="t">name</span> <span class="k">FROM</span> <span class="t">beta_users</span>;
+</code></pre>
+
+<div class="callout warn">
+集合操作要求<strong>列数相同 + 对应位置类型兼容</strong>，列名以第一个 SELECT 为准。
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-10"><span class="badge">10</span> NULL 完整处理</h2>
+
+<h3>10.1 NULL 的特殊行为（务必记住）</h3>
+
+<div class="callout danger">
+<strong>NULL 不等于任何值，包括它自己</strong>：<code>NULL = NULL</code> 的结果是 <code>NULL</code>（不是 TRUE）。
+</div>
+
+<pre><code><span class="c">-- 永远用 IS NULL / IS NOT NULL,不要用 = NULL</span>
+<span class="k">WHERE</span> <span class="t">deleted_at</span> <span class="k">IS NULL</span>;
+
+<span class="c">-- 任何与 NULL 的算术返回 NULL</span>
+<span class="k">SELECT</span> <span class="n">1</span> + <span class="k">NULL</span>;           <span class="c">-- → NULL</span>
+<span class="k">SELECT</span> <span class="s">'abc'</span> || <span class="k">NULL</span>;        <span class="c">-- → NULL</span>
+
+<span class="c">-- 聚合函数会忽略 NULL (除了 COUNT(*))</span>
+<span class="k">SELECT</span> <span class="k">AVG</span>(<span class="t">salary</span>) <span class="k">FROM</span> <span class="t">employees</span>;
+<span class="c">-- 等价于: SUM(salary) / COUNT(salary), 不算 NULL</span>
+</code></pre>
+
+<h3>10.2 NULL 处理函数</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>函数</th><th>用途</th><th>等价</th></tr></thead>
+<tbody>
+<tr><td><code>COALESCE(a, b, c, ...)</code></td><td>第一个非 NULL</td><td>逐层 fallback</td></tr>
+<tr><td><code>NULLIF(a, b)</code></td><td>a==b 时返回 NULL，否则 a</td><td>反向 fallback</td></tr>
+<tr><td><code>IFNULL(a, b)</code> (MySQL)</td><td>等同 COALESCE(a, b)</td><td>2 参数版</td></tr>
+<tr><td><code>ISNULL(a, b)</code> (SQL Server)</td><td>同上</td><td></td></tr>
+</tbody>
+</table>
+</div>
+
+<pre><code><span class="k">SELECT</span> <span class="k">COALESCE</span>(<span class="t">phone</span>, <span class="t">email</span>, <span class="s">'未填写'</span>) <span class="k">AS</span> <span class="t">contact</span>
+<span class="k">FROM</span> <span class="t">users</span>;
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-11"><span class="badge">11</span> CASE WHEN 与条件表达式</h2>
+
+<h3>11.1 CASE WHEN（标准）</h3>
+
+<pre><code><span class="k">SELECT</span>
+  <span class="t">user_id</span>,
+  <span class="k">CASE</span>
+    <span class="k">WHEN</span> <span class="t">total</span> &gt;= <span class="n">100000</span> <span class="k">THEN</span> <span class="s">'钻石'</span>
+    <span class="k">WHEN</span> <span class="t">total</span> &gt;= <span class="n">10000</span>  <span class="k">THEN</span> <span class="s">'金'</span>
+    <span class="k">WHEN</span> <span class="t">total</span> &gt;= <span class="n">1000</span>   <span class="k">THEN</span> <span class="s">'银'</span>
+    <span class="k">ELSE</span> <span class="s">'普通'</span>
+  <span class="k">END</span> <span class="k">AS</span> <span class="t">tier</span>
+<span class="k">FROM</span> <span class="t">user_summary</span>;
+
+<span class="c">-- 简单形式</span>
+<span class="k">CASE</span> <span class="t">status</span>
+  <span class="k">WHEN</span> <span class="n">1</span> <span class="k">THEN</span> <span class="s">'草稿'</span>
+  <span class="k">WHEN</span> <span class="n">2</span> <span class="k">THEN</span> <span class="s">'已发布'</span>
+  <span class="k">ELSE</span> <span class="s">'未知'</span>
+<span class="k">END</span>
+</code></pre>
+
+<h3>11.2 CASE WHEN 用作条件聚合</h3>
+
+<pre><code><span class="c">-- 一次性算多个状态的数量 (横表)</span>
+<span class="k">SELECT</span>
+  <span class="k">COUNT</span>(<span class="k">CASE</span> <span class="k">WHEN</span> <span class="t">status</span>=<span class="s">'paid'</span>   <span class="k">THEN</span> <span class="n">1</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">paid</span>,
+  <span class="k">COUNT</span>(<span class="k">CASE</span> <span class="k">WHEN</span> <span class="t">status</span>=<span class="s">'unpaid'</span> <span class="k">THEN</span> <span class="n">1</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">unpaid</span>,
+  <span class="k">SUM</span>(<span class="k">CASE</span> <span class="k">WHEN</span> <span class="t">status</span>=<span class="s">'paid'</span> <span class="k">THEN</span> <span class="t">amount</span> <span class="k">ELSE</span> <span class="n">0</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">revenue</span>
+<span class="k">FROM</span> <span class="t">orders</span>;
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-12"><span class="badge">12</span> 字符串 + 日期 + 数值函数</h2>
+
+<h3>12.1 字符串函数</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>函数</th><th>例子</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td><code>LENGTH(s)</code></td><td><code>LENGTH('abc')</code></td><td>3</td></tr>
+<tr><td><code>UPPER / LOWER</code></td><td><code>UPPER('abc')</code></td><td>'ABC'</td></tr>
+<tr><td><code>CONCAT</code> / <code>||</code></td><td><code>'a' || 'b'</code></td><td>'ab'</td></tr>
+<tr><td><code>SUBSTRING(s, from, len)</code></td><td><code>SUBSTRING('hello', 2, 3)</code></td><td>'ell'</td></tr>
+<tr><td><code>REPLACE(s, a, b)</code></td><td><code>REPLACE('aabbcc', 'b', 'X')</code></td><td>'aaXXcc'</td></tr>
+<tr><td><code>TRIM(s)</code></td><td><code>TRIM('  abc  ')</code></td><td>'abc'</td></tr>
+<tr><td><code>POSITION(sub IN s)</code></td><td><code>POSITION('ll' IN 'hello')</code></td><td>3</td></tr>
+<tr><td><code>LEFT(s, n)</code> / <code>RIGHT(s, n)</code></td><td><code>LEFT('abc', 2)</code></td><td>'ab'</td></tr>
+<tr><td><code>SPLIT_PART(s, sep, n)</code> (PG)</td><td><code>SPLIT_PART('a,b,c', ',', 2)</code></td><td>'b'</td></tr>
+<tr><td><code>REGEXP_REPLACE(s, re, sub)</code></td><td>正则替换</td><td></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>12.2 日期时间函数</h3>
+
+<pre><code><span class="c">-- 当前时间</span>
+<span class="k">SELECT NOW</span>(), <span class="k">CURRENT_DATE</span>, <span class="k">CURRENT_TIME</span>;
+
+<span class="c">-- 提取部分</span>
+<span class="k">SELECT EXTRACT</span>(<span class="k">YEAR</span> <span class="k">FROM</span> <span class="t">created_at</span>);
+<span class="k">SELECT EXTRACT</span>(<span class="k">DOW</span>  <span class="k">FROM</span> <span class="t">created_at</span>);  <span class="c">-- 星期几</span>
+
+<span class="c">-- 截断到某粒度 (PG)</span>
+<span class="k">SELECT DATE_TRUNC</span>(<span class="s">'day'</span>,   <span class="t">created_at</span>);
+<span class="k">SELECT DATE_TRUNC</span>(<span class="s">'month'</span>, <span class="t">created_at</span>);
+
+<span class="c">-- 时间运算</span>
+<span class="k">SELECT</span> <span class="t">created_at</span> + <span class="k">INTERVAL</span> <span class="s">'7 days'</span>;
+<span class="k">SELECT</span> <span class="t">created_at</span> - <span class="k">INTERVAL</span> <span class="s">'1 month'</span>;
+
+<span class="c">-- 格式化</span>
+<span class="k">SELECT TO_CHAR</span>(<span class="k">NOW</span>(), <span class="s">'YYYY-MM-DD HH24:MI:SS'</span>);
+
+<span class="c">-- 两个时间差</span>
+<span class="k">SELECT</span> <span class="t">end_time</span> - <span class="t">start_time</span>;       <span class="c">-- INTERVAL</span>
+<span class="k">SELECT EXTRACT</span>(<span class="k">EPOCH</span> <span class="k">FROM</span> <span class="t">end_time</span> - <span class="t">start_time</span>);  <span class="c">-- 秒数</span>
+</code></pre>
+
+<h3>12.3 数值函数</h3>
+
+<div class="table-wrap">
+<table>
+<tbody>
+<tr><td><code>ABS</code> / <code>SIGN</code></td><td>绝对值 / 正负</td></tr>
+<tr><td><code>ROUND(x, n)</code></td><td>四舍五入</td></tr>
+<tr><td><code>CEIL</code> / <code>FLOOR</code></td><td>向上 / 向下取整</td></tr>
+<tr><td><code>MOD(a, b)</code> / <code>a % b</code></td><td>取模</td></tr>
+<tr><td><code>POWER(a, b)</code> / <code>a ^ b</code></td><td>幂</td></tr>
+<tr><td><code>SQRT</code> / <code>EXP</code> / <code>LOG</code> / <code>LN</code></td><td>开方 / 指数 / 对数</td></tr>
+<tr><td><code>RANDOM()</code></td><td>[0, 1) 随机数</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-13"><span class="badge">13</span> DDL：CREATE / ALTER / DROP</h2>
+
+<h3>13.1 CREATE TABLE 完整模板</h3>
+
+<pre><code><span class="k">CREATE TABLE</span> <span class="t">orders</span> (
+  <span class="t">id</span>          <span class="k">BIGSERIAL PRIMARY KEY</span>,
+  <span class="t">user_id</span>     <span class="k">BIGINT NOT NULL REFERENCES</span> <span class="t">users</span>(<span class="t">id</span>) <span class="k">ON DELETE CASCADE</span>,
+  <span class="t">amount</span>      <span class="k">NUMERIC</span>(<span class="n">10</span>, <span class="n">2</span>) <span class="k">NOT NULL CHECK</span> (<span class="t">amount</span> &gt;= <span class="n">0</span>),
+  <span class="t">status</span>      <span class="k">VARCHAR</span>(<span class="n">20</span>) <span class="k">NOT NULL DEFAULT</span> <span class="s">'pending'</span>,
+  <span class="t">created_at</span>  <span class="k">TIMESTAMPTZ NOT NULL DEFAULT NOW</span>(),
+  <span class="k">UNIQUE</span> (<span class="t">user_id</span>, <span class="t">status</span>),
+  <span class="k">CHECK</span> (<span class="t">status</span> <span class="k">IN</span> (<span class="s">'pending'</span>, <span class="s">'paid'</span>, <span class="s">'refunded'</span>))
+);
+
+<span class="c">-- 创建索引</span>
+<span class="k">CREATE INDEX</span> <span class="t">idx_orders_user</span> <span class="k">ON</span> <span class="t">orders</span>(<span class="t">user_id</span>);
+<span class="k">CREATE INDEX</span> <span class="t">idx_orders_created</span> <span class="k">ON</span> <span class="t">orders</span>(<span class="t">created_at</span> <span class="k">DESC</span>);
+</code></pre>
+
+<h3>13.2 常用约束</h3>
+
+<table>
+<tr><td><code>PRIMARY KEY</code></td><td>主键，自动唯一 + 非空 + 索引</td></tr>
+<tr><td><code>UNIQUE</code></td><td>唯一约束</td></tr>
+<tr><td><code>NOT NULL</code></td><td>非空</td></tr>
+<tr><td><code>DEFAULT v</code></td><td>默认值</td></tr>
+<tr><td><code>CHECK (cond)</code></td><td>检查表达式</td></tr>
+<tr><td><code>REFERENCES T(c)</code></td><td>外键</td></tr>
+<tr><td><code>ON DELETE CASCADE</code></td><td>级联删除</td></tr>
+<tr><td><code>ON DELETE SET NULL</code></td><td>父删→自身置 NULL</td></tr>
+</table>
+
+<h3>13.3 ALTER TABLE</h3>
+
+<pre><code><span class="c">-- 加列</span>
+<span class="k">ALTER TABLE</span> <span class="t">users</span> <span class="k">ADD COLUMN</span> <span class="t">email</span> <span class="k">VARCHAR</span>(<span class="n">255</span>);
+
+<span class="c">-- 改类型</span>
+<span class="k">ALTER TABLE</span> <span class="t">users</span> <span class="k">ALTER COLUMN</span> <span class="t">age</span> <span class="k">TYPE INT</span>;
+
+<span class="c">-- 改名</span>
+<span class="k">ALTER TABLE</span> <span class="t">users</span> <span class="k">RENAME COLUMN</span> <span class="t">name</span> <span class="k">TO</span> <span class="t">full_name</span>;
+
+<span class="c">-- 删列</span>
+<span class="k">ALTER TABLE</span> <span class="t">users</span> <span class="k">DROP COLUMN</span> <span class="t">old_field</span>;
+
+<span class="c">-- 加约束</span>
+<span class="k">ALTER TABLE</span> <span class="t">users</span> <span class="k">ADD CONSTRAINT</span> <span class="t">uq_email</span> <span class="k">UNIQUE</span> (<span class="t">email</span>);
+
+<span class="c">-- 改表名</span>
+<span class="k">ALTER TABLE</span> <span class="t">users</span> <span class="k">RENAME TO</span> <span class="t">customers</span>;
+</code></pre>
+
+<h3>13.4 DROP</h3>
+
+<pre><code><span class="k">DROP TABLE</span> [<span class="k">IF EXISTS</span>] <span class="t">orders</span> [<span class="k">CASCADE</span>];
+<span class="k">DROP INDEX</span> <span class="t">idx_orders_user</span>;
+<span class="k">TRUNCATE TABLE</span> <span class="t">orders</span> [<span class="k">CASCADE</span>];   <span class="c">-- 清空但保留表结构,比 DELETE 快</span>
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-14"><span class="badge">14</span> DML：INSERT / UPDATE / DELETE / UPSERT</h2>
+
+<h3>14.1 INSERT</h3>
+
+<pre><code><span class="c">-- 单条</span>
+<span class="k">INSERT INTO</span> <span class="t">users</span> (<span class="t">name</span>, <span class="t">email</span>) <span class="k">VALUES</span> (<span class="s">'Alice'</span>, <span class="s">'a@x.com'</span>);
+
+<span class="c">-- 多条</span>
+<span class="k">INSERT INTO</span> <span class="t">users</span> (<span class="t">name</span>, <span class="t">email</span>) <span class="k">VALUES</span>
+  (<span class="s">'Alice'</span>, <span class="s">'a@x.com'</span>),
+  (<span class="s">'Bob'</span>,   <span class="s">'b@x.com'</span>);
+
+<span class="c">-- INSERT ... SELECT</span>
+<span class="k">INSERT INTO</span> <span class="t">archive_orders</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">orders</span> <span class="k">WHERE</span> <span class="t">created_at</span> &lt; <span class="s">'2020-01-01'</span>;
+
+<span class="c">-- 返回插入后的值 (PG)</span>
+<span class="k">INSERT INTO</span> <span class="t">users</span> (<span class="t">name</span>) <span class="k">VALUES</span> (<span class="s">'Eve'</span>)
+<span class="k">RETURNING</span> <span class="t">id</span>, <span class="t">created_at</span>;
+</code></pre>
+
+<h3>14.2 UPDATE</h3>
+
+<pre><code><span class="k">UPDATE</span> <span class="t">orders</span>
+<span class="k">SET</span>    <span class="t">status</span> = <span class="s">'paid'</span>,
+       <span class="t">paid_at</span> = <span class="k">NOW</span>()
+<span class="k">WHERE</span>  <span class="t">id</span> = <span class="n">42</span>;
+
+<span class="c">-- 用 JOIN 更新</span>
+<span class="k">UPDATE</span> <span class="t">orders</span> o
+<span class="k">SET</span>    <span class="t">total</span> = <span class="t">total</span> * <span class="n">0.9</span>
+<span class="k">FROM</span>   <span class="t">users</span> u
+<span class="k">WHERE</span>  o.<span class="t">user_id</span> = u.<span class="t">id</span>
+  <span class="k">AND</span>  u.<span class="t">vip</span> = <span class="k">true</span>;
+</code></pre>
+
+<h3>14.3 DELETE</h3>
+
+<pre><code><span class="k">DELETE FROM</span> <span class="t">orders</span> <span class="k">WHERE</span> <span class="t">status</span> = <span class="s">'cancelled'</span>;
+
+<span class="c">-- 配 JOIN</span>
+<span class="k">DELETE FROM</span> <span class="t">orders</span> o
+<span class="k">USING</span> <span class="t">users</span> u
+<span class="k">WHERE</span> o.<span class="t">user_id</span> = u.<span class="t">id</span>
+  <span class="k">AND</span> u.<span class="t">deleted</span> = <span class="k">true</span>;
+</code></pre>
+
+<h3>14.4 UPSERT（关键！）</h3>
+
+<pre><code><span class="c">-- PostgreSQL: ON CONFLICT</span>
+<span class="k">INSERT INTO</span> <span class="t">users</span> (<span class="t">email</span>, <span class="t">name</span>)
+<span class="k">VALUES</span> (<span class="s">'a@x.com'</span>, <span class="s">'Alice'</span>)
+<span class="k">ON CONFLICT</span> (<span class="t">email</span>) <span class="k">DO UPDATE</span>
+  <span class="k">SET</span> <span class="t">name</span> = <span class="k">EXCLUDED</span>.<span class="t">name</span>,
+      <span class="t">updated_at</span> = <span class="k">NOW</span>();
+
+<span class="c">-- 只在冲突时跳过</span>
+<span class="k">ON CONFLICT</span> (<span class="t">email</span>) <span class="k">DO NOTHING</span>;
+
+<span class="c">-- MySQL: ON DUPLICATE KEY UPDATE</span>
+<span class="k">INSERT INTO</span> <span class="t">users</span> (<span class="t">email</span>, <span class="t">name</span>) <span class="k">VALUES</span> (<span class="s">'a@x.com'</span>, <span class="s">'Alice'</span>)
+<span class="k">ON DUPLICATE KEY UPDATE</span> <span class="t">name</span> = <span class="k">VALUES</span>(<span class="t">name</span>);
+
+<span class="c">-- SQL 标准: MERGE</span>
+<span class="k">MERGE INTO</span> <span class="t">users</span> u
+<span class="k">USING</span> (<span class="k">VALUES</span> (<span class="s">'a@x.com'</span>, <span class="s">'Alice'</span>)) v(<span class="t">email</span>, <span class="t">name</span>)
+<span class="k">ON</span> u.<span class="t">email</span> = v.<span class="t">email</span>
+<span class="k">WHEN MATCHED</span>     <span class="k">THEN UPDATE SET</span> <span class="t">name</span> = v.<span class="t">name</span>
+<span class="k">WHEN NOT MATCHED</span> <span class="k">THEN INSERT</span> (<span class="t">email</span>, <span class="t">name</span>) <span class="k">VALUES</span> (v.<span class="t">email</span>, v.<span class="t">name</span>);
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-15"><span class="badge">15</span> 索引、视图、事务</h2>
+
+<h3>15.1 索引完整种类</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>索引类型</th><th>适用</th><th>引擎</th></tr></thead>
+<tbody>
+<tr><td><strong>B-tree</strong></td><td>等值、范围、排序（默认）</td><td>全部</td></tr>
+<tr><td><strong>Hash</strong></td><td>仅等值，特定场景比 B-tree 快</td><td>PG, MySQL(MEMORY)</td></tr>
+<tr><td><strong>GIN</strong></td><td>JSONB、数组、全文</td><td>PG</td></tr>
+<tr><td><strong>GiST</strong></td><td>地理空间、自定义</td><td>PG</td></tr>
+<tr><td><strong>BRIN</strong></td><td>大表、值与物理位置相关</td><td>PG</td></tr>
+<tr><td><strong>FULLTEXT</strong></td><td>全文搜索</td><td>MySQL, PG (tsvector)</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>15.2 索引使用规律</h3>
+
+<pre><code><span class="c">-- 联合索引: 最左前缀原则</span>
+<span class="k">CREATE INDEX</span> <span class="t">idx_user_status_time</span>
+  <span class="k">ON</span> <span class="t">orders</span>(<span class="t">user_id</span>, <span class="t">status</span>, <span class="t">created_at</span>);
+
+<span class="c">-- 能用上:</span>
+<span class="k">WHERE</span> <span class="t">user_id</span> = ?
+<span class="k">WHERE</span> <span class="t">user_id</span> = ? <span class="k">AND</span> <span class="t">status</span> = ?
+<span class="k">WHERE</span> <span class="t">user_id</span> = ? <span class="k">AND</span> <span class="t">status</span> = ? <span class="k">AND</span> <span class="t">created_at</span> &gt; ?
+
+<span class="c">-- 用不上:</span>
+<span class="k">WHERE</span> <span class="t">status</span> = ?               <span class="c">-- 跳过了 user_id</span>
+<span class="k">WHERE</span> <span class="t">created_at</span> &gt; ?           <span class="c">-- 跳过了前两个</span>
+</code></pre>
+
+<div class="callout warn">
+<strong>索引失效场景</strong>：
+<ul style="margin:8px 0 0">
+  <li>列上有函数：<code>WHERE UPPER(email) = ...</code></li>
+  <li>类型不匹配自动转换：字符串列被当数字比</li>
+  <li>前导通配：<code>LIKE '%xxx%'</code></li>
+  <li>OR 不同列：<code>WHERE a=1 OR b=2</code> 通常各走一次</li>
+</ul>
+</div>
+
+<h3>15.3 视图</h3>
+
+<pre><code><span class="c">-- 普通视图 (执行时实时查询)</span>
+<span class="k">CREATE VIEW</span> <span class="t">v_active_users</span> <span class="k">AS</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">users</span> <span class="k">WHERE</span> <span class="t">deleted_at</span> <span class="k">IS NULL</span>;
+
+<span class="c">-- 物化视图 (PG, 缓存结果,需手动刷新)</span>
+<span class="k">CREATE MATERIALIZED VIEW</span> <span class="t">mv_daily_sales</span> <span class="k">AS</span>
+<span class="k">SELECT</span> <span class="k">DATE_TRUNC</span>(<span class="s">'day'</span>, <span class="t">created_at</span>), <span class="k">SUM</span>(<span class="t">amount</span>)
+<span class="k">FROM</span> <span class="t">orders</span> <span class="k">GROUP BY</span> <span class="n">1</span>;
+
+<span class="c">-- 刷新</span>
+<span class="k">REFRESH MATERIALIZED VIEW</span> <span class="t">mv_daily_sales</span>;
+</code></pre>
+
+<h3>15.4 事务</h3>
+
+<pre><code><span class="k">BEGIN</span>;  <span class="c">-- 或 START TRANSACTION</span>
+
+  <span class="k">UPDATE</span> <span class="t">accounts</span> <span class="k">SET</span> <span class="t">balance</span> = <span class="t">balance</span> - <span class="n">100</span> <span class="k">WHERE</span> <span class="t">id</span> = <span class="n">1</span>;
+  <span class="k">UPDATE</span> <span class="t">accounts</span> <span class="k">SET</span> <span class="t">balance</span> = <span class="t">balance</span> + <span class="n">100</span> <span class="k">WHERE</span> <span class="t">id</span> = <span class="n">2</span>;
+
+  <span class="c">-- 保存点</span>
+  <span class="k">SAVEPOINT</span> <span class="t">sp1</span>;
+  <span class="k">UPDATE</span> ...;
+  <span class="k">ROLLBACK TO SAVEPOINT</span> <span class="t">sp1</span>;  <span class="c">-- 仅回滚到此</span>
+
+<span class="k">COMMIT</span>;   <span class="c">-- 或 ROLLBACK 全部撤销</span>
+
+<span class="c">-- 隔离级别</span>
+<span class="k">SET TRANSACTION ISOLATION LEVEL</span>
+  <span class="k">READ COMMITTED</span>       <span class="c">-- PG/Oracle 默认</span>
+  | <span class="k">REPEATABLE READ</span>    <span class="c">-- MySQL InnoDB 默认</span>
+  | <span class="k">SERIALIZABLE</span>;     <span class="c">-- 最严, 性能代价</span>
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-16"><span class="badge">16</span> 18 个高频业务模式</h2>
+
+<h3>16.1 Top-N per Group（每组前 N）⭐</h3>
+
+<pre><code><span class="c">-- 每个分类下销量前 3</span>
+<span class="k">WITH</span> <span class="t">ranked</span> <span class="k">AS</span> (
+  <span class="k">SELECT</span> *,
+         <span class="k">ROW_NUMBER</span>() <span class="k">OVER</span> (<span class="k">PARTITION BY</span> <span class="t">category</span> <span class="k">ORDER BY</span> <span class="t">sales</span> <span class="k">DESC</span>) <span class="k">AS</span> <span class="t">rn</span>
+  <span class="k">FROM</span> <span class="t">products</span>
+)
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">ranked</span> <span class="k">WHERE</span> <span class="t">rn</span> &lt;= <span class="n">3</span>;
+</code></pre>
+
+<h3>16.2 累计求和（Running Total）</h3>
+
+<pre><code><span class="k">SELECT</span> <span class="t">date</span>, <span class="t">sales</span>,
+       <span class="k">SUM</span>(<span class="t">sales</span>) <span class="k">OVER</span> (<span class="k">ORDER BY</span> <span class="t">date</span>) <span class="k">AS</span> <span class="t">cumulative</span>
+<span class="k">FROM</span> <span class="t">daily_sales</span>;
+</code></pre>
+
+<h3>16.3 移动平均</h3>
+
+<pre><code><span class="k">SELECT</span> <span class="t">date</span>, <span class="t">sales</span>,
+       <span class="k">AVG</span>(<span class="t">sales</span>) <span class="k">OVER</span> (
+         <span class="k">ORDER BY</span> <span class="t">date</span>
+         <span class="k">ROWS BETWEEN</span> <span class="n">6</span> <span class="k">PRECEDING AND CURRENT ROW</span>
+       ) <span class="k">AS</span> <span class="t">ma7</span>
+<span class="k">FROM</span> <span class="t">daily_sales</span>;
+</code></pre>
+
+<h3>16.4 行转列（Pivot）</h3>
+
+<pre><code><span class="c">-- 月销售透视</span>
+<span class="k">SELECT</span> <span class="t">product_id</span>,
+       <span class="k">SUM</span>(<span class="k">CASE</span> <span class="k">WHEN</span> <span class="k">EXTRACT</span>(<span class="k">MONTH FROM</span> <span class="t">d</span>) = <span class="n">1</span>  <span class="k">THEN</span> <span class="t">sales</span> <span class="k">ELSE</span> <span class="n">0</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">jan</span>,
+       <span class="k">SUM</span>(<span class="k">CASE</span> <span class="k">WHEN</span> <span class="k">EXTRACT</span>(<span class="k">MONTH FROM</span> <span class="t">d</span>) = <span class="n">2</span>  <span class="k">THEN</span> <span class="t">sales</span> <span class="k">ELSE</span> <span class="n">0</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">feb</span>,
+       ...
+<span class="k">FROM</span> <span class="t">monthly_sales</span>
+<span class="k">GROUP BY</span> <span class="t">product_id</span>;
+</code></pre>
+
+<h3>16.5 列转行（Unpivot）</h3>
+
+<pre><code><span class="c">-- PostgreSQL: 用 UNION ALL 或 unnest</span>
+<span class="k">SELECT</span> <span class="t">id</span>, <span class="s">'jan'</span> <span class="k">AS</span> <span class="t">month</span>, <span class="t">jan</span> <span class="k">AS</span> <span class="t">sales</span> <span class="k">FROM</span> <span class="t">t</span>
+<span class="k">UNION ALL</span>
+<span class="k">SELECT</span> <span class="t">id</span>, <span class="s">'feb'</span>, <span class="t">feb</span> <span class="k">FROM</span> <span class="t">t</span>
+<span class="k">UNION ALL</span>
+...
+</code></pre>
+
+<h3>16.6 找重复行</h3>
+
+<pre><code><span class="c">-- 哪些 email 重复了 + 重复几次</span>
+<span class="k">SELECT</span> <span class="t">email</span>, <span class="k">COUNT</span>(*) <span class="k">AS</span> <span class="t">cnt</span>
+<span class="k">FROM</span> <span class="t">users</span>
+<span class="k">GROUP BY</span> <span class="t">email</span>
+<span class="k">HAVING</span> <span class="k">COUNT</span>(*) &gt; <span class="n">1</span>;
+
+<span class="c">-- 保留每组第一条,删除其他重复 (PG)</span>
+<span class="k">DELETE FROM</span> <span class="t">users</span>
+<span class="k">WHERE</span> <span class="t">id</span> <span class="k">NOT IN</span> (
+  <span class="k">SELECT MIN</span>(<span class="t">id</span>) <span class="k">FROM</span> <span class="t">users</span> <span class="k">GROUP BY</span> <span class="t">email</span>
+);
+</code></pre>
+
+<h3>16.7 留存分析（次日留存）</h3>
+
+<pre><code><span class="k">WITH</span> <span class="t">day1</span> <span class="k">AS</span> (<span class="k">SELECT DISTINCT</span> <span class="t">user_id</span> <span class="k">FROM</span> <span class="t">events</span> <span class="k">WHERE</span> <span class="t">date</span> = <span class="s">'2026-01-01'</span>),
+     <span class="t">day2</span> <span class="k">AS</span> (<span class="k">SELECT DISTINCT</span> <span class="t">user_id</span> <span class="k">FROM</span> <span class="t">events</span> <span class="k">WHERE</span> <span class="t">date</span> = <span class="s">'2026-01-02'</span>)
+<span class="k">SELECT</span>
+  (<span class="k">SELECT COUNT</span>(*) <span class="k">FROM</span> <span class="t">day1</span> <span class="k">JOIN</span> <span class="t">day2</span> <span class="k">USING</span> (<span class="t">user_id</span>))::<span class="k">float</span> /
+  (<span class="k">SELECT COUNT</span>(*) <span class="k">FROM</span> <span class="t">day1</span>) <span class="k">AS</span> <span class="t">retention</span>;
+</code></pre>
+
+<h3>16.8 漏斗分析</h3>
+
+<pre><code><span class="k">SELECT</span>
+  <span class="k">COUNT</span>(<span class="k">DISTINCT CASE</span> <span class="k">WHEN</span> <span class="t">event</span>=<span class="s">'view'</span>     <span class="k">THEN</span> <span class="t">user_id</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">step1_view</span>,
+  <span class="k">COUNT</span>(<span class="k">DISTINCT CASE</span> <span class="k">WHEN</span> <span class="t">event</span>=<span class="s">'cart'</span>     <span class="k">THEN</span> <span class="t">user_id</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">step2_cart</span>,
+  <span class="k">COUNT</span>(<span class="k">DISTINCT CASE</span> <span class="k">WHEN</span> <span class="t">event</span>=<span class="s">'checkout'</span> <span class="k">THEN</span> <span class="t">user_id</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">step3_checkout</span>,
+  <span class="k">COUNT</span>(<span class="k">DISTINCT CASE</span> <span class="k">WHEN</span> <span class="t">event</span>=<span class="s">'paid'</span>     <span class="k">THEN</span> <span class="t">user_id</span> <span class="k">END</span>) <span class="k">AS</span> <span class="t">step4_paid</span>
+<span class="k">FROM</span> <span class="t">events</span>;
+</code></pre>
+
+<h3>16.9 时间窗口对比（同比 / 环比）</h3>
+
+<pre><code><span class="k">WITH</span> <span class="t">curr</span> <span class="k">AS</span> (<span class="k">SELECT SUM</span>(<span class="t">amount</span>) <span class="k">AS</span> <span class="t">total</span> <span class="k">FROM</span> <span class="t">orders</span> <span class="k">WHERE</span> <span class="t">d</span> &gt;= <span class="s">'2026-05-01'</span>),
+     <span class="t">prev</span> <span class="k">AS</span> (<span class="k">SELECT SUM</span>(<span class="t">amount</span>) <span class="k">AS</span> <span class="t">total</span> <span class="k">FROM</span> <span class="t">orders</span>
+                <span class="k">WHERE</span> <span class="t">d</span> <span class="k">BETWEEN</span> <span class="s">'2026-04-01'</span> <span class="k">AND</span> <span class="s">'2026-04-30'</span>)
+<span class="k">SELECT</span> <span class="t">curr</span>.<span class="t">total</span>, <span class="t">prev</span>.<span class="t">total</span>,
+       (<span class="t">curr</span>.<span class="t">total</span> - <span class="t">prev</span>.<span class="t">total</span>) / <span class="t">prev</span>.<span class="t">total</span>::<span class="k">float</span> <span class="k">AS</span> <span class="t">growth</span>
+<span class="k">FROM</span> <span class="t">curr</span>, <span class="t">prev</span>;
+</code></pre>
+
+<h3>16.10 找缺失的序号（Gap Detection）</h3>
+
+<pre><code><span class="c">-- 找出 id 序列中的空洞</span>
+<span class="k">SELECT</span> <span class="t">id</span> + <span class="n">1</span> <span class="k">AS</span> <span class="t">missing_start</span>,
+       <span class="k">LEAD</span>(<span class="t">id</span>) <span class="k">OVER</span> (<span class="k">ORDER BY</span> <span class="t">id</span>) - <span class="n">1</span> <span class="k">AS</span> <span class="t">missing_end</span>
+<span class="k">FROM</span> <span class="t">t</span>
+<span class="k">WHERE</span> <span class="k">LEAD</span>(<span class="t">id</span>) <span class="k">OVER</span> (<span class="k">ORDER BY</span> <span class="t">id</span>) - <span class="t">id</span> &gt; <span class="n">1</span>;
+</code></pre>
+
+<h3>16.11 中位数</h3>
+
+<pre><code><span class="k">SELECT PERCENTILE_CONT</span>(<span class="n">0.5</span>) <span class="k">WITHIN GROUP</span> (<span class="k">ORDER BY</span> <span class="t">salary</span>) <span class="k">AS</span> <span class="t">median</span>
+<span class="k">FROM</span> <span class="t">employees</span>;
+</code></pre>
+
+<h3>16.12 随机抽样</h3>
+
+<pre><code><span class="c">-- 抽 100 条</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">large_table</span> <span class="k">ORDER BY RANDOM</span>() <span class="k">LIMIT</span> <span class="n">100</span>;
+
+<span class="c">-- PG: 用 TABLESAMPLE 更快</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">large_table</span> <span class="k">TABLESAMPLE BERNOULLI</span> (<span class="n">1</span>);  <span class="c">-- 1%</span>
+</code></pre>
+
+<h3>16.13 行号、相邻行差</h3>
+
+<pre><code><span class="c">-- 跟上一次订单间隔多少天</span>
+<span class="k">SELECT</span> <span class="t">user_id</span>, <span class="t">order_date</span>,
+       <span class="t">order_date</span> - <span class="k">LAG</span>(<span class="t">order_date</span>) <span class="k">OVER</span> (
+         <span class="k">PARTITION BY</span> <span class="t">user_id</span> <span class="k">ORDER BY</span> <span class="t">order_date</span>
+       ) <span class="k">AS</span> <span class="t">days_since_last</span>
+<span class="k">FROM</span> <span class="t">orders</span>;
+</code></pre>
+
+<h3>16.14 连续登录天数（岛屿与缝隙问题）</h3>
+
+<pre><code><span class="c">-- 经典岛屿问题: 算每个用户的最长连续登录</span>
+<span class="k">WITH</span> <span class="t">marked</span> <span class="k">AS</span> (
+  <span class="k">SELECT</span> <span class="t">user_id</span>, <span class="t">date</span>,
+         <span class="t">date</span> - <span class="k">ROW_NUMBER</span>() <span class="k">OVER</span> (
+           <span class="k">PARTITION BY</span> <span class="t">user_id</span> <span class="k">ORDER BY</span> <span class="t">date</span>
+         ) * <span class="k">INTERVAL</span> <span class="s">'1 day'</span> <span class="k">AS</span> <span class="t">grp</span>
+  <span class="k">FROM</span> <span class="t">logins</span>
+)
+<span class="k">SELECT</span> <span class="t">user_id</span>, <span class="k">MAX</span>(<span class="t">streak</span>) <span class="k">AS</span> <span class="t">longest_streak</span>
+<span class="k">FROM</span> (
+  <span class="k">SELECT</span> <span class="t">user_id</span>, <span class="t">grp</span>, <span class="k">COUNT</span>(*) <span class="k">AS</span> <span class="t">streak</span>
+  <span class="k">FROM</span> <span class="t">marked</span>
+  <span class="k">GROUP BY</span> <span class="t">user_id</span>, <span class="t">grp</span>
+) t
+<span class="k">GROUP BY</span> <span class="t">user_id</span>;
+</code></pre>
+
+<h3>16.15 第 N 高的薪水</h3>
+
+<pre><code><span class="c">-- 第 N 高 (含并列)</span>
+<span class="k">SELECT DISTINCT</span> <span class="t">salary</span>
+<span class="k">FROM</span> <span class="t">employees</span>
+<span class="k">ORDER BY</span> <span class="t">salary</span> <span class="k">DESC</span>
+<span class="k">OFFSET</span> <span class="n">N</span> - <span class="n">1</span> <span class="k">LIMIT</span> <span class="n">1</span>;
+
+<span class="c">-- 或用 DENSE_RANK</span>
+<span class="k">SELECT</span> <span class="t">salary</span>
+<span class="k">FROM</span> (
+  <span class="k">SELECT</span> <span class="t">salary</span>, <span class="k">DENSE_RANK</span>() <span class="k">OVER</span> (<span class="k">ORDER BY</span> <span class="t">salary</span> <span class="k">DESC</span>) <span class="k">AS</span> <span class="t">rk</span>
+  <span class="k">FROM</span> <span class="t">employees</span>
+) t
+<span class="k">WHERE</span> <span class="t">rk</span> = <span class="n">N</span>;
+</code></pre>
+
+<h3>16.16 JSON 字段查询（PG）</h3>
+
+<pre><code><span class="c">-- JSON 字段提取</span>
+<span class="k">SELECT</span> <span class="t">data</span>-&gt;<span class="s">'user'</span>-&gt;&gt;<span class="s">'name'</span> <span class="k">AS</span> <span class="t">name</span>
+<span class="k">FROM</span> <span class="t">events</span>
+<span class="k">WHERE</span> <span class="t">data</span>-&gt;<span class="s">'user'</span>-&gt;&gt;<span class="s">'role'</span> = <span class="s">'admin'</span>;
+
+<span class="c">-- JSON 数组展开</span>
+<span class="k">SELECT</span> <span class="k">jsonb_array_elements</span>(<span class="t">data</span>-&gt;<span class="s">'tags'</span>) <span class="k">FROM</span> <span class="t">events</span>;
+</code></pre>
+
+<h3>16.17 全文搜索（PG）</h3>
+
+<pre><code><span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">articles</span>
+<span class="k">WHERE</span> <span class="k">to_tsvector</span>(<span class="s">'simple'</span>, <span class="t">title</span> || <span class="s">' '</span> || <span class="t">body</span>)
+   @@ <span class="k">to_tsquery</span>(<span class="s">'simple'</span>, <span class="s">'postgres &amp; index'</span>);
+</code></pre>
+
+<h3>16.18 批量更新（数据迁移场景）</h3>
+
+<pre><code><span class="c">-- 用 VALUES 列表批量更新</span>
+<span class="k">UPDATE</span> <span class="t">products</span> p
+<span class="k">SET</span>    <span class="t">price</span> = v.<span class="t">price</span>
+<span class="k">FROM</span> (
+  <span class="k">VALUES</span> (<span class="n">1</span>, <span class="n">99.0</span>), (<span class="n">2</span>, <span class="n">59.0</span>), (<span class="n">3</span>, <span class="n">88.0</span>)
+) <span class="k">AS</span> v(<span class="t">id</span>, <span class="t">price</span>)
+<span class="k">WHERE</span> p.<span class="t">id</span> = v.<span class="t">id</span>;
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-17"><span class="badge">17</span> 性能优化要点</h2>
+
+<h3>17.1 永远先看执行计划</h3>
+
+<pre><code><span class="k">EXPLAIN</span>              <span class="t">your_query</span>;   <span class="c">-- 静态分析</span>
+<span class="k">EXPLAIN ANALYZE</span>      <span class="t">your_query</span>;   <span class="c">-- 实际跑一遍, 给真实耗时 (PG)</span>
+<span class="k">EXPLAIN</span> (<span class="k">ANALYZE</span>, <span class="k">BUFFERS</span>, <span class="k">FORMAT JSON</span>) ...;
+</code></pre>
+
+<h3>17.2 优化清单</h3>
+
+<div class="row-2">
+  <div class="card">
+    <h4>🟢 查询层</h4>
+    <ul>
+      <li>WHERE 列建索引</li>
+      <li>JOIN 列建索引</li>
+      <li>避免 SELECT *，只取需要的列</li>
+      <li>EXISTS 替代 IN（大数据集）</li>
+      <li>用 UNION ALL 替代 UNION（如果不需去重）</li>
+      <li>用游标分页替代深 OFFSET</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>🟢 数据库层</h4>
+    <ul>
+      <li>VACUUM / ANALYZE（PG）</li>
+      <li>ANALYZE TABLE（MySQL）</li>
+      <li>统计信息要更新</li>
+      <li>分区表（大表场景）</li>
+      <li>物化视图缓存常用聚合</li>
+      <li>读写分离 / 副本</li>
+    </ul>
+  </div>
+</div>
+
+<h3>17.3 索引数量的平衡</h3>
+
+<div class="callout warn">
+索引不是越多越好。每个索引让<strong>写入慢一点</strong>（每次 INSERT/UPDATE/DELETE 都要维护）。一般经验：单表索引数控制在 <strong>5-7 个以内</strong>。
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-18"><span class="badge">18</span> SQL 注入防御与红队视角</h2>
+
+<h3>18.1 SQL 注入是什么</h3>
+
+<p>把用户输入<strong>拼接</strong>到 SQL 字符串里，导致用户输入被当成 SQL 代码执行。</p>
+
+<pre><code><span class="c">-- ❌ 致命错误的写法</span>
+sql = <span class="s">f"SELECT * FROM users WHERE name='{user_input}'"</span>
+
+<span class="c">-- 用户输入 admin' OR '1'='1</span>
+<span class="c">-- 拼接结果:</span>
+<span class="k">SELECT</span> * <span class="k">FROM</span> <span class="t">users</span> <span class="k">WHERE</span> <span class="t">name</span>=<span class="s">'admin'</span> <span class="k">OR</span> <span class="s">'1'</span>=<span class="s">'1'</span>;
+<span class="c">-- → 返回全部用户</span>
+</code></pre>
+
+<h3>18.2 正确做法：参数化查询</h3>
+
+<pre><code><span class="c"># Python (psycopg2)</span>
+cur.execute(
+  <span class="s">"SELECT * FROM users WHERE name = %s"</span>,
+  (user_input,)        <span class="c"># 参数,会被自动转义</span>
+)
+
+<span class="c"># Node.js</span>
+db.query(
+  <span class="s">'SELECT * FROM users WHERE name = $1'</span>,
+  [user_input]
+)
+</code></pre>
+
+<div class="callout key">
+<strong>核心原则</strong>：永远不要拼接 SQL 字符串。所有用户输入都通过参数占位符传入。<strong>这一条做好了，SQL 注入基本就死了</strong>。
+</div>
+
+<h3>18.3 红队视角的 5 类注入手法</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>类型</th><th>原理</th><th>典型 payload</th></tr></thead>
+<tbody>
+<tr><td><strong>Union-based</strong></td><td>通过 UNION 直接拼接读数据</td><td><code>' UNION SELECT 1,2,3--</code></td></tr>
+<tr><td><strong>Boolean Blind</strong></td><td>通过响应差异推断</td><td><code>' AND 1=1--</code> vs <code>' AND 1=2--</code></td></tr>
+<tr><td><strong>Time-based Blind</strong></td><td>通过响应时间推断</td><td><code>' AND SLEEP(5)--</code></td></tr>
+<tr><td><strong>Error-based</strong></td><td>故意触发错误获取信息</td><td>各种类型转换错误</td></tr>
+<tr><td><strong>Stacked Queries</strong></td><td>分号执行额外语句</td><td><code>'; DROP TABLE--</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>18.4 ORM 的安全保证</h3>
+
+<p>正经 ORM（SQLAlchemy、Django ORM、TypeORM、GORM）<strong>默认参数化</strong>，安全。但要警惕这些反模式：</p>
+
+<pre><code><span class="c"># ❌ 任何"原生 SQL + 字符串拼接"都危险</span>
+db.execute(<span class="s">f"SELECT * FROM t WHERE id = {user_id}"</span>)
+
+<span class="c"># ❌ 动态表名/列名 ORM 也保护不了</span>
+db.execute(<span class="s">f"SELECT * FROM {user_input_table}"</span>)
+<span class="c"># → 必须自己用白名单 + 严格校验</span>
+</code></pre>
+
+<!-- =================================================================== -->
+<h2 id="sec-19"><span class="badge">19</span> 三大方言差异速查</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>功能</th><th>PostgreSQL</th><th>MySQL</th><th>SQLite</th></tr></thead>
+<tbody>
+<tr><td>自增主键</td><td><code>BIGSERIAL</code> / <code>GENERATED AS IDENTITY</code></td><td><code>AUTO_INCREMENT</code></td><td><code>INTEGER PRIMARY KEY AUTOINCREMENT</code></td></tr>
+<tr><td>UPSERT</td><td><code>ON CONFLICT ... DO UPDATE</code></td><td><code>ON DUPLICATE KEY UPDATE</code></td><td><code>ON CONFLICT ... DO UPDATE</code></td></tr>
+<tr><td>字符串拼接</td><td><code>||</code></td><td><code>CONCAT()</code></td><td><code>||</code></td></tr>
+<tr><td>限制行数</td><td><code>LIMIT N OFFSET M</code></td><td><code>LIMIT M, N</code></td><td><code>LIMIT N OFFSET M</code></td></tr>
+<tr><td>反引号</td><td>无（用双引号）</td><td>有 <code>`name`</code></td><td>有</td></tr>
+<tr><td>RETURNING</td><td>✅</td><td>❌（用 LAST_INSERT_ID()）</td><td>3.35+</td></tr>
+<tr><td>JSON 函数</td><td>非常强（JSONB + GIN）</td><td>5.7+ 支持</td><td>JSON1 模块</td></tr>
+<tr><td>窗口函数</td><td>✅</td><td>8.0+</td><td>3.25+</td></tr>
+<tr><td>递归 CTE</td><td>✅</td><td>8.0+</td><td>✅</td></tr>
+<tr><td>布尔类型</td><td>原生 <code>BOOLEAN</code></td><td><code>TINYINT(1)</code></td><td>整数 0/1</td></tr>
+<tr><td>类型转换</td><td><code>::type</code> / <code>CAST</code></td><td>仅 <code>CAST</code></td><td>仅 <code>CAST</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="sec-20"><span class="badge">20</span> 术语表 + 参考</h2>
+
+<h3>20.1 术语表</h3>
+
+<dl class="glossary">
+<dt>DDL (Data Definition Language)</dt>
+<dd>定义数据结构的语句：CREATE / ALTER / DROP / TRUNCATE / RENAME。</dd>
+
+<dt>DML (Data Manipulation Language)</dt>
+<dd>操作数据的语句：INSERT / UPDATE / DELETE / SELECT / MERGE。</dd>
+
+<dt>DCL (Data Control Language)</dt>
+<dd>权限控制：GRANT / REVOKE。</dd>
+
+<dt>TCL (Transaction Control Language)</dt>
+<dd>事务控制：BEGIN / COMMIT / ROLLBACK / SAVEPOINT。</dd>
+
+<dt>OLTP / OLAP</dt>
+<dd>联机事务处理 / 联机分析处理。OLTP 重高并发短事务，OLAP 重大数据复杂查询。</dd>
+
+<dt>ACID</dt>
+<dd>事务四性质：原子性 / 一致性 / 隔离性 / 持久性。</dd>
+
+<dt>CTE (Common Table Expression)</dt>
+<dd>WITH 子句定义的临时结果集，提高可读性 + 支持递归。</dd>
+
+<dt>Window Function（窗口函数）</dt>
+<dd>对一组相关行计算单行结果的函数，不像聚合函数那样合并行。</dd>
+
+<dt>Index Seek vs Index Scan</dt>
+<dd>Seek 是直接跳到目标位置，O(log n)；Scan 是按顺序扫整个索引。Seek 更快。</dd>
+
+<dt>EXPLAIN</dt>
+<dd>查询计划解释器，看 SQL 实际怎么跑。优化的第一步。</dd>
+
+<dt>UPSERT</dt>
+<dd>UPDATE + INSERT 的组合，存在则更新，不存在则插入。</dd>
+
+<dt>MVCC (Multi-Version Concurrency Control)</dt>
+<dd>多版本并发控制，让读不阻塞写、写不阻塞读。PG / InnoDB 都用。</dd>
+</dl>
+
+<h3>20.2 推荐资源</h3>
+
+<div class="references">
+<h2>📖 参考与延伸阅读</h2>
+<ol>
+  <li>PostgreSQL 官方文档. <a href="https://www.postgresql.org/docs/current/">postgresql.org/docs</a></li>
+  <li>MySQL 8.0 Reference Manual. <a href="https://dev.mysql.com/doc/refman/8.0/en/">dev.mysql.com/doc</a></li>
+  <li>SQLite Language Documentation. <a href="https://www.sqlite.org/lang.html">sqlite.org/lang</a></li>
+  <li>Use The Index, Luke! — 关于 SQL 索引的最佳免费教程. <a href="https://use-the-index-luke.com/">use-the-index-luke.com</a></li>
+  <li>Markus Winand, "SQL Performance Explained" — 索引与性能必读</li>
+  <li>OWASP SQL Injection Prevention Cheat Sheet. <a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html">cheatsheetseries.owasp.org</a></li>
+  <li>Joe Celko, "SQL for Smarties" — 进阶模式与设计</li>
+  <li>PostgreSQL Window Functions Tutorial. <a href="https://www.postgresqltutorial.com/postgresql-window-function/">postgresqltutorial.com</a></li>
+  <li>Modern SQL — 介绍各家方言现代 SQL 特性. <a href="https://modern-sql.com/">modern-sql.com</a></li>
+  <li>SQL Style Guide by Simon Holywell. <a href="https://www.sqlstyle.guide/">sqlstyle.guide</a></li>
+</ol>
+</div>
+
+<div class="next">
+<strong>建议接下来：</strong>(a) 在 PostgreSQL 上跑一遍 §16 的所有模式，每个写出 EXPLAIN ANALYZE 对照；(b) 给一份你常用的业务表，用本文模式重写一遍现有 SQL；(c) 安装 sqlmap 在测试环境跑一次 SQL 注入对照防御代码。
+</div>
+
+</body>
+</html>
