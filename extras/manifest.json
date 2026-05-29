@@ -1,0 +1,14 @@
+{
+  "articles": [
+    {
+      "path": "cot-research/cot-extraction-short.html",
+      "label": "⭐ CoT 抽取 · 精读版",
+      "topic": "CoT 资产化与抽取攻击：核心要点"
+    },
+    {
+      "path": "cot-research/cot-extraction-long.html",
+      "label": "⭐ CoT 抽取 · 深度版",
+      "topic": "从经济学到方法学的全景（9500 字）"
+    }
+  ]
+}

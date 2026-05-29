@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 17 · UDP + HTTP 演进</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 17 · UDP + HTTP 演进：从 1.0 到 QUIC 的三十年</h1>
+  <div class="meta">Week 03 · 周三 · 2026-05-29 · 主线：应用层协议 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们花一整天读懂了 TCP——它怎么用一堆复杂状态机给你一条"可靠字节流"。今天换一个视角：当我们<strong>不需要</strong>那么强的可靠性、或者愿意把可靠性<strong>自己实现一遍</strong>来换更低的延迟，会发生什么？答案就是 UDP，以及构建在 UDP 之上的现代协议 QUIC。同时我们把每天都在用的 HTTP 从 1.0 一路看到 3.0：<span class="key">为什么 HTTP/1.1 必须有 keep-alive、为什么 HTTP/2 要走二进制多路复用、为什么 HTTP/3 干脆抛弃了 TCP</span>。今天结束你应该能回答："为什么 DNS 用 UDP 但 DNS over TLS 又用 TCP？" 和 "我的 LLM 流式接口（SSE）跑在 HTTP/2 上比 HTTP/1.1 快还是慢？"
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">UDP：极简主义传输层</a></li>
+  <li><a href="#s2">HTTP/1.0 与 1.1：keep-alive 救了世界</a></li>
+  <li><a href="#s3">HTTP 方法、状态码、关键 Header</a></li>
+  <li><a href="#s4">HTTP/2：二进制分帧 + 多路复用 + HPACK</a></li>
+  <li><a href="#s5">HTTP/3 与 QUIC：0-RTT 与抛弃 TCP</a></li>
+  <li><a href="#s6">CORS：浏览器跨域的全景</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. UDP：极简主义传输层</h2>
+
+<p><span class="term">UDP（User Datagram Protocol，用户数据报协议）</span>是 TCP 在传输层的同伴，但设计哲学完全相反。如果说 TCP 是"我把所有脏活累活全包了、给你一条干净流"，UDP 就是"我什么都不管，你自己看着办"。它的头只有 8 字节，是网络协议里最简洁的之一。</p>
+
+<div class="ascii"> 0      7 8     15 16    23 24    31
++--------+--------+--------+--------+
+|     Source      |   Destination   |
+|      Port       |      Port       |
++--------+--------+--------+--------+
+|     Length      |    Checksum     |
++--------+--------+--------+--------+
+|             Data (可选)            |
++-----------------------------------+</div>
+
+<p>四个字段就完了：<strong>源端口、目的端口、长度、校验和</strong>。对比 TCP 的 20+ 字节、加上 11 个状态、加上拥塞控制和滑动窗口——UDP 简直简陋。UDP 不做的事情比它做的事情多得多：</p>
+
+<ul>
+  <li><strong>不建立连接</strong>——发就发，没有握手</li>
+  <li><strong>不保证到达</strong>——丢了就丢了，不重传</li>
+  <li><strong>不保证顺序</strong>——后发的可能先到</li>
+  <li><strong>不去重</strong>——同一个包到达两次你会收到两次</li>
+  <li><strong>不做拥塞控制</strong>——你拼命发，网络拥塞了也是你自己的问题</li>
+  <li><strong>不做流量控制</strong>——发再快也不管对方接收缓冲是不是满了</li>
+</ul>
+
+<p>听起来 UDP 是个"残废协议"，那为什么还有人用它？因为<span class="key">它没有 TCP 的开销，更没有 TCP 的"队头阻塞"</span>。在某些场景下，TCP 的"可靠保证"反而是负担：</p>
+
+<table>
+<tr><th>场景</th><th>为什么用 UDP</th></tr>
+<tr><td>DNS 查询</td><td>请求/响应都小（一个 UDP 包就够），重传由应用层做，省去 TCP 三次握手</td></tr>
+<tr><td>音视频实时通话</td><td>丢一个包不如延迟一个包。WebRTC、SIP、RTP 全是 UDP</td></tr>
+<tr><td>在线游戏</td><td>玩家位置 100ms 后过时了，丢了也不需要重传——下一个状态包就来了</td></tr>
+<tr><td>NTP 时间同步</td><td>请求/响应模式，应用层自己处理重试</td></tr>
+<tr><td>QUIC / HTTP/3</td><td>在 UDP 之上自己实现一个比 TCP 更好的可靠传输（后面详讲）</td></tr>
+<tr><td>SNMP / syslog</td><td>监控指标，丢一个无所谓</td></tr>
+</table>
+
+<p>一个细节常被忽略：<strong>UDP 没有 MTU 自动分片</strong>。一个 IP 包超过 MTU（典型 1500 字节）需要 IP 层分片，分片中丢任何一片整个 UDP 数据报都失效。所以应用层用 UDP 时通常把包控制在 1200-1400 字节以内——QUIC 也遵守这个上限。</p>
+
+<h2 id="s2">2. HTTP/1.0 与 1.1：keep-alive 救了世界</h2>
+
+<p><span class="term">HTTP（HyperText Transfer Protocol）</span>1990 年代由 Tim Berners-Lee 设计时极其简单：客户端发"GET /page"，服务端返 HTML，TCP 关闭。下一个请求重开 TCP。这就是 <strong>HTTP/0.9 和 1.0</strong> 的本来面目。</p>
+
+<p>问题：一个网页有几十个图片、CSS、JS。1996 年浏览器加载一个页面要打开几十个 TCP 连接、每个都要三次握手 + TLS（如果有的话），<span class="key">总延迟里 TCP 握手能占一半以上</span>。当时浏览器还有"并发 6 个 TCP"的硬限制，剩下的资源排队等。</p>
+
+<h3>HTTP/1.1 的关键改进：keep-alive</h3>
+
+<p>1997 年 HTTP/1.1 把 <strong>persistent connection（持久连接）</strong>设为默认。一个 TCP 连接可以连续发多个 HTTP 请求/响应，省下重复握手成本。客户端发：</p>
+
+<pre><code>GET /index.html HTTP/1.1
+Host: example.com
+Connection: keep-alive
+
+</code></pre>
+
+<p>Server 答复后不关 TCP，客户端可以继续在这个连接上发下一个请求。直到任意一方发 <code>Connection: close</code> 或者 idle 超时（Nginx 默认 75s）才关。</p>
+
+<h3>HTTP/1.1 的另一个尝试：pipelining</h3>
+
+<p>持久连接还是串行——必须等上一个响应回来才能发下一个请求。HTTP/1.1 提了 <strong>pipelining</strong>：客户端连续发好几个请求，服务端按顺序响应。理论上很好，实践中是灾难：</p>
+
+<ul>
+  <li>必须严格按发送顺序响应——后面快的请求必须等前面慢的（<strong>队头阻塞 head-of-line blocking</strong>）</li>
+  <li>中间代理、负载均衡常常不支持，会乱序或者断连</li>
+</ul>
+
+<p>结果 pipelining 在主流浏览器里几乎全部默认关闭。所以"一个 HTTP/1.1 连接上同一时刻只能跑一个请求"是事实上的限制，浏览器只能开 6 个并发连接绕过这个限制。</p>
+
+<h3>分块传输 Chunked Transfer-Encoding</h3>
+
+<p>HTTP/1.1 引入了 <strong>chunked encoding</strong>：响应不需要预先知道总长度，可以一段一段发，每段前缀长度。这是后来 <strong>SSE（Server-Sent Events）</strong>和 LLM 流式输出的协议基础——你的 ChatGPT 流式响应底层就是 chunked HTTP/1.1 或 HTTP/2 data frames。</p>
+
+<pre><code>HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Transfer-Encoding: chunked
+
+1a
+data: {"token":"hello"}
+
+1c
+data: {"token":" world"}
+
+0
+
+</code></pre>
+
+<h2 id="s3">3. HTTP 方法、状态码、关键 Header</h2>
+
+<h3>方法（Methods / Verbs）</h3>
+
+<table>
+<tr><th>方法</th><th>语义</th><th>幂等？</th><th>典型用途</th></tr>
+<tr><td>GET</td><td>读取资源</td><td>是</td><td>查询，可被代理缓存</td></tr>
+<tr><td>POST</td><td>创建 / 非幂等操作</td><td>否</td><td>新建资源、登录、触发动作</td></tr>
+<tr><td>PUT</td><td>整体替换</td><td>是</td><td>"用这份完整数据覆盖资源 X"</td></tr>
+<tr><td>PATCH</td><td>部分修改</td><td>否（视实现）</td><td>"修改 X 的某些字段"</td></tr>
+<tr><td>DELETE</td><td>删除</td><td>是</td><td>"删掉资源 X"</td></tr>
+<tr><td>HEAD</td><td>只要响应头</td><td>是</td><td>探活、看大小</td></tr>
+<tr><td>OPTIONS</td><td>询问支持的方法</td><td>是</td><td>CORS 预检</td></tr>
+<tr><td>CONNECT</td><td>建立隧道</td><td>—</td><td>HTTPS 代理</td></tr>
+</table>
+
+<p><span class="key">幂等性</span>是个被忽视的概念：同样的请求做 N 次和做 1 次效果一样。客户端在网络抖动时可以放心重试幂等请求，但不能重试 POST——否则可能创建两条记录。所以"用 POST 还是 PUT"不是品味问题，是语义问题。</p>
+
+<h3>状态码大类</h3>
+
+<ul>
+  <li><strong>1xx 信息</strong>：100 Continue、101 Switching Protocols（WebSocket、HTTP/2 升级）</li>
+  <li><strong>2xx 成功</strong>：200 OK、201 Created、204 No Content、206 Partial（断点续传）</li>
+  <li><strong>3xx 重定向</strong>：301 Moved Permanently、302 Found、304 Not Modified（条件请求命中缓存）、307/308（保持方法的重定向）</li>
+  <li><strong>4xx 客户端错误</strong>：400 Bad Request、401 Unauthorized（没认证）、403 Forbidden（认了但没权）、404、409 Conflict、429 Too Many Requests（限流）</li>
+  <li><strong>5xx 服务端错误</strong>：500 Internal、502 Bad Gateway、503 Service Unavailable、504 Gateway Timeout</li>
+</ul>
+
+<p>常被搞混：401 是"你没告诉我你是谁"、403 是"我知道你是谁但你没权限"。生产中很多 API 把所有失败都返 500 是设计糟糕——客户端没法区分该重试还是该改请求。</p>
+
+<h3>关键 Header（必须熟）</h3>
+
+<ul>
+  <li><code>Host</code>：HTTP/1.1 强制要求——一个 IP 上跑多个域名（虚拟主机）就靠它</li>
+  <li><code>Content-Type</code> + <code>Content-Length</code>：消息体的类型和长度</li>
+  <li><code>Accept</code> / <code>Accept-Encoding</code> / <code>Accept-Language</code>：内容协商</li>
+  <li><code>Authorization</code>：<code>Bearer &lt;token&gt;</code>（OAuth/JWT）、<code>Basic base64(user:pass)</code></li>
+  <li><code>Cookie</code> / <code>Set-Cookie</code>：会话状态。属性 <code>HttpOnly</code> 防 JS 读取、<code>Secure</code> 只在 HTTPS 传、<code>SameSite</code> 防 CSRF</li>
+  <li><code>Cache-Control</code> / <code>ETag</code> / <code>If-None-Match</code> / <code>Last-Modified</code>：HTTP 缓存的核心</li>
+  <li><code>X-Forwarded-For</code> / <code>X-Real-IP</code>：经反代后保留客户端真实 IP（注意可伪造，要看是不是从可信代理来的）</li>
+  <li><code>Strict-Transport-Security</code>（HSTS）、<code>Content-Security-Policy</code>（CSP）：Web 安全 header</li>
+</ul>
+
+<h2 id="s4">4. HTTP/2：二进制分帧 + 多路复用 + HPACK</h2>
+
+<p>2015 年 HTTP/2 发布（基于 Google 的 SPDY）。它没有改变 HTTP 语义（方法、状态码、Header 都一样），只重写了<strong>传输方式</strong>。核心三件套：</p>
+
+<h3>1. 二进制分帧</h3>
+
+<p>HTTP/1.1 是纯文本协议，解析要找 <code>\r\n</code>、要处理大小写——慢且容易出 bug。HTTP/2 改成二进制分帧（frame），每个 frame 有固定头：</p>
+
+<div class="ascii">+-----------------------------------------------+
+|                 Length (24)                   |
++---------------+---------------+---------------+
+|   Type (8)    |   Flags (8)   |
++---+-----------+---------------+---------------+
+|R|             Stream Identifier (31)         |
++---+-------------------------------------------+
+|                 Frame Payload                 |
++-----------------------------------------------+</div>
+
+<p>关键字段 <code>Stream Identifier</code>——这是多路复用的根基。一条 TCP 连接里可以并行有几百个 stream（请求/响应对），frame 之间可以任意交错，靠 stream id 区分。</p>
+
+<h3>2. 多路复用（multiplexing）</h3>
+
+<p>HTTP/1.1 在一个 TCP 上同一时刻只能跑一个请求；HTTP/2 在一个 TCP 上可以同时跑 N 个请求，frame 交错传输。一个网页几十个资源用 1 个 TCP 就能并行拉完——握手成本被均摊到几乎为零。</p>
+
+<div class="ascii">     HTTP/1.1                    HTTP/2
+   单连接串行                  单连接多路复用
+
+  req1 ────►                 req1 ───[frame]──►
+       ◄──── resp1                  ◄──[frame]──
+  req2 ────►                 req2 ───[frame]──►
+       ◄──── resp2           req3 ───[frame]──►
+                                    ◄──[frame]── resp1
+                                    ◄──[frame]── resp3
+                                    ◄──[frame]── resp2</div>
+
+<p>注意：<span class="key">HTTP/2 解决了 HTTP 层的队头阻塞，但 TCP 层的队头阻塞还在</span>——任何一个 frame 在 TCP 流里丢了，整个 TCP 流都得等重传，所有 stream 都被卡。HTTP/3 就是为了解决这个才换到 UDP。</p>
+
+<h3>3. HPACK 头部压缩</h3>
+
+<p>HTTP 请求里 Header 经常比 body 还大（一堆 cookie、user-agent）。HPACK 用两招压：</p>
+<ul>
+  <li><strong>静态表 + 动态表</strong>：常见 header 名（<code>:method</code>、<code>:path</code>、<code>user-agent</code>）有固定 id，传 id 不传字符串；动态表为连接周期内的重复 header 建索引</li>
+  <li><strong>Huffman 编码</strong>：剩下的字符串用 Huffman 压</li>
+</ul>
+
+<p>HPACK 让请求 Header 经常从几 KB 压到几十字节。但它带来了安全问题：<strong>CRIME / BREACH 类压缩侧信道</strong>——攻击者通过观察密文长度推断 cookie。HTTP/3 的 QPACK 加了缓解措施，但根本风险仍在，所以对敏感 cookie 不要全靠压缩省带宽。</p>
+
+<h3>HTTP/2 的其他特性</h3>
+
+<ul>
+  <li><strong>Server Push</strong>：服务端预先推客户端"可能要"的资源。实践证明效果差、缓存难、bug 多，Chrome 已经在 2022 年默认禁用</li>
+  <li><strong>流优先级</strong>：客户端可以告诉服务端"先返 CSS 再返图"</li>
+  <li><strong>强制 TLS</strong>：标准上没强制，但所有主流浏览器只支持 HTTPS 上的 HTTP/2（h2 over TLS，对应 ALPN 标识 <code>h2</code>；明文是 <code>h2c</code>）</li>
+</ul>
+
+<h2 id="s5">5. HTTP/3 与 QUIC：0-RTT 与抛弃 TCP</h2>
+
+<p>2022 年 HTTP/3 正式标准化。它最反直觉的一点：<strong>不跑在 TCP 上，跑在 UDP 上</strong>。为什么？因为 TCP 改不动了。</p>
+
+<p>TCP 是内核协议，要给一个 TCP 加新特性意味着推全世界的 Linux/Windows/macOS 内核更新——10 年也推不完。中间盒（防火墙、NAT、运营商盒子）对 TCP 的"奇怪选项"经常直接丢弃。于是 Google 想了个办法：<span class="key">把传输层整个搬到用户态、跑在 UDP 上</span>——这就是 QUIC。</p>
+
+<div class="ascii">    HTTP/2 栈                  HTTP/3 栈
+   ┌─────────┐                ┌─────────┐
+   │  HTTP/2 │                │  HTTP/3 │
+   ├─────────┤                ├─────────┤
+   │   TLS   │                │  QUIC   │ ← 用户态
+   ├─────────┤                │ (含 TLS │   传输层
+   │   TCP   │                │  1.3)   │
+   ├─────────┤                ├─────────┤
+   │   IP    │                │   UDP   │
+   └─────────┘                ├─────────┤
+                              │   IP    │
+                              └─────────┘</div>
+
+<h3>QUIC 的几大特性</h3>
+
+<ol>
+  <li><strong>0-RTT / 1-RTT 握手</strong>：QUIC 把 TLS 1.3 集成在传输层，<strong>第一次连接 1 个 RTT</strong>就建立加密连接（vs TCP+TLS 的 2-3 RTT）；<strong>恢复连接 0-RTT</strong>——客户端可以在第一个包里就带应用数据。</li>
+  <li><strong>真正的多路复用，没有 TCP 队头阻塞</strong>：QUIC 在用户态实现独立的 stream 重传，stream A 丢包不影响 stream B。</li>
+  <li><strong>连接迁移（connection migration）</strong>：QUIC 用 Connection ID 而不是四元组标识连接。你从 WiFi 切到 4G，IP 变了——TCP 必须重连，QUIC 不用断。</li>
+  <li><strong>抗中间盒</strong>：因为 QUIC 整个 payload 包括头大部分都加密，中间盒看不到细节，没法搞 "TCP 优化" 把协议玩坏。</li>
+  <li><strong>用户态可迭代</strong>：拥塞控制可以选 BBR / Cubic / 自定义，发布新版本不用等内核。</li>
+</ol>
+
+<h3>HTTP/3 的现实</h3>
+
+<p>到 2026 年，全球约 30% 的网站启用了 HTTP/3，CDN（Cloudflare、Fastly、Akamai）全面支持。客户端通过 HTTP 响应 header <code>Alt-Svc: h3=":443"</code> 知道服务器支持 QUIC，下次主动用 UDP。一些企业网仍封 UDP 443，需要回退到 HTTP/2。</p>
+
+<div class="note">
+<strong>什么时候 HTTP/3 真的快</strong>：<br>
+1. 高丢包率链路（弱网/移动）——TCP 队头阻塞被消除，收益最大<br>
+2. 跨大洋长连接——0-RTT 恢复省一个 RTT<br>
+3. 多资源并发加载的网页<br>
+反之，单请求/低丢包内网场景，HTTP/3 因为用户态 UDP 的 CPU 开销比 TCP 高 30-50%，反而稍慢。
+</div>
+
+<h2 id="s6">6. CORS：浏览器跨域的全景</h2>
+
+<p><span class="term">CORS（Cross-Origin Resource Sharing）</span>是 Web 安全里最常被骂、最常被误解的机制。要理解它，先理解它解决什么问题。</p>
+
+<h3>同源策略（Same-Origin Policy）</h3>
+
+<p>浏览器对 JS 的硬规则：脚本只能访问"同源"的资源，"同源"= <strong>协议 + 域名 + 端口</strong>三者全相同。如果没这条规则，恶意网站 <code>evil.com</code> 的 JS 可以背着你向 <code>bank.com</code> 发请求，浏览器会自动带上你的 cookie——你银行账号就被搬空了。</p>
+
+<h3>CORS 是同源策略的"安全放宽"</h3>
+
+<p>但现代 Web 又需要跨域：前端在 <code>app.example.com</code>、API 在 <code>api.example.com</code>。CORS 提供一套机制让服务端"显式同意"某些跨域请求。</p>
+
+<p>规则分两类：</p>
+
+<ol>
+  <li><strong>简单请求（simple request）</strong>：GET/POST/HEAD + 仅安全 header + Content-Type 是 form/text 之一。浏览器直接发，但响应里必须有 <code>Access-Control-Allow-Origin</code> 才允许 JS 读取。</li>
+  <li><strong>预检请求（preflighted）</strong>：所有其他请求（PUT/DELETE/PATCH、JSON Content-Type、自定义 header）。浏览器先发一个 <strong>OPTIONS 预检</strong>问："我能不能发这个请求？"</li>
+</ol>
+
+<pre><code># 浏览器先发预检
+OPTIONS /api/users HTTP/1.1
+Origin: https://app.example.com
+Access-Control-Request-Method: PUT
+Access-Control-Request-Headers: Content-Type, Authorization
+
+# 服务器同意
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://app.example.com
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Allow-Credentials: true
+Access-Control-Max-Age: 86400   # 预检结果可缓存的秒数
+</code></pre>
+
+<p>几个易踩的坑：</p>
+<ul>
+  <li><code>Access-Control-Allow-Origin: *</code> + <code>Access-Control-Allow-Credentials: true</code> 是<strong>非法组合</strong>——浏览器会拒绝。带 credential 必须明确指定 origin。</li>
+  <li>预检只能用 OPTIONS，<strong>不会带认证 cookie</strong>，不要在服务端的认证中间件里拒绝 OPTIONS。</li>
+  <li>CORS 是<strong>浏览器单方面的执行</strong>——curl、Python requests 完全不受 CORS 影响。它只防"浏览器里的恶意脚本"。</li>
+  <li>CORS 不能替代认证授权——它只是"允许跨域"，安全决策（这个 token 能不能改这条数据）还是要服务端检查。</li>
+</ul>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. SSE 流式 LLM 接口跨 HTTP 版本的差异</strong>。你的 ChatGPT 风格流式响应（<code>data: ...\n\n</code>）在 HTTP/1.1 上每个流式连接独占一个 TCP（浏览器 6 个并发上限会卡）；在 HTTP/2 上多个流式响应共享 TCP，但任意一个 stream 因 TCP 重传卡住会拖累所有 stream；HTTP/3 上完全独立。如果你做面向移动端的 LLM 应用、用户在弱网，<span class="key">优先支持 HTTP/3 能显著降低 TTFT 和 token 之间的卡顿</span>。</p>
+
+<p><strong>2. UDP 反射放大攻击是经典 DDoS 手法</strong>。攻击者伪造受害者 IP 给一堆 DNS/NTP/Memcached 服务器发小请求，服务器把巨大响应打到受害者那里——放大比可达几百倍。Memcached 反射攻击曾打出 1.7Tbps 的流量。对 Agent 服务这意味着：你自己的 UDP 服务（QUIC、DNS-over-UDP、自定义协议）必须做 amplification 防护——比如 QUIC 强制要求服务端首包不超过客户端首包的 3 倍。</p>
+
+<p><strong>3. CORS 错配是 LLM API 常见漏洞</strong>。很多团队上线 Agent 后端图省事开 <code>Access-Control-Allow-Origin: *</code>，前期没事——但当你加了 cookie 认证或 session 认证后，攻击者构造的恶意页面就可能借用户身份调用 Agent API。正确做法：<strong>白名单具体 origin、cookie 走 SameSite=Strict、敏感操作走 token + CSRF token 双验证</strong>。</p>
+
+<p><strong>4. HPACK / QPACK 侧信道泄露 prompt</strong>。如果你的 LLM 网关把用户 prompt 放进 HTTP header（少见但有），HPACK 的压缩会让密文长度暴露 prompt 内容——攻击者通过反复触发请求观察响应大小可以推测内容。对 LLM 流量，prompt 永远放 body，header 只放短的元数据。</p>
+
+<p><strong>5. HTTP/2 RST flood（CVE-2023-44487）</strong>是 2023 年震动业界的事件——攻击者快速打开/RST stream，让服务器陷入资源消耗。所有主流 web server（Nginx、Envoy、Go net/http）都中招。教训：<span class="key">"多路复用 + 状态机"是攻击面富集地</span>。部署 LLM 服务时，nginx/envoy 一定要打上对应补丁、配 <code>http2_max_concurrent_streams</code>、<code>http2_max_requests</code>。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：对比 HTTP/1.1、HTTP/2、HTTP/3</strong></p>
+<p>用 curl 测三个版本：</p>
+<pre><code># HTTP/1.1
+curl -v --http1.1 -o /dev/null -s -w "Total: %{time_total}s\n" https://cloudflare-quic.com/
+
+# HTTP/2（默认现代 curl 都会协商 h2）
+curl -v --http2 -o /dev/null -s -w "Total: %{time_total}s\n" https://cloudflare-quic.com/
+
+# HTTP/3（需要 curl 编译时启用 --with-quiche/--with-openssl-quic）
+curl --http3 -v -o /dev/null -s -w "Total: %{time_total}s\n" https://cloudflare-quic.com/
+
+# 看你 curl 支持哪些
+curl -V | grep -E 'HTTP|brotli'</code></pre>
+<p>问题：观察 <code>-v</code> 输出里 ALPN 协商（<code>h2</code> vs <code>http/1.1</code> vs <code>h3</code>）、握手 RTT 数。如果 HTTP/3 不可用，至少对比 1.1 和 2 多请求一个资源时的总时间。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：抓一个 DNS UDP 包</strong></p>
+<pre><code># 监听 DNS 端口
+sudo tcpdump -nn -i any -c 4 'udp port 53'
+
+# 另一个终端
+dig google.com
+
+# 观察 tcpdump 输出，每条 DNS 查询/响应都是单个 UDP 包
+# 留意"长度"——典型 DNS 包 50-200 字节
+# 用 +tcp 强制 TCP 试试
+dig +tcp google.com
+# 这次抓 'tcp port 53' 看握手</code></pre>
+<p>问题：DNS UDP 包多大？什么情况 DNS 会自动回退 TCP（提示：响应过大、AXFR 区域传输、TC 标志位）？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考题</strong></p>
+<p>场景：你做了一个 LLM Agent SaaS，前端在 <code>app.youragent.com</code>、API 在 <code>api.youragent.com</code>，用户登录后浏览器 cookie 里存 session。一位渗透测试报告说："你 API 的 CORS 配置是 <code>Access-Control-Allow-Origin: *</code>，存在风险"。</p>
+<p>问题：（1）这个配置在你目前的架构下，能不能被利用？为什么？提示：跨域 + credentials 的浏览器限制。（2）正确的 CORS 配置应该是什么？要不要允许 <code>Authorization</code> header？要不要允许 cookie？（3）如果用户的 Agent 会调用第三方 webhook URL，怎么防 SSRF（这不是 CORS 能解决的）？</p>
+<p>追加问题：如果你切到 HTTP/3，CORS 行为会有任何不同吗？为什么？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 18 · TLS / HTTPS：对称非对称、PKI 证书链、TLS 1.3 握手</strong>。今天 HTTP/2、HTTP/3 都建立在 TLS 之上。明天我们把 TLS 这个看似神秘的东西拆开：为什么需要对称 + 非对称结合？证书链验证到底验什么？TLS 1.3 比 1.2 快在哪？SNI 怎么暴露你访问的域名？mTLS 怎么用客户端证书做服务间认证？理解 TLS 是理解现代 Web 安全的<strong>分水岭</strong>。
+</div>
+
+</body>
+</html>
