@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 18 · TLS / HTTPS</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 18 · TLS / HTTPS：现代 Web 安全的分水岭</h1>
+  <div class="meta">Week 03 · 周四 · 2026-06-02 · 主线：应用层安全 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：你每天访问的网站地址栏里那把"小锁"，背后是过去三十年密码学和工程的结晶。今天我们把 <span class="key">TLS（HTTPS 里的 S）</span>这个看似神秘的东西彻底拆开：为什么单用对称加密不行、单用非对称加密也不行，必须两个结合？浏览器凭什么相信 <code>bank.com</code> 给你的证书不是伪造的？TLS 1.3 比 1.2 快在哪、又安全在哪？为什么你访问的域名（SNI）至今还在明文裸奔？以及服务间通信怎么用 mTLS 互相验明正身。今天结束你应该能回答："中间人攻击到底攻击的是哪一步？" 和 "我的 LLM Agent 服务用自签证书在内网通信，到底安不安全？"
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">对称 vs 非对称：为什么必须两个一起用</a></li>
+  <li><a href="#s2">PKI 与证书链：信任的传递</a></li>
+  <li><a href="#s3">X.509：证书里到底装了什么</a></li>
+  <li><a href="#s4">TLS 1.2 握手：一步步建立加密通道</a></li>
+  <li><a href="#s5">TLS 1.3：更快、更安全、砍掉的东西</a></li>
+  <li><a href="#s6">SNI 与 ALPN：握手里的两个旁路信息</a></li>
+  <li><a href="#s7">mTLS：双向认证与服务身份</a></li>
+  <li><a href="#s8">经典漏洞：TLS 三十年的伤疤</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 对称 vs 非对称：为什么必须两个一起用</h2>
+
+<p>加密分两大流派，理解它们的区别是理解 TLS 的前提。</p>
+
+<p><span class="term">对称加密（symmetric）</span>：加密和解密用<strong>同一把钥匙</strong>。就像家门钥匙——同一把锁门、开门。代表算法 <code>AES</code>、<code>ChaCha20</code>。优点是<span class="key">极快</span>，现代 CPU 有 AES-NI 硬件指令，每秒能加密几个 GB。缺点是个致命的"先有鸡还是先有蛋"问题：<strong>你怎么把这把钥匙安全地交给对方？</strong>如果通过网络发，中间人就能截获，那加密就白做了。</p>
+
+<p><span class="term">非对称加密（asymmetric / 公钥加密）</span>：有<strong>一对</strong>钥匙——公钥（public key）和私钥（private key）。公钥加密的只有私钥能解，反之亦然。代表算法 <code>RSA</code>、<code>ECDSA</code>、<code>Ed25519</code>。神奇之处：<span class="key">公钥可以大大方方公开</span>，谁都能用你的公钥给你加密，但只有持有私钥的你能解密。这就解决了钥匙分发问题。缺点是<strong>慢</strong>——RSA 加密比 AES 慢几百上千倍，不可能用它加密整个 HTTP 流量。</p>
+
+<p>类比：非对称加密像一个"任何人都能投信、只有你有钥匙开"的<strong>邮筒</strong>；对称加密像两人共享的<strong>密码本</strong>，谁有都能读写。</p>
+
+<div class="note">
+<strong>TLS 的核心智慧</strong>：用<span class="key">慢但能安全分发钥匙的非对称加密</span>，去传递一把<span class="key">快但需要安全分发的对称密钥</span>。握手阶段用非对称协商出一个临时对称密钥（叫 <strong>session key / 会话密钥</strong>），之后所有数据用这把对称密钥加密。鱼和熊掌兼得。
+</div>
+
+<p>还有第三个角色：<span class="term">密钥交换（key exchange）</span>。现代 TLS 不再用"公钥直接加密会话密钥"（那样私钥泄露后历史流量全完蛋），而是用 <strong>Diffie-Hellman（DH / ECDHE）</strong>算法。它的魔法是：双方各自生成临时随机数，通过几次数学运算，<strong>在公开信道上各自算出同一个共享秘密，而窃听者即使看到所有交换的消息也算不出来</strong>。每次连接用全新的临时密钥，这个特性叫<span class="key">前向保密（Forward Secrecy）</span>——就算服务器私钥未来泄露，攻击者也解不开之前录下的流量。</p>
+
+<h2 id="s2">2. PKI 与证书链：信任的传递</h2>
+
+<p>非对称加密解决了"怎么安全传钥匙"，但留下一个新问题：<strong>你拿到的这个"bank.com 的公钥"，凭什么相信它真是 bank.com 的，而不是中间人换上去的？</strong>这就是<span class="term">PKI（Public Key Infrastructure，公钥基础设施）</span>要解决的"身份认证"问题。</p>
+
+<p>解法是引入可信第三方——<span class="term">CA（Certificate Authority，证书颁发机构）</span>。逻辑像现实里的"公证处"：</p>
+
+<ol>
+  <li>bank.com 生成自己的公私钥对，把公钥 + 域名信息打包成"证书签名请求（CSR）"交给 CA。</li>
+  <li>CA 验证 bank.com 确实拥有这个域名（DV 证书查 DNS / 邮箱即可），然后<strong>用 CA 自己的私钥给这份证书签名</strong>。</li>
+  <li>浏览器/操作系统出厂时<strong>内置了一批受信任 CA 的公钥</strong>（叫根证书 / Root CA store）。</li>
+  <li>你连接 bank.com 时，它发来证书，浏览器用内置的 CA 公钥验证签名——签名对得上，就证明"一个我信任的 CA 担保了这个公钥属于 bank.com"。</li>
+</ol>
+
+<p>但 CA 不会拿宝贵的根私钥直接签每张证书（根私钥一旦泄露整个体系崩塌，所以离线保存）。实际是<strong>证书链（chain of trust）</strong>：</p>
+
+<div class="ascii">  Root CA（根证书，离线，浏览器内置）
+        │ 签名
+        ▼
+  Intermediate CA（中间证书，在线签发）
+        │ 签名
+        ▼
+  bank.com 的叶子证书（leaf / end-entity）</div>
+
+<p>浏览器验证时<strong>逐级往上验签</strong>：叶子证书由中间 CA 签 → 中间 CA 由根 CA 签 → 根 CA 在我的信任库里。<span class="key">只要链条能一路连到一个我信任的根，整条链就可信。</span>服务器有义务把"叶子 + 中间"证书都发给你（漏发中间证书是最常见的部署错误，表现为"部分浏览器报错、部分正常"——因为有些客户端缓存了中间证书）。</p>
+
+<p>信任也能被<strong>撤销</strong>：如果私钥泄露，CA 通过 <strong>CRL（撤销列表）</strong>或 <strong>OCSP（在线状态查询）</strong>宣布某证书作废。现代多用 <strong>OCSP Stapling</strong>——服务器自己定期取 OCSP 应答并在握手时一并发给你，省去浏览器额外查询、也保护隐私。</p>
+
+<h2 id="s3">3. X.509：证书里到底装了什么</h2>
+
+<p><span class="term">X.509</span> 是证书的标准格式。一张证书本质是"一段结构化数据 + CA 对这段数据的签名"。用 <code>openssl</code> 拆开看：</p>
+
+<pre><code># 从一个网站抓证书并打印明文
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null \
+  | openssl x509 -noout -text
+
+# 只看关键字段
+echo | openssl s_client -connect example.com:443 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates</code></pre>
+
+<p>关键字段含义：</p>
+
+<table>
+<tr><th>字段</th><th>含义</th></tr>
+<tr><td>Subject</td><td>证书主体（给谁的）。<code>CN=example.com</code></td></tr>
+<tr><td>Issuer</td><td>签发者（哪个 CA 签的）。自签证书里 Subject==Issuer</td></tr>
+<tr><td>Validity (Not Before / Not After)</td><td>有效期。过期证书浏览器直接拒绝</td></tr>
+<tr><td>Subject Alternative Name (SAN)</td><td><span class="key">真正生效的域名列表</span>。现代浏览器只看 SAN，不再看 CN！一张证书可覆盖 <code>example.com</code> + <code>*.example.com</code></td></tr>
+<tr><td>Public Key</td><td>主体的公钥（RSA 2048/4096 或 EC P-256）</td></tr>
+<tr><td>Signature Algorithm</td><td>CA 用什么算法签的，如 <code>sha256WithRSAEncryption</code></td></tr>
+<tr><td>Key Usage / Extended Key Usage</td><td>这把钥匙能干嘛（数字签名 / 服务端认证 / 客户端认证）</td></tr>
+</table>
+
+<p>证书文件常见两种编码：<strong>PEM</strong>（Base64 文本，<code>-----BEGIN CERTIFICATE-----</code> 开头，最常见）和 <strong>DER</strong>（二进制）。一个 <code>.pem</code> 文件里可以拼接多张证书形成证书链。</p>
+
+<p>按验证强度，证书分三档：<strong>DV（域名验证）</strong>只证明你控制这个域名（Let's Encrypt 免费的就是 DV）；<strong>OV（组织验证）</strong>验证公司真实存在；<strong>EV（扩展验证）</strong>最严格。但 2019 年后浏览器取消了 EV 的"绿色公司名"特殊显示——<span class="key">对普通用户来说三者地址栏看起来一样</span>，所以现在绝大多数网站用免费 DV 就够。</p>
+
+<h2 id="s4">4. TLS 1.2 握手：一步步建立加密通道</h2>
+
+<p>把前面的零件组装起来，看一次完整的 <strong>TLS 1.2 握手</strong>（HTTP/2 之前的主流，至今仍大量在用）。它需要 <strong>2 个 RTT</strong>（往返）：</p>
+
+<div class="ascii">客户端                                      服务器
+  │                                          │
+  │──ClientHello────────────────────────────►│  我支持这些 TLS 版本/加密套件
+  │   (随机数 client_random, 支持的 cipher)   │   + SNI（要访问哪个域名）
+  │                                          │
+  │◄─────────────────────ServerHello─────────│  选定版本/套件 + server_random
+  │◄─────────────────────Certificate─────────│  我的证书链
+  │◄──────────────ServerKeyExchange──────────│  DH 参数（ECDHE 用）
+  │◄──────────────────ServerHelloDone────────│
+  │                                          │
+  │──ClientKeyExchange───────────────────────►│  我的 DH 公开值
+  │──ChangeCipherSpec────────────────────────►│  之后开始加密
+  │──Finished (加密)─────────────────────────►│
+  │                                          │
+  │◄──────────────────ChangeCipherSpec───────│
+  │◄────────────────────Finished (加密)──────│
+  │                                          │
+  │═══════ 之后全是对称加密的应用数据 ═════════│</div>
+
+<p>逐步拆解发生了什么：</p>
+
+<ol>
+  <li><strong>ClientHello</strong>：客户端说"我支持 TLS 1.2/1.3、这些加密套件、这是我的随机数 <code>client_random</code>"，并通过 SNI 扩展告诉服务器要访问哪个域名。</li>
+  <li><strong>ServerHello + Certificate</strong>：服务器从客户端列表里挑一个双方都支持的<strong>加密套件（cipher suite）</strong>，发回 <code>server_random</code> 和自己的证书链。客户端此时验证证书（第 2、3 节讲的链验证）。</li>
+  <li><strong>密钥交换</strong>：双方用 ECDHE 交换 DH 公开值，各自算出<strong>预主密钥（pre-master secret）</strong>，再结合两个随机数派生出最终的对称会话密钥。<span class="key">这个会话密钥从未在网络上传输过</span>。</li>
+  <li><strong>Finished</strong>：双方各发一个用会话密钥加密的 Finished 消息，内容是"到目前为止所有握手消息的哈希"。如果中间人篡改过任何握手消息，这个哈希对不上，握手失败——这保证了握手过程本身的完整性。</li>
+</ol>
+
+<p>一个 <strong>cipher suite</strong> 名字编码了所有选择，例如 <code>TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</code> 拆开是：密钥交换 <code>ECDHE</code> + 身份认证 <code>RSA</code> + 对称加密 <code>AES_128_GCM</code> + 哈希 <code>SHA256</code>。</p>
+
+<h2 id="s5">5. TLS 1.3：更快、更安全、砍掉的东西</h2>
+
+<p>2018 年 TLS 1.3 发布，是十年来最大的升级。两个关键词：<strong>更快</strong>和<strong>更安全</strong>。</p>
+
+<h3>更快：1-RTT 握手 + 0-RTT 恢复</h3>
+
+<p>TLS 1.2 要 2 个 RTT 才能开始传数据。TLS 1.3 把流程压缩到 <strong>1 个 RTT</strong>：客户端在 ClientHello 里<strong>直接附带它猜测服务器会用的 DH 公开值</strong>（key_share），服务器一次回复就能完成密钥协商。对恢复的连接更进一步——<span class="key">0-RTT</span>：客户端可以在第一个包里就带应用数据（用上次会话缓存的密钥）。这就是为什么 HTTP/3（基于 QUIC，内置 TLS 1.3）连接这么快。</p>
+
+<div class="ascii">  TLS 1.2（2-RTT）          TLS 1.3（1-RTT）
+  Client → Hello            Client → Hello + key_share
+  Server → Hello,Cert,...   Server → Hello,key_share,Cert,Finished
+  Client → KeyExchange      Client → Finished + 应用数据
+  Server → Finished         （已经可以传数据了）
+  Client → 应用数据</div>
+
+<h3>更安全：做减法</h3>
+
+<p>TLS 1.3 最大的安全提升来自<strong>删除不安全的旧选项</strong>——历史上 TLS 漏洞大多源于"为了兼容保留的弱算法"：</p>
+
+<ul>
+  <li><strong>删掉 RSA 密钥交换</strong>：强制使用 (EC)DHE，<span class="key">所有连接默认前向保密</span>。</li>
+  <li><strong>删掉 CBC 模式、RC4、3DES、MD5、SHA-1</strong>：只保留 AEAD 认证加密（AES-GCM、ChaCha20-Poly1305），从根上消灭 BEAST、Lucky13、POODLE 这类针对 CBC 的攻击。</li>
+  <li><strong>删掉压缩</strong>：消灭 CRIME 压缩侧信道。</li>
+  <li><strong>删掉重协商（renegotiation）</strong>：消灭一类中间人注入攻击。</li>
+  <li><strong>加密更多握手信息</strong>：ServerHello 之后的证书等消息都加密了（1.2 里证书是明文的）。</li>
+</ul>
+
+<p>到 2026 年，TLS 1.3 已是主流，TLS 1.0/1.1 被所有主流浏览器废弃，PCI-DSS 等合规标准也要求至少 TLS 1.2。<strong>部署 LLM 服务时，应当只开 TLS 1.2 + 1.3，关闭一切更老版本。</strong></p>
+
+<h2 id="s6">6. SNI 与 ALPN：握手里的两个旁路信息</h2>
+
+<p>ClientHello 里有两个常被忽视、但对运维和安全都关键的扩展。</p>
+
+<h3>SNI（Server Name Indication）</h3>
+
+<p>一台服务器（一个 IP）上往往托管几百个域名（虚拟主机）。但 TLS 握手在 HTTP 之前发生——服务器还没看到 HTTP 的 <code>Host</code> header，怎么知道该返回哪个域名的证书？答案是 <span class="term">SNI</span>：客户端在 ClientHello 里<strong>明文</strong>写上要访问的域名，服务器据此选证书。</p>
+
+<p>问题就在"明文"二字。<span class="key">即使整个 TLS 加密了内容，SNI 仍然暴露了你访问的是哪个网站</span>——运营商、防火墙、网络监控者都能看到。这是 GFW 和企业网络做"按域名封锁"的主要手段之一。</p>
+
+<p>解决方案 <strong>ECH（Encrypted Client Hello）</strong>正在推广——把 SNI 也加密，但部署依赖 DNS 配合且尚未普及。在 2026 年，<strong>SNI 明文泄露仍是现实，做隐私敏感的 Agent 服务要意识到这点。</strong></p>
+
+<pre><code># 观察 SNI 明文：抓握手包能直接看到域名
+sudo tcpdump -nn -i any -A 'tcp port 443' | grep -a -i "example"
+
+# 用 openssl 指定 SNI（多域名服务器必须指定，否则可能拿到默认证书）
+openssl s_client -connect 1.2.3.4:443 -servername api.example.com</code></pre>
+
+<h3>ALPN（Application-Layer Protocol Negotiation）</h3>
+
+<p><span class="term">ALPN</span> 让客户端和服务器在 TLS 握手时<strong>顺便协商上层用什么协议</strong>，省去一次额外往返。客户端在 ClientHello 里列出支持的协议标识，服务器选一个：</p>
+
+<ul>
+  <li><code>h2</code> → HTTP/2</li>
+  <li><code>http/1.1</code> → HTTP/1.1</li>
+  <li><code>h3</code> → HTTP/3（在 QUIC 上）</li>
+</ul>
+
+<p>这就是昨天讲的"浏览器只在 TLS 上跑 HTTP/2"的实现机制——没有 ALPN 协商出 <code>h2</code>，就回退到 HTTP/1.1。gRPC 也靠 ALPN 协商 <code>h2</code>。</p>
+
+<h2 id="s7">7. mTLS：双向认证与服务身份</h2>
+
+<p>普通 HTTPS 是<strong>单向认证</strong>：客户端验证服务器（"你真是 bank.com 吗"），但服务器不验证客户端是谁（客户端身份靠后续的 cookie/token）。<span class="term">mTLS（mutual TLS，双向 TLS）</span>则要求<strong>双方都出示证书</strong>——服务器在握手时额外发一个 <code>CertificateRequest</code>，客户端也必须提供自己的证书并证明持有对应私钥。</p>
+
+<div class="ascii">  单向 TLS（浏览器场景）       mTLS（服务间场景）
+  Client 验证 Server          Client 验证 Server
+  Server 不验 Client    →     Server 也验证 Client 证书
+  （身份靠 token/cookie）      （身份就是证书本身）</div>
+
+<p>mTLS 的核心价值是<span class="key">把"网络身份"绑定到密码学证书上</span>，而不是可被盗用的密码或 token。典型应用场景：</p>
+
+<ul>
+  <li><strong>微服务间通信</strong>：服务 A 调服务 B，双方用证书互认，确保不是冒充的服务在调用。Service Mesh（Istio、Linkerd）默认给每个 Pod 注入证书、自动做 mTLS。</li>
+  <li><strong>零信任网络</strong>：不再假设"内网就安全"，每次调用都验证身份（这是 Week 16 的零信任专题主线）。</li>
+  <li><strong>高安全 API</strong>：银行、支付的对接常要求客户端证书。</li>
+</ul>
+
+<pre><code># 自己做一个最小 mTLS 实验：先建一个 CA
+openssl genrsa -out ca.key 4096
+openssl req -x509 -new -key ca.key -days 365 -out ca.crt -subj "/CN=MyTestCA"
+
+# 给服务器签证书
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr -subj "/CN=localhost"
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365
+
+# 给客户端签证书（同样用这个 CA）
+openssl genrsa -out client.key 2048
+openssl req -new -key client.key -out client.csr -subj "/CN=client-A"
+openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days 365
+
+# 启动要求客户端证书的 TLS 服务
+openssl s_server -accept 8443 -cert server.crt -key server.key -CAfile ca.crt -Verify 1
+
+# 客户端必须带证书才能连上
+openssl s_client -connect localhost:8443 -cert client.crt -key client.key -CAfile ca.crt</code></pre>
+
+<p>注意 mTLS 的运维成本：<span class="key">证书轮转</span>是大难题——客户端证书会过期，几百个服务的证书手工换是灾难。这正是 Istio/SPIFFE 这类系统自动签发短期证书（几小时一换）的意义所在。</p>
+
+<h2 id="s8">8. 经典漏洞：TLS 三十年的伤疤</h2>
+
+<p>理解漏洞才能理解 TLS 为什么长成今天这样。下面这些都是真实震动业界的事件：</p>
+
+<table>
+<tr><th>漏洞</th><th>攻击的是什么</th><th>教训 / 缓解</th></tr>
+<tr><td>Heartbleed (2014)</td><td>OpenSSL 心跳扩展的越界读，能<strong>泄露服务器内存</strong>（含私钥、session）</td><td>实现 bug，非协议 bug。私钥可能泄露 → 必须吊销重发证书</td></tr>
+<tr><td>POODLE (2014)</td><td>逼迫降级到 SSLv3，利用 CBC padding 漏洞解密</td><td>彻底禁用 SSLv3；TLS 1.3 删掉 CBC</td></tr>
+<tr><td>BEAST / Lucky13</td><td>CBC 模式的 padding / 时间侧信道</td><td>用 AEAD（GCM）替代 CBC</td></tr>
+<tr><td>CRIME / BREACH</td><td>压缩 + 加密，通过密文长度推断 cookie 内容</td><td>TLS 1.3 删掉 TLS 压缩；HTTP 压缩需谨慎</td></tr>
+<tr><td>FREAK / Logjam</td><td>逼迫降级到出口级弱 RSA/DH（512 位）后暴力破解</td><td>禁用所有弱密钥长度；最小 2048-bit RSA / 256-bit EC</td></tr>
+<tr><td>降级攻击 (downgrade)</td><td>中间人篡改 ClientHello 让双方用更弱的版本</td><td>TLS 1.3 用特殊随机数标记 + Finished 哈希检测降级</td></tr>
+</table>
+
+<p>提炼出一条贯穿性的规律：<span class="key">几乎所有 TLS 漏洞要么来自"为兼容而保留的弱算法"，要么来自"实现 bug"，而不是核心密码学被破解</span>。这就是 TLS 1.3 激进做减法的根本动机——能删的弱选项全删，把攻击面压到最小。</p>
+
+<div class="note">
+<strong>中间人攻击（MITM）到底攻击哪一步？</strong>核心永远是<strong>证书验证</strong>。如果你能让客户端相信一个伪造的证书（比如往受害者机器装一个恶意根 CA，或客户端代码图省事写了 <code>verify=False</code>），中间人就能解密一切。所以"是否严格校验证书链"是 TLS 安全的命门——下面练习和连结会反复强调。
+</div>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. <code>verify=False</code> 是 LLM 工具调用的头号隐患</strong>。Agent 经常需要去调外部 HTTP API、抓网页、连数据库。开发者为了"先跑通"经常写 <code>requests.get(url, verify=False)</code> 或 <code>httpx.Client(verify=False)</code>，<span class="key">这等于关掉了证书验证，把整条链路暴露给中间人</span>。一个被劫持的 API 响应可以注入恶意指令（间接 prompt injection）。生产 Agent 必须强制证书校验，对自建服务用自己的 CA bundle 而非关验证。</p>
+
+<p><strong>2. 自建 CA 是内网 Agent 服务的正确姿势</strong>。你的 LLM 推理服务（vLLM）、向量库、网关在 K8s 内网互调，用公网 CA 签证书既贵又不必要。正确做法是<strong>建一个内部 CA、给每个服务签证书、客户端信任这个内部 CA</strong>——既加密又认证，还能上 mTLS 做服务身份。这正是第 7 节那套 openssl 命令的实战用途，也是 Istio 自动帮你做的事。</p>
+
+<p><strong>3. SNI 泄露暴露你的 Agent 在调用哪些模型/服务</strong>。如果你的 Agent 调用 <code>api.openai.com</code>、<code>api.anthropic.com</code> 或某个特定向量服务，即使流量加密，SNI 明文也会让网络监控方知道你在用哪些服务——这对合规审计是把双刃剑（既能监控也会泄密）。隐私敏感场景需关注 ECH 进展或走专线/代理。</p>
+
+<p><strong>4. 证书过期会让整个 Agent 链路雪崩</strong>。mTLS 短期证书、Let's Encrypt 90 天证书，一旦轮转脚本挂了，到期当天所有服务调用集体 TLS 握手失败。这是真实发生过的大规模事故模式。LLM 服务的监控里<span class="key">必须有"证书剩余有效期"告警</span>（用 <code>openssl x509 -enddate</code> 配合 Prometheus exporter）。</p>
+
+<p><strong>5. 模型权重/数据传输的前向保密很重要</strong>。如果攻击者今天录下了你传输加密模型权重或敏感训练数据的流量，未来某天拿到服务器私钥，<strong>有前向保密（ECDHE）就解不开，没有就全泄</strong>。这就是为什么 TLS 1.3 强制 ECDHE 是对长期机密数据的关键保护——传大文件（checkpoint、数据集）务必确认走的是支持前向保密的套件。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：拆解一个真实证书链</strong></p>
+<pre><code># 抓取并查看完整证书链（注意 -showcerts 列出整条链）
+echo | openssl s_client -connect github.com:443 -servername github.com -showcerts 2>/dev/null
+
+# 看叶子证书关键字段
+echo | openssl s_client -connect github.com:443 -servername github.com 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+
+# 看协商出的 TLS 版本和加密套件
+echo | openssl s_client -connect github.com:443 -servername github.com 2>/dev/null \
+  | grep -E "Protocol|Cipher"</code></pre>
+<p>问题：（a）这个证书的 SAN 里有几个域名？（b）签发它的中间 CA 是谁？（c）协商出的是 TLS 1.2 还是 1.3，加密套件是哪个？试着把套件名字拆成"密钥交换 + 认证 + 对称 + 哈希"四部分。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：SNI 在明文里裸奔</strong></p>
+<pre><code># 一个终端抓包（只抓握手的前几个包）
+sudo tcpdump -nn -i any -A -c 20 'tcp port 443 and tcp[((tcp[12:1] & 0xf0) >> 2):1] = 0x16'
+
+# 另一个终端发起一次访问
+curl -s https://www.wikipedia.org/ -o /dev/null</code></pre>
+<p>问题：在 tcpdump 输出里能不能找到明文的 <code>www.wikipedia.org</code> 字符串？它出现在 ClientHello 里。这说明了什么隐私问题？想一想：为什么 TLS 加密了内容却保护不了"你访问了哪个域名"？ECH 想怎么解决它？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考题</strong></p>
+<p>场景：你的 LLM Agent 后端部署在 K8s 内网，由「网关 → 推理服务(vLLM) → 向量库」三段组成。安全团队要求"所有内部通信必须加密且双向认证"。</p>
+<p>问题：（1）你会用公网 CA（如 Let's Encrypt）还是自建 CA 给内部服务签证书？为什么？（2）"双向认证"应该用 mTLS 还是"单向 TLS + token"？两者在"防止冒充服务"上有什么本质区别？（3）如果某个服务的客户端证书在凌晨 3 点过期了，整个链路会发生什么？你会怎么设计监控和自动轮转来避免？</p>
+<p>追加：你的 Agent 代码里有一处 <code>requests.get(tool_url, verify=False)</code>，code review 时你会怎么向同事解释这一行的风险，以及正确的替代写法是什么（提示：<code>verify='/path/to/internal-ca.pem'</code>）？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 19 · 🔧 LAB 网络动手</strong>：本周我们把 IP、TCP、UDP、HTTP、TLS 这些概念走了一遍，明天该把它们全落到命令上了。你会用 <code>curl</code> 的高级用法、<code>tcpdump</code> 抓真实流量、<code>Wireshark</code> 亲眼看 TCP 三次握手和 TLS 握手的每一个包、用 <code>ss</code>/<code>netstat</code> 看连接状态、用 <code>dig</code>/<code>traceroute</code>/<code>mtr</code> 追踪 DNS 和路由。理论照进现实的一天。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
