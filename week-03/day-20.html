@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 20 · 网络抓包与协议分析 🔐</title>
+<style>
+  :root {
+    --bg: #fff7ed;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --sec-border: #fdba74;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--accent); border-radius: 6px; padding: 20px 24px; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .header .sec-tag { display: inline-block; background: var(--accent); color: white; padding: 2px 10px; border-radius: 3px; font-size: 11px; margin-bottom: 8px; letter-spacing: 1px; }
+  .toc { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .leadin { background: var(--card); border-left: 3px solid var(--accent); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; border: 1px solid var(--sec-border); }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; border: 1px solid var(--sec-border); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .warn { background: var(--danger-bg); border-left: 4px solid var(--danger); padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: #991b1b; }
+  .note { background: var(--card); border-left: 4px solid var(--accent-soft); padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .attack { background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid var(--danger); padding: 14px 18px; border-radius: 4px; margin: 18px 0; }
+  .attack h3 { margin-top: 4px; color: #991b1b; }
+  .expect { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 3px; }
+  .expect strong { color: #92400e; }
+  .connect { background: var(--card); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 18px 22px; margin: 16px 0; }
+  .exercise-num { display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; font-size: 12px; line-height: 22px; margin-right: 8px; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="sec-tag">🔐 SECURITY · 周六安全主线</div>
+  <h1>Day 20 · 网络抓包与协议分析</h1>
+  <div class="meta">Week 03 · 周六（序号 6）· 2026-06-08 · Sec 主题：让数据包现形 · 预计 1.5h 阅读 + 2.5h 上机</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：前五天我们在脑子里画了 IP 头、TCP 状态机、TLS 握手、DNS 解析——全是抽象的"协议应该长这样"。但安全工程师的核心能力是<span class="key">把网线上真实流过的每一个字节抓下来、看清楚、并判断它是不是恶意的</span>。今天我们彻底动手：先用 <code>tcpdump</code> 在命令行抓包并学会它的 BPF 过滤表达式（这套语法是所有抓包工具的通用语言）；再用 Wireshark 的图形界面做显示过滤、"追踪 TCP 流"把散落的包拼回完整对话；然后回答一个让无数初学者困惑的问题——<span class="key">HTTPS 加密了，那我抓到的还能看吗？</span>答案是：能，只要你有 <code>SSLKEYLOGFILE</code>。接着我们走进攻击者视角：<code>sslstrip</code> 如何把你的 HTTPS 偷偷降级成 HTTP、DNS 投毒如何把你导向假服务器、以及防御方为什么要上 DoH/DoT 把 DNS 也加密。今天的目标是：看完之后，再有人说"网络流量",你脑子里浮现的不是图，而是<strong>一帧一帧能解析的字节</strong>。所有命令在 macOS 上能跑（标注了 Linux 差异）。<strong>本页所有攻击技术仅用于你自己的实验环境与授权测试——这是法律红线。</strong>
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">抓包的本质：数据包是怎么被"复制"出来的</a></li>
+  <li><a href="#s2">tcpdump 与 BPF 过滤表达式（通用语言）</a></li>
+  <li><a href="#s3">Wireshark：显示过滤与"追踪 TCP 流"</a></li>
+  <li><a href="#s4">为什么 HTTPS 抓到也是乱码 + SSLKEYLOGFILE 解密</a></li>
+  <li><a href="#s5">中间人攻击与 sslstrip：HTTPS 降级</a></li>
+  <li><a href="#s6">DNS 投毒：把你导向假服务器</a></li>
+  <li><a href="#s7">DoH / DoT：给 DNS 也穿上 TLS</a></li>
+  <li><a href="#s8">实战：抓一次 HTTPS 请求并完整解密</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 抓包的本质：数据包是怎么被"复制"出来的</h2>
+
+<p>在能用工具之前，先搞清楚一件事：<span class="term">抓包（packet capture）</span>到底在抓什么。你的网卡（NIC）正常工作时，会过滤掉不是发给自己的帧——它看以太网头里的目标 MAC 地址，不是自己的就丢弃。<strong>抓包工具做的第一件事，就是让网卡进入<span class="term">混杂模式（promiscuous mode）</span>或<span class="term">监听模式</span>，把经过它的所有帧都收下来，并在内核里复制一份交给用户态程序。</strong></p>
+
+<p><strong>类比</strong>：把网卡想象成公司前台。正常模式下，前台只签收写着"你"名字的快递，别人的直接退回。混杂模式相当于前台把<em>每一个</em>经过大厅的快递都拆开拍照存档一份再放行。注意"经过大厅"这个限定——这正是关键：<span class="key">你只能抓到物理上流经你这块网卡的流量</span>。在交换机（switch）组成的现代局域网里，交换机只把帧送到目标端口，所以默认情况下你抓不到隔壁同事的流量——除非你做了 ARP 欺骗把流量引到自己这儿（这就是后面 MITM 的前提），或者在交换机上配了端口镜像（SPAN）。</p>
+
+<p>抓下来的字节按协议分层封装，像俄罗斯套娃，这是你 Day 15 学过的封装在真实字节上的样子：</p>
+
+<div class="ascii">
+[ 以太网帧 Ethernet ]  目标MAC | 源MAC | 类型(0x0800=IPv4)
+   └─[ IP 包 ]  版本 | 源IP | 目标IP | 协议(6=TCP)
+        └─[ TCP 段 ]  源端口 | 目标端口 | seq | ack | flags(SYN/ACK...)
+             └─[ 应用层 ]  HTTP 文本 / TLS 记录 / DNS 查询 ...
+
+抓包工具的工作 = 把这一层层壳剥开，每一层都解析成人类可读的字段
+</div>
+
+<p>底层支撑这一切的是一套叫 <span class="term">BPF（Berkeley Packet Filter）</span>的内核机制——你在 Day 13 听过它的现代版 eBPF。BPF 让你在<strong>内核里</strong>就先过滤掉不关心的包，只把符合条件的拷贝到用户态，避免海量流量把工具淹死。Linux 上对应 <code>libpcap</code> 库，macOS 也用它，Windows 上叫 <code>Npcap</code>。<code>tcpdump</code>、Wireshark、Python 的 <code>scapy</code> 全都站在 libpcap 之上——所以学会 BPF 过滤语法，等于一把钥匙开所有门。</p>
+
+<div class="note">
+<strong>关键事实</strong>
+<ul>
+<li>抓包 = 网卡混杂模式 + 内核 BPF 过滤 + 拷贝到用户态，三步。</li>
+<li>交换网络里默认只能抓到<strong>自己的</strong>流量；要抓别人的需 ARP 欺骗或端口镜像。</li>
+<li><code>tcpdump</code> / Wireshark / scapy 共享同一套底层（libpcap）和<strong>同一套 BPF 捕获过滤语法</strong>。</li>
+<li>抓包文件标准格式是 <code>.pcap</code> / <code>.pcapng</code>，可以保存后离线分析、跨工具交换。</li>
+</ul>
+</div>
+
+<h2 id="s2">2. tcpdump 与 BPF 过滤表达式（通用语言）</h2>
+
+<p><code>tcpdump</code> 是命令行抓包的瑞士军刀。没有图形界面，但正因为如此它能在任何一台服务器、容器、跳板机上直接用——这是你日后排查线上问题的看家本领。它的命令结构是：<code>tcpdump [选项] [BPF过滤表达式]</code>。</p>
+
+<h3>先跑起来</h3>
+<pre><code># macOS / Linux 都需要 root（抓包是特权操作）
+# -i 指定网卡；en0 是 mac 的 WiFi，Linux 上常是 eth0/wlan0/ens33
+# -n 不做 DNS 反解（否则每个 IP 都去查域名，又慢又产生额外流量）
+sudo tcpdump -i en0 -n
+
+# 列出所有可抓的网卡
+tcpdump -D            # Linux: ip link 也能看
+</code></pre>
+<div class="expect"><strong>预期</strong>：满屏滚动，每行一个包，形如<br><code>14:22:01.345 IP 192.168.1.10.51234 > 142.250.1.1.443: Flags [S], seq 12345, win 65535</code><br><code>[S]</code> 就是 SYN——你<strong>亲眼</strong>看到了 Day 16 学的三次握手第一步。<code>[S.]</code> 是 SYN+ACK，<code>[.]</code> 是纯 ACK，<code>[P.]</code> 带 PUSH 表示有数据，<code>[F.]</code> 是 FIN。</div>
+
+<h3>BPF 过滤表达式：抓包的"WHERE 子句"</h3>
+<p>满屏滚动没法看，真正的功力在于<strong>过滤</strong>。BPF 表达式像 SQL 的 WHERE，用三类原语（primitives）组合：</p>
+
+<table>
+<tr><th>类别</th><th>关键词</th><th>例子</th></tr>
+<tr><td>主机/网络</td><td><code>host</code> <code>net</code> <code>src</code> <code>dst</code></td><td><code>host 8.8.8.8</code>、<code>src net 10.0.0.0/8</code></td></tr>
+<tr><td>端口</td><td><code>port</code> <code>portrange</code></td><td><code>port 443</code>、<code>portrange 8000-9000</code></td></tr>
+<tr><td>协议</td><td><code>tcp</code> <code>udp</code> <code>icmp</code> <code>arp</code></td><td><code>udp port 53</code>（DNS）</td></tr>
+</table>
+
+<p>用 <code>and</code> / <code>or</code> / <code>not</code> 组合，括号需转义或加引号：</p>
+<pre><code># 只看与某主机的 HTTPS 流量
+sudo tcpdump -i en0 -n 'host 142.250.1.1 and port 443'
+
+# 只看 DNS 查询（UDP 53）——抓 DNS 投毒的第一步
+sudo tcpdump -i en0 -n 'udp port 53'
+
+# 只看 TCP 握手与挥手包（排除大量数据包），看连接的"骨架"
+# tcp[tcpflags] 直接读 TCP flags 字节，SYN=0x02 FIN=0x01 RST=0x04
+sudo tcpdump -i en0 -n 'tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst) != 0'
+
+# 抓某网段进出但排除 SSH（不想看自己的远程登录流量刷屏）
+sudo tcpdump -i en0 -n 'net 192.168.1.0/24 and not port 22'
+</code></pre>
+
+<h3>看内容，不只看头</h3>
+<pre><code># -A 以 ASCII 打印 payload（看明文 HTTP 最爽）
+sudo tcpdump -i en0 -n -A 'tcp port 80'
+
+# -X 同时打印十六进制+ASCII（分析二进制协议、TLS 记录）
+sudo tcpdump -i en0 -n -X 'tcp port 443'
+
+# -w 存盘成 pcap，之后用 Wireshark 慢慢看（生产环境标准做法）
+sudo tcpdump -i en0 -n -w /tmp/capture.pcap 'host 142.250.1.1'
+#   抓够了 Ctrl-C，然后：
+tcpdump -r /tmp/capture.pcap -n      # -r 读回文件离线分析
+</code></pre>
+
+<div class="expect"><strong>预期</strong>：抓 80 端口加 <code>-A</code>，你能直接读到 <code>GET / HTTP/1.1</code>、<code>Host: ...</code>、<code>Cookie: session=...</code> 这些明文——<span class="key">HTTP 的一切（包括 Cookie、密码）在网线上是裸奔的</span>。抓 443 加 <code>-X</code>，你只看到一堆十六进制乱码，因为 TLS 加密了——这正是第 4 节要破的局。</div>
+
+<div class="note">
+<strong>常用选项速查</strong>
+<ul>
+<li><code>-i</code> 网卡 · <code>-n</code> 不反解 DNS · <code>-nn</code> 连端口名也不解（443 不显示成 https）</li>
+<li><code>-c N</code> 抓 N 个包就停 · <code>-s 0</code> 抓完整包（老版本默认截断）· <code>-e</code> 显示以太网头（看 MAC，查 ARP 欺骗用）</li>
+<li><code>-v</code> / <code>-vv</code> 更详细 · <code>-A</code> ASCII · <code>-X</code> hex+ASCII · <code>-w</code> 存盘 · <code>-r</code> 读盘</li>
+<li>记忆要点：<strong>捕获过滤（BPF，在内核，省资源）和显示过滤（Wireshark 里，事后筛）是两套不同语法</strong>，别混。</li>
+</ul>
+</div>
+
+<h2 id="s3">3. Wireshark：显示过滤与"追踪 TCP 流"</h2>
+
+<p><code>tcpdump</code> 适合服务器和快速过滤，但要看一段完整对话、把几百个乱序的包拼成"人话"，图形化的 <span class="term">Wireshark</span> 无可替代。安装：mac 上 <code>brew install --cask wireshark</code>，Linux <code>apt install wireshark</code>。它和 tcpdump 共享 libpcap，所以 tcpdump <code>-w</code> 出来的 pcap 可以直接拖进 Wireshark。</p>
+
+<h3>捕获过滤 vs 显示过滤——必须分清的两套语法</h3>
+<table>
+<tr><th></th><th>捕获过滤 Capture Filter</th><th>显示过滤 Display Filter</th></tr>
+<tr><td>语法</td><td>BPF（同 tcpdump）</td><td>Wireshark 专属（点分字段名）</td></tr>
+<tr><td>时机</td><td>抓之前，决定<strong>抓不抓</strong></td><td>抓之后，决定<strong>显不显示</strong></td></tr>
+<tr><td>例子</td><td><code>tcp port 443</code></td><td><code>tcp.port == 443</code></td></tr>
+<tr><td>丢弃的数据</td><td>不符合的<strong>永久丢弃</strong></td><td>只是隐藏，随时改条件</td></tr>
+</table>
+
+<p>显示过滤是 Wireshark 的灵魂，它能精确到协议的<strong>每一个字段</strong>。几个高频例子：</p>
+<pre><code>http                          # 只看 HTTP
+http.request.method == "POST" # 只看 POST 请求
+tls.handshake.type == 1       # 只看 TLS ClientHello（握手开始）
+dns.qry.name contains "google"# DNS 查询里含 google 的
+ip.addr == 192.168.1.10       # 某 IP 的所有流量（src 或 dst）
+tcp.flags.syn == 1 && tcp.flags.ack == 0   # 纯 SYN（新连接发起）
+tcp.analysis.retransmission   # Wireshark 帮你标出的重传包（网络差的信号）
+http.cookie || http.set_cookie # 抓 Cookie
+</code></pre>
+
+<div class="note"><strong>小技巧</strong>：在包详情面板里随便点一个字段（比如某个 Cookie 值），右键 → "Apply as Filter" → "Selected"，Wireshark 自动帮你写好显示过滤表达式。不用背字段名，点出来即可。</div>
+
+<h3>追踪 TCP 流（Follow TCP Stream）——把碎片拼成对话</h3>
+<p>一次 HTTP 下载可能拆成几十个 TCP 段，在包列表里散落各处。<strong>右键任一包 → Follow → TCP Stream</strong>，Wireshark 会按 seq 号把同一条 TCP 连接的所有 payload 重组，用两种颜色（红=客户端发的，蓝=服务器发的）拼成完整对话。</p>
+
+<div class="expect"><strong>预期</strong>：对一次 HTTP 请求做 Follow TCP Stream，你会看到一整段：<br><code>GET /search?q=secret HTTP/1.1</code>（红）<br><code>Host: example.com</code><br><code>Cookie: SESSIONID=abc123...</code><br>↓<br><code>HTTP/1.1 200 OK</code>（蓝）<br>……完整的网页 HTML。<span class="key">这就是为什么公共 WiFi 上用 HTTP 等于把账号密码喊出来。</span></div>
+
+<p>对应的兄弟功能：<strong>Follow → TLS Stream</strong>（解密后，见第 4 节）、<strong>Follow → HTTP/2 Stream</strong>、<strong>Follow → QUIC Stream</strong>。命令行也有等价物——<code>tshark</code> 是 Wireshark 的 CLI 版：</p>
+<pre><code># tshark = 命令行 Wireshark，可在服务器上跑显示过滤
+tshark -r capture.pcap -Y 'http.request' -T fields -e http.host -e http.request.uri
+# -Y 显示过滤，-T fields 只输出指定字段，做日志分析很顺手
+</code></pre>
+
+<h2 id="s4">4. 为什么 HTTPS 抓到也是乱码 + SSLKEYLOGFILE 解密</h2>
+
+<p>到这里你应该已经实验出那个让人困惑的现象：<strong>抓 80 端口什么都看得见，抓 443 端口全是乱码。</strong>原因你 Day 18 学过——TLS 在 TCP 之上加了一层加密，应用数据（HTTP）在离开你电脑前就被对称密钥加密成了密文。tcpdump/Wireshark 抓到的是网线上的密文，它们没有密钥，自然解不开。</p>
+
+<p>那 HTTPS 是不是就绝对抓不到明文了？<strong>不是。</strong>密钥就在你自己的浏览器进程内存里——只要能把那把<span class="term">会话密钥（session key）</span>导出来喂给 Wireshark，它就能解密。这正是 <span class="term">SSLKEYLOGFILE</span> 的作用。</p>
+
+<h3>原理：会话密钥日志</h3>
+<p>Chrome、Firefox、curl 等基于 NSS/BoringSSL/OpenSSL 的程序，都支持一个约定：如果环境变量 <code>SSLKEYLOGFILE</code> 指向一个文件，它们会在每次 TLS 握手后，把本次连接协商出的<strong>主密钥（master secret）</strong>以标准格式追加写进去。Wireshark 读这个文件，就能对相应连接解密。</p>
+
+<div class="warn"><strong>注意</strong>：这只能解密<strong>你自己机器上、你自己启动</strong>的那些进程的流量——因为密钥来自你自己的内存。你<strong>不能</strong>用它解密别人的 HTTPS。这是合法调试手段，不是攻击。（TLS 1.3 用了前向保密 ECDHE，光抓服务器私钥也解不了历史流量，所以 SSLKEYLOGFILE 这种导会话密钥的方式才是现在唯一的本机调试途径。）</p></div>
+
+<pre><code># 1) 指定密钥日志文件并启动浏览器（mac，以 Chrome 为例）
+export SSLKEYLOGFILE=$HOME/tls-keys.log
+open -a "Google Chrome"        # 必须从这个 shell 启动，才能继承环境变量
+#   Linux:  SSLKEYLOGFILE=~/tls-keys.log google-chrome &
+
+# 2) 同时用 tcpdump 抓包
+sudo tcpdump -i en0 -n -w /tmp/https.pcap 'tcp port 443'
+
+# 3) 在浏览器里访问一个 https 站点，然后 Ctrl-C 停止抓包
+
+# 4) curl 也支持，更适合做干净的实验：
+SSLKEYLOGFILE=~/tls-keys.log curl -s https://example.com > /dev/null
+</code></pre>
+
+<p>然后在 Wireshark 里：<strong>Preferences → Protocols → TLS → "(Pre)-Master-Secret log filename"</strong> 填入 <code>tls-keys.log</code> 的路径。重新打开 pcap——奇迹发生：原本乱码的 443 流量，Wireshark 现在显示一个新的 <code>Decrypted TLS</code> 标签页，里面是明文 HTTP！对它做 Follow → HTTP Stream，你就看到了加密连接里的真实请求与响应。</p>
+
+<div class="expect"><strong>预期</strong>：解密后，过滤 <code>http</code> 能直接看到 HTTPS 站点里的 <code>GET /</code>、响应头、甚至 JSON API 的 body。<span class="key">加密保护的是"传输中被第三方偷看",但对持有密钥的端点（也就是你自己）始终是透明的。</span>这一点对理解后面所有 LLM API 流量调试至关重要。</div>
+
+<h2 id="s5">5. 中间人攻击与 sslstrip：HTTPS 降级</h2>
+
+<div class="warn"><strong>法律与道德红线</strong>：本节及后两节的攻击技术<strong>只能</strong>在你拥有完全控制权的实验环境（自己的两三台虚拟机/树莓派组成的隔离网络）或<strong>书面授权</strong>的渗透测试中演示。在公共网络、公司网络、或对他人设备实施，等同于犯罪。我们学它，是因为<strong>不懂攻击就写不出防御</strong>——这是你做 Agent 安全的本职。</div>
+
+<h3>什么是中间人（MITM）</h3>
+<p><span class="term">中间人攻击</span>：攻击者把自己插到通信双方中间，让 A 以为在和 B 说话、B 以为在和 A 说话，实际所有流量都经过攻击者。在局域网里，最经典的做法是 <span class="term">ARP 欺骗（ARP spoofing）</span>：</p>
+
+<div class="ascii">
+正常：    受害者 ──→ 网关(路由器) ──→ 互联网
+
+ARP 欺骗后：
+   攻击者持续广播假 ARP："网关的 IP 对应的是我的 MAC"
+   受害者信了（ARP 没有认证）→ 把发往网关的包发给攻击者
+   攻击者转发给真网关 → 受害者无感知，但流量全被看到
+
+   受害者 ──→ 攻击者(中间人) ──→ 网关 ──→ 互联网
+                  │
+                  └─ 抓包 / 篡改 / 降级
+</div>
+
+<p>ARP 欺骗之所以可行，是因为你 Day 15 学的 ARP 协议<strong>完全没有认证</strong>——谁吼一嗓子"这个 IP 是我"，别人就信。工具如 <code>arpspoof</code>（dsniff 套件）、<code>bettercap</code> 几条命令就能做到。一旦成为中间人，攻击者就能抓到受害者所有流量——但 HTTPS 还是密文。怎么办？这就引出 sslstrip。</p>
+
+<div class="attack">
+<h3>sslstrip：把 HTTPS 偷偷换成 HTTP</h3>
+<p><code>sslstrip</code>（Moxie Marlinspike 2009 年发布）的思路极其巧妙：它不去破解 TLS，而是<strong>不让 TLS 发生</strong>。很多人访问网站时输入的是 <code>example.com</code> 而非 <code>https://example.com</code>，浏览器先发 HTTP，服务器再用 <code>301 重定向</code>或 <code>HSTS</code> 把你升级到 HTTPS。sslstrip 作为中间人，拦下这个升级：</p>
+<ol>
+<li>受害者→攻击者：明文 HTTP 请求 <code>example.com</code></li>
+<li>攻击者→服务器：攻击者自己用 <strong>HTTPS</strong> 去访问真站点（攻击者和服务器之间是加密的，正常）</li>
+<li>服务器→攻击者：返回页面，里面所有 <code>https://</code> 链接</li>
+<li>攻击者把页面里的 <code>https://</code> 全改写成 <code>http://</code> 再发给受害者</li>
+<li>结果：<strong>受害者全程用 HTTP 和攻击者通信</strong>，浏览器地址栏没有锁图标但很多人不看；攻击者却用 HTTPS 和真站点通信，两边都"正常工作"，密码、Cookie 全在受害者那一侧明文流过攻击者。</li>
+</ol>
+</div>
+
+<h3>防御：HSTS 与 HSTS Preload</h3>
+<p>sslstrip 的克星是 <span class="term">HSTS（HTTP Strict Transport Security）</span>。服务器返回响应头 <code>Strict-Transport-Security: max-age=31536000; includeSubDomains</code>，浏览器收到后会记住"这个域名以后<strong>只准用 HTTPS</strong>",哪怕用户敲 http，浏览器自己在本地就改成 https，根本不发明文请求——sslstrip 没东西可拦。更进一步，<span class="term">HSTS Preload List</span> 把一批域名硬编码进浏览器源码，<strong>第一次访问就强制 HTTPS</strong>，连首次的明文窗口都堵死。你可以验证：</p>
+<pre><code># 看一个站点是否启用 HSTS
+curl -sI https://github.com | grep -i strict-transport
+#   Strict-Transport-Security: max-age=31536000; includeSubdomains; preload
+
+# Chrome 内部页面查看 preload 状态
+#   浏览器地址栏访问： chrome://net-internals/#hsts
+</code></pre>
+<div class="note"><strong>关键事实</strong>：sslstrip 攻击之所以现在威力大减，正是因为<strong>主流站点普遍上了 HSTS + Preload</strong>，且现代浏览器默认尝试 HTTPS。但<strong>没上 HSTS 的内部系统、老旧设备、自建服务</strong>仍是重灾区——这在企业内网渗透里非常常见。你做 Agent 安全时，自家的内部 API 务必上 HSTS。</div>
+
+<h2 id="s6">6. DNS 投毒：把你导向假服务器</h2>
+
+<p>MITM 是物理上插到中间，<span class="term">DNS 投毒（DNS spoofing / cache poisoning）</span>则是更隐蔽的"指错路":不拦截你的流量，而是在你问"<code>bank.com</code> 的 IP 是多少"时，抢先给你一个<strong>假 IP</strong>，让你自己心甘情愿地连到攻击者的服务器。</p>
+
+<p><strong>类比</strong>：DNS 是互联网的电话簿（Day 21 会深入）。DNS 投毒就是趁你查电话簿时，有人把"银行客服"那一行的号码偷偷换成了诈骗电话——你拨过去时一切正常，但接电话的是骗子。</p>
+
+<h3>两种投毒</h3>
+<table>
+<tr><th>类型</th><th>攻击点</th><th>原理</th></tr>
+<tr><td>本地 DNS 欺骗</td><td>同局域网（需先 MITM）</td><td>攻击者看到你的 UDP 53 查询，抢在真 DNS 服务器之前回一个伪造响应。UDP 无连接、DNS 靠 16 位事务 ID 匹配，抢答只要 ID 对就被接受。</td></tr>
+<tr><td>缓存投毒</td><td>递归 DNS 服务器</td><td>污染上游解析器的缓存，一次投毒影响所有用它的用户。经典的 Kaminsky 攻击（2008）靠暴力猜事务 ID + 抢答实现，催生了<strong>源端口随机化</strong>这一缓解措施。</td></tr>
+</table>
+
+<div class="attack">
+<h3>为什么 DNS 这么好骗</h3>
+<ul>
+<li><strong>UDP 无连接</strong>：没有握手，伪造一个响应包成本极低，不需要建立连接。</li>
+<li><strong>仅靠 16 位事务 ID + 端口匹配</strong>：理论上 65536 种 ID，本地 MITM 下攻击者能直接看到 ID（抓包就行），命中率 100%；远程则靠猜（Kaminsky）。</li>
+<li><strong>明文</strong>：传统 DNS（Do53）查询和响应全是明文，谁都能看你在查什么——既泄露隐私（你访问了哪些网站一览无余），又便于精准投毒。</li>
+</ul>
+<p>本地实验里，<code>dnsspoof</code>（dsniff）或 <code>bettercap</code> 的 <code>dns.spoof</code> 模块几行配置就能把任意域名解析到你指定的 IP。</p>
+</div>
+
+<h3>观察你自己的 DNS（无害实验）</h3>
+<pre><code># 抓自己机器的 DNS 查询，看看明文长什么样
+sudo tcpdump -i en0 -n -A 'udp port 53'
+#   另开终端访问几个网站，回来看抓到的查询/响应，域名清清楚楚
+
+# dig 看完整 DNS 响应（事务 ID、各段记录）
+dig +noall +answer +stats www.example.com
+#   注意输出里的 "id" 字段——那 16 位就是投毒要匹配的事务 ID
+</code></pre>
+
+<div class="warn"><strong>防御视角</strong>：DNS 投毒的根本治法是<strong>给响应加上认证或加密</strong>。<span class="term">DNSSEC</span> 用数字签名保证响应"确实来自权威服务器且未被篡改"（但它不加密，旁观者仍看得到你查什么）；而 DoH/DoT（下一节）则把整条 DNS 通道加密，旁观者连你查什么都看不到，更无从抢答。两者解决的问题不同：DNSSEC 防篡改，DoH/DoT 防偷窥+防本地抢答。</div>
+
+<h2 id="s7">7. DoH / DoT：给 DNS 也穿上 TLS</h2>
+
+<p>传统 DNS（<span class="term">Do53</span>，即 53 端口的明文 UDP/TCP）的两大原罪——明文可窥探、易被抢答投毒——的现代答案是把 DNS 装进 TLS 隧道。两种主流方案：</p>
+
+<table>
+<tr><th></th><th>DoT (DNS over TLS)</th><th>DoH (DNS over HTTPS)</th></tr>
+<tr><td>端口</td><td>853（专用）</td><td>443（和普通 HTTPS 混在一起）</td></tr>
+<tr><td>封装</td><td>DNS 报文直接塞进 TLS</td><td>DNS 报文塞进 HTTPS 请求体</td></tr>
+<tr><td>可识别性</td><td>专用端口，网络管理员<strong>能看出</strong>"这是加密 DNS"并可封</td><td>混在 443 的海量 HTTPS 里，<strong>极难区分</strong>普通网页流量</td></tr>
+<tr><td>典型使用者</td><td>系统级解析器（Android 默认）</td><td>浏览器内置（Firefox/Chrome）</td></tr>
+</table>
+
+<p>两者都做到了：第三方（包括你的 ISP、同局域网的 MITM）<strong>既看不到你在查什么域名，也无法抢答伪造响应</strong>，因为通道有 TLS 的完整性和身份保护。这是隐私和抗投毒的巨大进步。</p>
+
+<pre><code># 用 curl 直接打 DoH 端点（Cloudflare 的 1.1.1.1）
+curl -sH 'accept: application/dns-json' \
+  'https://1.1.1.1/dns-query?name=example.com&type=A' | python3 -m json.tool
+#   返回 JSON 形式的解析结果，全程走 443 加密
+
+# DoT 测试（需要 kdig，knot-dnsutils 提供；mac: brew install knot）
+kdig -d @1.1.1.1 +tls-ca +tls-host=cloudflare-dns.com example.com
+</code></pre>
+
+<div class="warn"><strong>安全的双刃剑——这点对你做 Agent 安全极重要</strong>：DoH 把 DNS 藏进 443，<strong>对隐私是好事，对企业防御是噩梦</strong>。传统上安全团队靠监控 DNS 查询来发现恶意软件回连 C2（很多木马用 DNS 解析找主控）、发现数据外泄（<span class="term">DNS tunneling</span>——把偷的数据编码进域名查询里偷偷送出去，你 Day 27 会专门学）。一旦终端走 DoH，这些查询全混进正常 HTTPS，传统 DNS 监控彻底失明。所以现代企业要么<strong>禁用终端自带 DoH、强制走自己的受控解析器</strong>，要么在 TLS 层做检测。攻击者也爱 DoH——用它做隐蔽 C2 信道。<strong>你设计 Agent 沙箱的出网策略时，必须把 DoH 这条隐蔽信道考虑进去。</strong></div>
+
+<h2 id="s8">8. 实战：抓一次 HTTPS 请求并完整解密</h2>
+
+<p>把今天的工具串成一条完整链路。目标：抓一次真实 HTTPS 请求，从密文一路解密到明文 HTTP，并定位其中每一层。建议在终端边敲边对照。</p>
+
+<pre><code># ── 准备 ──
+export SSLKEYLOGFILE=$HOME/lab-keys.log
+rm -f $HOME/lab-keys.log /tmp/lab.pcap
+
+# ── 1) 开抓包（后台），只抓与目标的 443 ──
+sudo tcpdump -i en0 -n -s 0 -w /tmp/lab.pcap 'tcp port 443 and host example.com' &
+TCPDUMP_PID=$!
+sleep 2
+
+# ── 2) 发一次会写密钥日志的 HTTPS 请求 ──
+curl -sv https://example.com/ -o /dev/null
+#   -v 会在 stderr 打印 TLS 握手摘要：协议版本、加密套件、证书链
+#   你能看到 "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384"
+
+# ── 3) 停止抓包 ──
+sleep 1
+sudo kill $TCPDUMP_PID
+
+# ── 4) 命令行先确认抓到了密文 ──
+tcpdump -r /tmp/lab.pcap -n -c 10
+#   能看到 SYN/SYN-ACK 握手 + 一堆 Application Data（密文）
+
+# ── 5) 确认密钥日志已生成 ──
+wc -l $HOME/lab-keys.log     # 应有若干行 CLIENT_TRAFFIC_SECRET / SERVER_... 之类
+</code></pre>
+
+<p>然后用 <code>tshark</code> 带上密钥文件直接在命令行解密（不用开 GUI）：</p>
+<pre><code>tshark -r /tmp/lab.pcap \
+  -o tls.keylog_file:$HOME/lab-keys.log \
+  -Y 'http' -V | head -60
+#   -o 指定密钥日志，-Y http 过滤出解密后的 HTTP，-V 展开全字段
+#   你会看到原本加密的 GET / HTTP/1.1、Host、User-Agent、响应 200 OK 全部明文
+</code></pre>
+
+<div class="expect"><strong>预期成果</strong>：你完成了一条从"网线上的乱码"到"可读 HTTP 报文"的完整解密链路。复盘时在脑中标出每一层：以太网帧 → IP 包（src/dst IP）→ TCP 段（端口 443、SYN/ACK 握手）→ TLS 记录（ClientHello/ServerHello/证书/Application Data）→ 解密后的 HTTP。<span class="key">这条链路就是你日后调试任何网络服务、排查任何"为什么连不上/为什么慢/这流量是不是恶意的"问题的标准心智模型。</span></div>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 调试 LLM 流式 API 必备 SSLKEYLOGFILE。</strong> 你的 Agent 调 OpenAI/Claude 这类 HTTPS API，出现"流式响应卡住""SSE 断流""超时重连"时，光看应用日志看不到传输层真相。用 <code>SSLKEYLOGFILE</code> + tcpdump 抓下来解密，你能精确看到是 TLS 握手慢、是服务器迟迟不发第一个 token（TTFT 问题）、还是 TCP 重传——把 Day 17 学的 SSE/HTTP 和今天的解密结合，是排查推理服务的硬功夫。</p>
+
+<p><strong>2. DoH 是 Agent 出网的隐蔽信道，必须纳入沙箱出网策略。</strong> 你给 Agent 配代码执行沙箱（Day 157 会深入沙箱设计）时，如果只在 DNS 层（53 端口）做出网管控，一个被 prompt injection 劫持的 Agent 完全可以用 DoH（443）绕过你的 DNS 监控，把窃取的数据或 C2 指令藏进正常 HTTPS 流量。设计出网白名单时，必须连 443 的目标域名/SNI 一起管，否则等于没管。</p>
+
+<p><strong>3. 抓包验证 Agent 工具调用没有"偷偷"外泄数据。</strong> 做 Agent 安全审计时，最硬的证据不是看代码，而是抓包：把 Agent 跑一遍，解密它所有出站 HTTPS，逐条核对——它是不是只连了它该连的 API？有没有把用户隐私数据发到第三方？有没有意料外的回连？这种"用网线上的真相核对代码声称"的方法，是发现供应链后门和数据外泄的金标准。</p>
+
+<p><strong>4. MITM 思路用于搭建 Agent 流量审计代理。</strong> 防御性地使用中间人技术：在 Agent 和外部世界之间放一个你控制的 TLS 解密代理（如 mitmproxy），所有出站请求都经过它解密、记录、按策略放行或拦截。这本质上是"善意的 sslstrip 反面"——你在自己授权的环境里做合法 MITM，给 Agent 的每一次外呼装上摄像头。理解了第 5 节的 MITM 原理，你才知道这种审计代理怎么搭、TLS 证书怎么处理、有哪些盲区（比如 Agent 若做了证书固定 pinning 就会拒绝你的代理）。</p>
+
+<p><strong>5. DNS 投毒 = 针对 Agent 的"工具地址劫持"。</strong> 你的 Agent 通过域名访问工具服务（向量库、检索 API、MCP server）。如果它所在网络的 DNS 被投毒，Agent 会把请求连同凭据一股脑发给攻击者的假服务器，而它自己毫无察觉——这是 indirect injection（Day 132 重点）之外另一条供应链攻击面。防御就是给 Agent 的关键依赖上 DoT/DoH + 证书校验，并在审计代理里固定关键服务的 IP/证书指纹。</p>
+</div>
+
+<h2 id="exercise">今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手</strong>：用 <code>SSLKEYLOGFILE</code> + tcpdump + tshark 完整复现第 8 节的解密链路，目标换成你常用的某个站点。要求最终用 <code>tshark</code> 在命令行打印出解密后的 HTTP 请求行和响应状态码。把成功解密前（乱码）和解密后（明文）的两段输出对比截图保存。<br><em>提示</em>：若解密失败，最常见原因是浏览器/curl 不是从设置了环境变量的同一个 shell 启动的，密钥没写进去。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察</strong>：开 <code>sudo tcpdump -i en0 -n -A 'udp port 53'</code>，然后在浏览器随便访问 5 个不同网站。回到抓包终端，数一数：访问一个网站平均触发了几次 DNS 查询？为什么不止一次（提示：一个页面会加载来自多少个不同域名的资源）？再把同一组站点改用浏览器的 DoH（Firefox 设置里开启 "DNS over HTTPS"）后重抓，观察 <code>udp port 53</code> 是不是几乎没流量了——它们去哪了？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考</strong>：你要为公司的 Agent 平台设计出网管控。已知（a）DoH 让传统 DNS 监控失明；（b）TLS 让你看不到 HTTPS 内容除非做解密代理；（c）做解密代理又会被证书固定的客户端拒绝。请写下一套<strong>分层</strong>的出网策略：在网络层、DNS 层、TLS 层、应用层各做什么，分别能挡住什么、挡不住什么。最后回答：一个被 prompt injection 完全控制的 Agent，在你的策略下最可能从哪个缝隙把数据偷运出去？你会怎么补这个缝？</p>
+</div>
+
+<div class="next">
+<strong>明日预告</strong> · Day 21（周日 🌐 综合）：<strong>DNS + CDN + 周复盘</strong>。今天我们从攻击视角碰了 DNS 的投毒与加密，明天正面、系统地拆开 DNS 这本"互联网电话簿"——协议格式、A/AAAA/CNAME/MX/TXT 各类记录、递归 vs 迭代查询、EDNS 扩展；再讲 CDN 如何用 Anycast 和 DNS 调度把你导向最近的边缘节点、HTTP 缓存如何分层。然后对整个 Week 03（网络 Part 1：IP/TCP/HTTP/TLS/DNS）做一次总复盘，把这一周的协议栈在脑中拼成完整一张图，为下周的网络 Part 2（应用层协议、负载均衡、Nginx）打底。今天你学会了"看见"流量，明天学会"看懂"它从哪来、到哪去。</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
