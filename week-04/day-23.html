@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 23 · 负载均衡</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 23 · 负载均衡</h1>
+  <div class="meta">Week 04 · 周二 · 2026-06-13 · 主线：网络与服务通信 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们讲清了「两个进程之间怎么对话」（HTTP/gRPC/WebSocket）。但真实生产里从来不是「一台服务器对一个客户端」——你部署的 vLLM 推理服务，前面可能挂着十万个并发用户，后面是几十张 GPU 卡。把这十万个请求<span class="key">均匀、可靠、可控地</span>分到后端这一堆机器上，就是「负载均衡」要解决的问题。今天我们回答 5 个问题：① 负载均衡到底在网络的哪一层干活（L4 vs L7 的本质）？② 它怎么决定「下一个请求发给谁」（调度算法）？③ 为什么「一致性哈希」是面试常考、生产常用的关键技巧？④ 后端有台机器挂了它怎么知道（健康检查）？⑤ LVS / HAProxy / Nginx / Envoy 这几个名字各是干嘛的、云上的 LB 又是什么？读完今天，你应该能看懂任何一张「请求从用户到 GPU」的架构图。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">为什么需要负载均衡：从 1 台到 N 台的鸿沟</a></li>
+  <li><a href="#s2">L4 vs L7：在网络的哪一层做决策</a></li>
+  <li><a href="#s3">调度算法：下一个请求发给谁</a></li>
+  <li><a href="#s4">一致性哈希：扩缩容时少搬一点</a></li>
+  <li><a href="#s5">健康检查与 sticky session：让流量只去活着的机器</a></li>
+  <li><a href="#s6">四个名字：LVS / HAProxy / Nginx / Envoy</a></li>
+  <li><a href="#s7">云负载均衡：把这一切托管给云厂商</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 为什么需要负载均衡：从 1 台到 N 台的鸿沟</h2>
+
+<p><span class="term">负载均衡（Load Balancing, LB）</span>的精确定义：在多个能提供同样服务的后端实例之间分配进来的网络流量，使得没有单台机器被压垮，整体吞吐和可用性最大化。承担这个分配工作的组件叫<span class="term">负载均衡器（Load Balancer）</span>。</p>
+
+<p>为什么单台不够？三个无法回避的物理事实：</p>
+<ul>
+  <li><strong>容量上限</strong>：一台机器的 CPU、内存、网卡带宽、GPU 显存都是有限的。一张 H100 同时只能塞下有限的并发请求（受 KV cache 显存限制，这正是 Week 06/08 会深挖的）。要服务更多用户，只能横向加机器（scale out）。</li>
+  <li><strong>单点故障（SPOF）</strong>：只有一台机器，它一挂，服务就 100% 不可用。加到 N 台后，挂一台只损失 1/N 的容量。</li>
+  <li><strong>运维需求</strong>：发版、打补丁、重启都需要把某台机器临时摘下来。没有 LB，摘一台就是全站下线。</li>
+</ul>
+
+<p>类比：负载均衡器就是<span class="key">银行大厅里那位喊号的引导员</span>。十个窗口（后端服务器）都能办同样的业务，引导员（LB）站在门口，看哪个窗口空了就把下一位顾客（请求）引过去。顾客不需要知道哪个窗口空——他只面对引导员一个人。这正是 LB 的核心价值：<span class="key">对外暴露一个稳定的入口（一个 IP / 一个域名），对内屏蔽后端的数量、位置、生死变化</span>。</p>
+
+<div class="ascii">                      ┌──────────────┐
+   10万并发用户  ───▶  │ Load Balancer │  ───▶  ┌─ server-1 (健康)
+   (一个域名)          │  喊号引导员    │        ├─ server-2 (健康)
+                      │  VIP: 1.2.3.4 │        ├─ server-3 (摘除维护中)
+                      └──────────────┘        └─ server-N (健康)
+              对外：一个稳定入口        对内：屏蔽后端数量与生死</div>
+
+<p>这里出现一个关键名词：<span class="term">VIP（Virtual IP，虚拟 IP）</span>。它是负载均衡器对外暴露的那个 IP 地址，不绑定任何一台真实后端，而是「虚拟」的服务入口。DNS 把域名解析到 VIP，用户连的是 VIP，LB 再转发到真实后端（这些真实后端的 IP 叫 RIP，Real IP）。</p>
+
+<h2 id="s2">2. L4 vs L7：在网络的哪一层做决策</h2>
+
+<p>负载均衡器最根本的分类，是看它<span class="key">在 OSI 模型的第几层做转发决策</span>。回忆 Day 15 的分层：L4 是传输层（TCP/UDP），L7 是应用层（HTTP）。这两类 LB 的工作方式天差地别。</p>
+
+<h3>L4 负载均衡（传输层）</h3>
+<p><span class="term">L4 LB</span> 只看 TCP/UDP 头里的<span class="key">四元组（源 IP、源端口、目的 IP、目的端口）</span>，不解析也不理解上层的 HTTP 内容。它的工作像邮局分拣员：只看信封上的地址，绝不拆信。一个 TCP 连接一旦被分到某台后端，这条连接上后续所有数据包都走同一台后端。</p>
+<ul>
+  <li><strong>快</strong>：不解析应用层，CPU 开销极小，单机可达百万级 QPS、几十 Gbps。</li>
+  <li><strong>透明</strong>：后端能看到（在某些模式下）真实客户端 IP；协议无关，TCP 上跑什么它都能转（MySQL、Redis、gRPC、自定义二进制协议都行）。</li>
+  <li><strong>但「笨」</strong>：它不知道 URL 是 <code>/api/chat</code> 还是 <code>/health</code>，无法按路径路由、无法改 Header、无法做 HTTP 层重试。</li>
+</ul>
+
+<h3>L7 负载均衡（应用层）</h3>
+<p><span class="term">L7 LB</span> 会<span class="key">终结（terminate）客户端的 TCP/TLS 连接，把 HTTP 请求完整读出来</span>，看到方法、URL、Header、Cookie，然后自己再开一条新连接去后端。它像前台秘书：不仅收信，还拆开读内容，根据内容决定转给哪个部门。</p>
+<ul>
+  <li><strong>聪明</strong>：能按 URL 路径路由（<code>/api/*</code> 去推理集群，<code>/static/*</code> 去 CDN 源站）、按 Header / Cookie 路由、改写请求、合并/压缩响应、做 HTTP 重试、灰度发布。</li>
+  <li><strong>能做 TLS 终止</strong>：在 LB 上解密 HTTPS，后端只跑明文 HTTP，省去每台后端配证书的麻烦（昨天 Day 18 学的 TLS 就在这里落地）。</li>
+  <li><strong>但更重</strong>：要解析整个 HTTP、维护两端连接，CPU/内存开销远大于 L4，单机吞吐低一个数量级。</li>
+</ul>
+
+<table>
+<tr><th>维度</th><th>L4（传输层）</th><th>L7（应用层）</th></tr>
+<tr><td>看到的信息</td><td>IP + 端口（四元组）</td><td>完整 HTTP：URL/Header/Cookie</td></tr>
+<tr><td>连接模型</td><td>转发同一条 TCP 连接</td><td>终结前端连接 + 新建后端连接</td></tr>
+<tr><td>性能</td><td>极高（百万 QPS）</td><td>较低（十万级，看复杂度）</td></tr>
+<tr><td>能否按 URL 路由</td><td>否</td><td>是</td></tr>
+<tr><td>能否 TLS 终止</td><td>否（透传）</td><td>是</td></tr>
+<tr><td>典型产品</td><td>LVS、云 NLB</td><td>Nginx、HAProxy、Envoy、云 ALB</td></tr>
+</table>
+
+<div class="note">
+<strong>生产里常常是「L4 + L7 两级串联」</strong>：最外层用 L4（如 LVS）抗住海量连接、做粗分发，把流量打到一组 L7（如 Nginx/Envoy），L7 再做精细的按路径路由和 TLS 终止。这就是为什么大厂架构图里 LB 往往画两层——你以后会经常见到这个组合。
+</div>
+
+<h2 id="s3">3. 调度算法：下一个请求发给谁</h2>
+
+<p>无论 L4 还是 L7，都要回答同一个问题：「这个新请求该发给哪台后端？」决定的规则就是<span class="term">调度算法（scheduling / balancing algorithm）</span>。常见的几种，从简单到聪明：</p>
+
+<ul>
+  <li><strong>轮询 Round Robin（RR）</strong>：A→B→C→A→B→C… 依次轮流。最简单、最公平（假设每台机器一样强、每个请求一样重）。缺点：不看后端实际负载，遇到「一个慢请求把一台机器拖住」时分配会失衡。</li>
+  <li><strong>加权轮询 Weighted RR</strong>：给强机器更高权重。一台配置是别人 2 倍的机器，权重设 2，它就拿 2 倍流量。异构集群（新旧 GPU 混部）必备。</li>
+  <li><strong>最少连接 Least Connections</strong>：把请求发给「当前活跃连接数最少」的后端。比 RR 聪明——它隐式感知了负载（慢的机器连接会堆积，自然少分给它）。<span class="key">对「请求耗时差异大」的场景（比如 LLM 推理，有的 prompt 短有的长）尤其适用。</span></li>
+  <li><strong>最短响应时间 Least Response Time</strong>：综合活跃连接数 + 实测响应延迟，发给「预计最快返回」的后端。Envoy 等现代 LB 支持。</li>
+  <li><strong>随机 / 随机两选一（P2C, Power of Two Choices）</strong>：纯随机简单但偶尔失衡；「随机挑 2 台，选其中连接少的那台」这个小技巧能用极低成本逼近最少连接的效果，是现代 LB（如 Envoy 默认）的常用算法。</li>
+  <li><strong>哈希 Hash</strong>：按某个 key（源 IP、URL、用户 ID）做哈希，同一个 key 永远落到同一台后端。这就引出了下一节的「一致性哈希」。</li>
+</ul>
+
+<div class="ascii">Round Robin（轮询）           Least Connections（最少连接）
+req1 ─▶ A                     A: ▮▮▮▮▮ (5 连接)  ← 不发这里
+req2 ─▶ B                     B: ▮▮ (2 连接)     ← 发给它！
+req3 ─▶ C                     C: ▮▮▮ (3 连接)
+req4 ─▶ A  (回到开头)          新请求 ─▶ B</div>
+
+<div class="note">
+<strong>面试高频问题</strong>：「LLM 推理服务前面的 LB 该选什么算法？」——首选 <span class="key">least connections 或 least request</span>，因为 LLM 请求耗时方差极大（decode 长度不同），轮询会把一个长生成请求和一个短请求一视同仁，导致某些卡空闲、某些卡排队。最少连接能自动把新请求避开「正在跑长任务」的卡。
+</div>
+
+<h2 id="s4">4. 一致性哈希：扩缩容时少搬一点</h2>
+
+<p>先看「普通哈希」的灾难。假设你有 4 台缓存服务器，用 <code>server = hash(key) % 4</code> 决定一个 key 存哪台。现在加了一台变成 5 台，公式变成 <code>% 5</code>——<span class="key">几乎所有 key 的归属都变了</span>。对缓存来说这意味着缓存全部失效、请求瞬间全打到后端数据库（缓存雪崩，Day 123 会专门讲）；对有状态服务来说意味着海量数据要搬家。</p>
+
+<p><span class="term">一致性哈希（Consistent Hashing）</span>就是为解决「增删一个节点时，尽量少地改变 key 的归属」而生。核心思想：</p>
+<ol>
+  <li>把哈希值的取值空间想象成一个<span class="key">首尾相接的环（0 到 2³²-1）</span>。</li>
+  <li>把每台服务器用 <code>hash(服务器名)</code> 映射到环上的一个点。</li>
+  <li>一个 key 用 <code>hash(key)</code> 也落到环上某点，然后<span class="key">顺时针找到的第一台服务器</span>就是它的归属。</li>
+</ol>
+
+<div class="ascii">             0/2³²
+              │
+      D ●─────┼─────● A
+       ╲      环      ╱
+        ╲           ╱      key 落在这里 ──┐
+         ╲         ╱                      ▼ 顺时针找到 C
+      C ●───────────● B
+
+  加入节点 E（落在 B、C 之间）：只有「原本属于 C 但现在
+  落在 E 之前」的那一小段 key 需要迁移到 E，其余 key 不动。</div>
+
+<p>关键收益：增删一个节点，平均只有 <code>1/N</code> 的 key 需要迁移，而不是普通哈希的「几乎全部」。但朴素一致性哈希有个问题——节点在环上分布不均，可能造成某台机器负载过重（数据倾斜）。解决办法是<span class="term">虚拟节点（virtual nodes）</span>：每台物理机在环上放成百上千个虚拟点，让分布更均匀。这是 Redis Cluster、Cassandra、Ketama、以及很多 LB「会话保持」背后的同一个技巧。</p>
+
+<pre><code># 用 Python 几十行手写一致性哈希，理解原理
+import hashlib, bisect
+
+class ConsistentHash:
+    def __init__(self, nodes, vnodes=150):
+        self.ring = {}            # hash值 -> 节点名
+        self.sorted_keys = []     # 排好序的 hash 值，便于二分查找
+        for node in nodes:
+            for i in range(vnodes):          # 每个节点 150 个虚拟节点
+                h = self._hash(f"{node}#{i}")
+                self.ring[h] = node
+                self.sorted_keys.append(h)
+        self.sorted_keys.sort()
+
+    def _hash(self, key):
+        return int(hashlib.md5(key.encode()).hexdigest(), 16)
+
+    def get(self, key):
+        h = self._hash(key)
+        idx = bisect.bisect(self.sorted_keys, h) % len(self.sorted_keys)  # 顺时针第一个
+        return self.ring[self.sorted_keys[idx]]
+
+ch = ConsistentHash(["gpu-1", "gpu-2", "gpu-3"])
+print(ch.get("user-alice"))   # 总是落到同一台，除非增删节点
+print(ch.get("user-bob"))</code></pre>
+
+<div class="note">
+<strong>LLM 场景的妙用</strong>：vLLM/SGLang 有「prefix caching」——相同的 system prompt 前缀已经算好的 KV cache 可复用。如果用一致性哈希按「prompt 前缀」路由，让同一类请求总落到同一张卡，就能<span class="key">最大化前缀缓存命中率</span>，显著降低 TTFT。这是「session affinity」在推理优化里的高级玩法。
+</div>
+
+<h2 id="s5">5. 健康检查与 sticky session：让流量只去活着的机器</h2>
+
+<h3>健康检查（Health Check）</h3>
+<p>LB 必须知道「哪台后端还活着」，否则会把请求发给已经挂掉的机器。<span class="term">健康检查</span>就是 LB 周期性地探测每台后端，只把流量发给「健康」的那些。两种探法：</p>
+<ul>
+  <li><strong>被动健康检查</strong>：不主动探，而是观察真实请求的结果。某台后端连续 N 次返回 5xx 或超时，就标记为不健康、暂时摘除。成本低但反应慢（要先死几个真实请求）。</li>
+  <li><strong>主动健康检查</strong>：LB 主动定时去敲后端的一个探活端点。L4 探法是「TCP 能不能连上」；L7 探法是「GET <code>/healthz</code> 是否返回 200」。</li>
+</ul>
+
+<p>关键参数：探测间隔（interval）、超时（timeout）、连续几次失败算挂（unhealthy threshold）、连续几次成功算恢复（healthy threshold）。设计 <code>/healthz</code> 端点时要注意：它应该<span class="key">真正反映服务能否干活</span>（比如检查 GPU 模型是否加载完成、依赖的数据库是否连通），而不是只返回一个永远 200 的空响应——否则一台「进程活着但模型没加载好」的机器会被持续打流量。</p>
+
+<pre><code># 一个有意义的 FastAPI 健康检查端点（推理服务示例）
+from fastapi import FastAPI, Response
+app = FastAPI()
+model_ready = False   # 模型加载完成后置 True
+
+@app.get("/healthz")              # 存活探针：进程还在吗
+def healthz():
+    return {"status": "ok"}
+
+@app.get("/readyz")               # 就绪探针：能接流量吗
+def readyz():
+    if not model_ready:
+        return Response(status_code=503)   # 没就绪，LB 别发流量过来
+    return {"status": "ready"}</code></pre>
+
+<div class="note">
+注意区分 K8s 里的三种探针（Day 72 详讲）：<code>liveness</code>（活着吗，否则重启）、<code>readiness</code>（能接流量吗，否则从 Service 摘除）、<code>startup</code>（启动完成了吗）。它们本质就是不同语义的健康检查。<span class="key">模型加载慢的推理服务尤其依赖 readiness/startup 探针</span>，否则 Pod 刚起来模型还没 load 完就被打流量，全是 503。
+</div>
+
+<h3>会话保持 / sticky session</h3>
+<p><span class="term">Sticky session（会话保持，又叫 session affinity）</span>：让同一个用户的多次请求落到同一台后端。为什么需要？如果后端把会话状态存在本机内存里（购物车、登录态、对话上下文），用户下一个请求被分到另一台就「失忆」了。</p>
+<p>实现方式：① <strong>基于源 IP 哈希</strong>（L4 常用，但 NAT 后大量用户共享一个出口 IP 会失衡）；② <strong>基于 Cookie</strong>（L7 常用，LB 给客户端塞一个标识 Cookie，下次按 Cookie 认机器）。</p>
+<p><span class="key">但更好的现代做法是「无状态化」</span>：把会话状态外移到共享存储（Redis、数据库），后端任意一台都能处理任意请求，根本不需要 sticky。这就是云原生「无状态服务」的核心思想——它让横向扩缩容、故障转移都变得简单。Sticky session 是不得已时的妥协，不是首选。</p>
+
+<h2 id="s6">6. 四个名字：LVS / HAProxy / Nginx / Envoy</h2>
+
+<p>这四个名字你迟早会在生产环境、面试、架构文档里反复遇到。一句话各自定位：</p>
+
+<table>
+<tr><th>名字</th><th>层级</th><th>定位 & 一句话</th></tr>
+<tr><td><span class="term">LVS</span><br>(IPVS)</td><td>L4</td><td>Linux 内核自带的 L4 LB，工作在内核态，性能极高（百万级），常做最外层入口。K8s 的 kube-proxy IPVS 模式就用它。</td></tr>
+<tr><td><span class="term">HAProxy</span></td><td>L4+L7</td><td>老牌、极稳、配置直观的软件 LB，TCP/HTTP 都能做。对延迟敏感的金融、数据库代理场景常见。</td></tr>
+<tr><td><span class="term">Nginx</span></td><td>L7(+L4)</td><td>你最该熟的——既是 Web 服务器又是反向代理/LB，event-driven + epoll（Day 11 学过），生态最大。明天 Day 24 专门深挖它。</td></tr>
+<tr><td><span class="term">Envoy</span></td><td>L7</td><td>云原生时代的「新贵」，CNCF 项目，动态配置（xDS API）、可观测性强，是 Istio service mesh（Day 108）的数据面 sidecar。</td></tr>
+</table>
+
+<p>三个关键区分点帮你记住：</p>
+<ul>
+  <li><strong>内核态 vs 用户态</strong>：LVS 在内核里转发（快但功能少）；HAProxy/Nginx/Envoy 是用户态进程（慢一档但灵活、能解析 HTTP）。</li>
+  <li><strong>静态配置 vs 动态配置</strong>：Nginx/HAProxy 传统上改配置要 reload；Envoy 通过 xDS 协议<span class="key">运行时动态下发</span>后端列表和路由规则，无需重启——这正是它在「后端 Pod 频繁增删」的 K8s 环境里胜出的原因。</li>
+  <li><strong>独立 LB vs Sidecar</strong>：前三个通常是「集中式」LB（流量都经过它）；Envoy 在 service mesh 里被部署成每个 Pod 旁边一个 sidecar，做「客户端侧负载均衡」，去掉了中心瓶颈。</li>
+</ul>
+
+<h2 id="s7">7. 云负载均衡：把这一切托管给云厂商</h2>
+
+<p>自己搭 LVS+Nginx 要操心高可用（LB 自己也不能是单点）、扩容、证书。云厂商把这些打包成<span class="term">托管负载均衡服务</span>，开箱即用、自动高可用、自动扩容。你只需要点几下或写几行 IaC。三大云的命名（记一个对照表就够）：</p>
+
+<table>
+<tr><th>类型</th><th>AWS</th><th>阿里云</th><th>GCP</th></tr>
+<tr><td>L4 网络 LB</td><td>NLB</td><td>NLB / CLB</td><td>Network LB</td></tr>
+<tr><td>L7 应用 LB</td><td>ALB</td><td>ALB</td><td>Application LB</td></tr>
+</table>
+
+<p>云 LB 的几个共同特点：① 本身跨多可用区（AZ）部署，没有单点；② 自带健康检查、TLS 终止、WAF 集成；③ 按流量/连接计费；④ 能和云的自动伸缩组（ASG）联动——后端机器自动增减时，LB 后端列表自动更新。在 K8s 里，你创建一个 <code>type: LoadBalancer</code> 的 Service，云厂商的 controller 就会自动帮你开一个云 LB 并把 VIP 指过来（Day 74 会讲）。</p>
+
+<div class="note">
+<strong>一个完整链路预览</strong>（明天起会逐步展开）：用户 → DNS 解析到云 L7 LB 的 VIP → 云 ALB 做 TLS 终止 + 按路径路由 → 转发到 K8s Ingress（Nginx/Envoy）→ Service（kube-proxy/IPVS 做 L4 分发）→ 落到某个 Pod。<span class="key">同一个请求会被「负载均衡」好几次</span>，每一层用的算法和层级都可能不同。这就是现代分布式系统的真实样子。
+</div>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>① 推理调度即安全边界。</strong> 把 LLM 请求按 least-connections 还是按 hash 路由，不只是性能问题。如果用「prompt 前缀一致性哈希」最大化 KV cache 命中，就意味着<span class="key">不同用户的请求可能共享同一张卡的缓存</span>——一旦 prefix caching 实现有缺陷，A 用户的缓存内容可能泄露给 B 用户。负载均衡策略直接决定了多租户隔离的攻击面（Day 48 GPU 多租户安全、Day 55 推理服务攻击面会深挖）。</p>
+
+<p><strong>② 健康检查是 DoS 的放大器也是探测点。</strong> 攻击者如果能让你的 <code>/healthz</code> 误判（比如构造请求耗尽某资源使探活超时），就能让 LB 把健康机器误摘，制造「自我 DoS」。反过来，一个暴露的 <code>/healthz</code> 也会泄露后端拓扑、版本、依赖状态——设计探活端点时要在「足够反映真实健康」和「不泄露内部信息」之间权衡。</p>
+
+<p><strong>③ Sticky session 与会话劫持。</strong> 基于 Cookie 的会话保持，如果那个 affinity Cookie 没设 <code>HttpOnly/Secure</code>、可被预测或篡改，攻击者就能强制把自己的请求绑到特定后端，用于探测、缓存投毒或绕过限流。Agent 平台里「同一会话的多轮工具调用落同一执行器」如果靠不安全的 sticky 实现，可能被劫持上下文。</p>
+
+<p><strong>④ L7 LB 是 prompt injection 防御的天然落点。</strong> 因为 L7 能解析 HTTP body，它是部署「请求级安全策略」的理想位置：在 LB/网关层做输入长度限制、速率限制、敏感字段过滤、WAF 规则，能在请求触达昂贵的 GPU 之前就拦掉恶意/超量请求。把第一道防线放在 L7 网关，是 Agent 安全纵深防御的标准做法（Day 104 API 安全、Day 160 攻击面综述会系统讲）。</p>
+
+<p><strong>⑤ 一致性哈希与限流的分布式难题。</strong> 多个 LB 实例各自独立限流会失准（每台只看到 1/N 流量）。生产里常用一致性哈希把「同一个用户/API key 的请求」路由到同一限流节点，或把计数外置到 Redis（Day 123）。如果限流被负载均衡策略「绕过」，攻击者就能用一个 key 打出超额请求耗尽 GPU——这是 LLM API 滥用的常见路径。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手</strong>：把第 4 节那段一致性哈希的 Python 代码 copy 下来运行。然后做个实验：先用 3 个节点 <code>["gpu-1","gpu-2","gpu-3"]</code>，对 10000 个随机 key 统计落到各节点的数量（应大致均匀）。再加一个节点 <code>"gpu-4"</code>，统计「归属发生变化的 key 占比」，验证它接近 1/4 而不是接近 1。对比一下：把 <code>get</code> 改成朴素的 <code>hash(key) % N</code>，加节点后变化占比会是多少？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察</strong>：在你本机或任意一台 Linux 上跑 <code>curl -I https://www.taobao.com</code>（或任意大站），看响应 Header 里有没有 <code>Server:</code>、<code>Via:</code>、或类似 <code>X-Cache</code> 的字段——这些常常暴露了它前面挂的是什么 LB/CDN。再多 <code>curl</code> 几次同一个域名前先 <code>dig +short</code> 它，观察一个域名是不是解析到多个 IP（DNS 轮询本身就是一种最朴素的负载均衡）。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考</strong>：你的 vLLM 推理集群有 8 张 GPU，请求耗时方差极大（有人问「你好」，有人贴 30k token 长文）。现在要在「least connections」和「prompt 前缀一致性哈希」之间选调度策略。前者让负载更均匀，后者让 KV cache 命中率更高但可能造成热点。你会怎么权衡？能不能设计一个「两者结合」的策略（提示：能不能在一致性哈希的基础上，给单台机器设一个并发上限，超了就 fallback 到次优节点）？这正是真实推理网关要解决的工程难题。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 24 · Nginx 深入</strong>。今天我们认识了 Nginx 这个名字，明天把它彻底拆开：master/worker 进程模型、它为什么用 event-driven + epoll（Day 11 的伏笔在这里收）、配置文件的层级结构（http/server/location）、反向代理 vs 正向代理的区别、upstream 怎么配后端、gzip 与缓存、以及生产必备的限流指令 <code>limit_req</code> / <code>limit_conn</code> 和 SSL 终止。读完明天你就能自己写一份能用的 Nginx 反向代理配置。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
