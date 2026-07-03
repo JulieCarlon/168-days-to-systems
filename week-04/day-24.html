@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 24 · Nginx 深入</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 24 · Nginx 深入</h1>
+  <div class="meta">Week 04 · 周三 · 2026-07-03 · 主线：网络 Part 2 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：几乎每一个你部署过的 LLM 服务，请求在到达你的 Python 代码之前，都先经过了一层 Nginx——它决定了谁能进来、以什么速率进来、走哪个后端、要不要压缩、TLS 在哪里终止。今天我们把这层「守门人」彻底拆开。你会理解一个只用一两个进程的 Nginx，凭什么能扛住几万条并发连接（答案是 Day 11 讲过的 <code>epoll</code>）；会读懂那份让无数人头疼的配置文件的<span class="key">层级结构</span>；会亲手写出<span class="key">反向代理、upstream 负载均衡、gzip 压缩、proxy_cache 缓存、limit_req 限流、SSL 终止</span>这六件生产必备武器。读完今天，你再看任何一份 <code>nginx.conf</code>，都不再是天书。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">Nginx 是什么 · master/worker 进程模型</a></li>
+  <li><a href="#s2">为什么 Nginx 这么快：事件驱动 + epoll</a></li>
+  <li><a href="#s3">配置文件的层级结构：上下文与指令继承</a></li>
+  <li><a href="#s4">正向代理 vs 反向代理</a></li>
+  <li><a href="#s5">upstream：反向代理 + 负载均衡</a></li>
+  <li><a href="#s6">gzip 压缩与 proxy_cache 缓存</a></li>
+  <li><a href="#s7">限流：limit_req（漏桶）与 limit_conn</a></li>
+  <li><a href="#s8">SSL / TLS 终止（SSL termination）</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. Nginx 是什么 · master/worker 进程模型</h2>
+
+<p><span class="term">Nginx</span>（读作 "engine-x"）是一个高性能的 <strong>HTTP 服务器 + 反向代理 + 负载均衡器</strong>。2004 年由俄罗斯工程师 Igor Sysoev 写出来，就是为了解决一个具体问题：<span class="key">C10K 问题</span>——如何让一台机器同时处理一万条并发连接。老一代的 Apache 用「一个连接一个进程/线程」的模型，一万条连接要一万个线程，光是上下文切换（Day 04、Day 05 讲过）和内存就把机器压垮了。Nginx 换了一套完全不同的架构。</p>
+
+<p>启动 Nginx 后，你 <code>ps</code> 会看到它是<strong>一组进程</strong>，而不是一个：</p>
+
+<pre><code>$ ps -ef | grep nginx
+root      1201     1  0  nginx: master process /usr/sbin/nginx
+www-data  1202  1201  0  nginx: worker process
+www-data  1203  1201  0  nginx: worker process
+www-data  1204  1201  0  nginx: worker process
+www-data  1205  1201  0  nginx: worker process</code></pre>
+
+<p>这就是 <span class="term">master/worker 模型</span>，分工非常清晰：</p>
+
+<table>
+<tr><th>角色</th><th>数量</th><th>身份</th><th>职责</th></tr>
+<tr><td>master 进程</td><td>1 个</td><td>root（特权）</td><td>读配置、绑定 80/443 端口、fork worker、平滑重载、监控并重启崩溃的 worker。<strong>不处理任何用户请求。</strong></td></tr>
+<tr><td>worker 进程</td><td>通常 = CPU 核数</td><td>非特权用户（www-data/nginx）</td><td>真正处理所有连接与请求。彼此独立、无共享状态（除少量共享内存）。</td></tr>
+</table>
+
+<p><strong>类比</strong>：master 是餐厅经理，只做开门、排班、盯着谁病了顶上；worker 是服务员，每人负责一片桌子端菜。经理不端盘子，服务员不管排班。这种分离带来两个直接好处：</p>
+
+<ul>
+  <li><strong>安全</strong>：只有 master 用 root 去绑定特权端口（1024 以下需要 root），worker 全部降权成普通用户运行。就算某个 worker 被攻破，攻击者拿到的也只是 <code>www-data</code> 权限，碰不到 root——这正是 Day 06 讲的<span class="key">最小权限原则</span>的教科书应用。</li>
+  <li><strong>可靠 + 可平滑升级</strong>：某个 worker 崩了，master 立刻 fork 一个新的补上，服务不中断。改配置后执行 <code>nginx -s reload</code>，master 用新配置启新 worker、让老 worker 处理完手头连接再退出——<span class="key">重载配置全程零丢包</span>。</li>
+</ul>
+
+<p>worker 数量由 <code>worker_processes</code> 指令控制，惯例设成 <code>auto</code>（等于 CPU 核数）。为什么正好是核数？因为每个 worker 是单线程的，一个核跑一个 worker，既跑满所有核，又避免 worker 之间抢核导致的上下文切换。这与你熟悉的「多开线程池」思路截然相反——Nginx 的哲学是<strong>进程数固定且少，靠单进程内的事件循环榨干每一个核</strong>。这就引出了第二节的核心问题。</p>
+
+<h2 id="s2">2. 为什么 Nginx 这么快：事件驱动 + epoll</h2>
+
+<p>一个 worker 进程、单线程，怎么可能同时伺候上万条连接？如果你用 Python 的思路写一个服务器：</p>
+
+<pre><code># 传统「阻塞式」写法——每条连接占一个线程
+def handle(conn):
+    data = conn.recv(4096)   # 这里会「阻塞」，线程卡住直到数据到达
+    process(data)
+    conn.send(response)
+
+for conn in accept_loop():
+    threading.Thread(target=handle, args=(conn,)).start()  # 一连接一线程</code></pre>
+
+<p>问题在 <code>conn.recv()</code> 这一行：网络数据没到时，这个线程什么也做不了，只能<strong>干等（阻塞）</strong>。一万条连接就要一万个线程干等，绝大多数时间都浪费在「等」上。Nginx 不这么干。它用的是 Day 11 你已经学过的 <span class="term">I/O 多路复用（epoll）</span>——一个 worker 的核心就是一个 <span class="key">事件循环（event loop）</span>：</p>
+
+<div class="ascii">worker 进程内部（单线程事件循环）：
+
+  ┌─────────────────────────────────────────────┐
+  │  epoll_wait()  ← 一次系统调用，问内核：       │
+  │  「我盯着的这 8000 条连接里，哪些现在有事？」   │
+  │                                             │
+  │   内核返回：conn#12 可读, conn#88 可写,       │
+  │            conn#301 有新连接...（就绪列表）    │
+  └───────────────┬─────────────────────────────┘
+                  │ 只处理「就绪」的那几条，不碰其余
+                  ▼
+     for ev in ready_events:
+         if ev.readable:  读请求、解析、转发给后端
+         if ev.writable:  把响应写回客户端
+                  │
+                  └──► 处理完立刻回到 epoll_wait，继续下一轮</div>
+
+<p>关键转变：<strong>线程再也不会「卡」在某一条连接上</strong>。谁有数据就处理谁，没数据的连接只是内核里的一个 fd，不占任何 CPU。回顾 Day 11 的核心结论：<code>epoll</code> 的开销与「就绪的连接数」成正比，而不是与「总连接数」成正比。所以维护 5 万条空闲连接几乎不花 CPU，只花一点内存。这就是单线程扛住 C10K 的秘密：<span class="key">用一个 epoll 循环代替一万个干等的线程</span>。</p>
+
+<div class="note">
+<strong>一句话对比</strong>：Apache（prohibit-fork 模型）是「10000 个服务员每人守一桌，多数时间在发呆」；Nginx 是「1 个眼观六路的服务员，哪桌举手就冲哪桌，从不站着发呆」。前者被上下文切换和内存压垮，后者把单核 CPU 榨到极致。这也是为什么 <code>worker_connections</code>（单 worker 能开的连接数）默认能设到 <code>10240</code> 甚至更高。
+</div>
+
+<p>你在 Day 22 已经知道，LLM 流式响应（SSE）会让每条连接长时间挂着（几十秒地吐 token）。这种「连接多、每条又慢又长」的场景，正是 Nginx 事件驱动模型的主场——挂着的连接不占线程，只占 fd。</p>
+
+<h2 id="s3">3. 配置文件的层级结构：上下文与指令继承</h2>
+
+<p>Nginx 的配置（默认 <code>/etc/nginx/nginx.conf</code>）之所以让新手崩溃，是因为没抓住它的<strong>树状嵌套结构</strong>。它由两种东西组成：<span class="term">指令（directive）</span>和<span class="term">上下文（context / block）</span>。指令是「键 值;」一行一条；上下文是用 <code>{ }</code> 括起来的一块，可以嵌套。核心的层级从外到内是：</p>
+
+<pre><code># ==== main 上下文（文件最外层，全局设置）====
+user  www-data;
+worker_processes  auto;          # ← 第 1 节讲的 worker 数
+
+events {                          # ==== events 上下文：连接处理方式 ====
+    worker_connections  10240;   # ← 第 2 节讲的单 worker 连接上限
+    use epoll;                   # Linux 上用 epoll（通常自动选好）
+}
+
+http {                           # ==== http 上下文：所有 HTTP 相关配置 ====
+    include       mime.types;
+    gzip on;                     # ← 在 http 层开，下面所有 server 都继承
+
+    upstream llm_backend {       # ==== upstream 上下文：定义一组后端 ====
+        server 127.0.0.1:8000;
+        server 127.0.0.1:8001;
+    }
+
+    server {                     # ==== server 上下文：一个「虚拟主机」====
+        listen       443 ssl;
+        server_name  api.example.com;
+
+        location /v1/ {          # ==== location 上下文：按 URL 路径匹配 ====
+            proxy_pass http://llm_backend;
+        }
+        location /healthz {
+            return 200 "ok";
+        }
+    }
+}</code></pre>
+
+<p>把它想象成一棵树：<code>main → events / http → server → location</code>。理解配置的<strong>唯一心法</strong>是这条规则：</p>
+
+<p style="background: var(--callout-bg); padding: 16px; border-radius: 6px; border-left: 4px solid var(--accent);">
+<strong>指令向内层「继承」，内层可以「覆盖」外层。</strong>你在 <code>http</code> 层写 <code>gzip on;</code>，则所有 <code>server</code> 和 <code>location</code> 默认都开了 gzip；某个 <code>location</code> 里写 <code>gzip off;</code> 就单独关掉它。
+</p>
+
+<p>各层的语义：<code>http</code> 是所有 HTTP 配置的总容器；一个 <code>server</code> 块 = 一个虚拟主机，靠 <code>listen</code>（端口）+ <code>server_name</code>（域名）来区分——同一个 80 端口上，Nginx 靠请求里的 <code>Host</code> 头把请求分发给对应的 server；<code>location</code> 则按 URL 路径进一步匹配，是你写规则最多的地方。location 的匹配有优先级：<code>=</code>（精确）&gt; <code>^~</code>（前缀且不再正则）&gt; <code>~</code>/<code>~*</code>（正则/忽略大小写正则）&gt; 普通前缀。改完配置后务必两步走：</p>
+
+<pre><code>sudo nginx -t          # 先测试配置语法是否正确（生产环境救命命令）
+sudo nginx -s reload   # 语法 OK 再平滑重载（第 1 节讲的零丢包重载）</code></pre>
+
+<h2 id="s4">4. 正向代理 vs 反向代理</h2>
+
+<p>「代理」就是中间人：客户端和服务器不直接说话，中间夹一层替它们转发。方向不同，名字就不同，这是最容易搞混的一对概念。</p>
+
+<div class="ascii">正向代理（forward proxy）—— 代理「客户端」，服务器不知道真实客户是谁
+   你的公司内网
+   [员工浏览器] ──► [公司代理服务器] ──► [google.com]
+                    (翻墙梯子/科学上网也是这类)
+   服务器看到的来源是「代理」，客户端主动配置要走这个代理
+
+反向代理（reverse proxy）—— 代理「服务器」，客户端不知道真实后端是谁
+   [用户浏览器] ──► [Nginx 反向代理] ──┬─► [后端 A: vLLM :8000]
+   (公网 443)       (api.example.com)   ├─► [后端 B: vLLM :8001]
+                                       └─► [后端 C: Python API]
+   用户以为只在跟 Nginx 说话，完全看不到背后有几台后端</div>
+
+<p>一句话记忆：<span class="key">正向代理站在客户端这边、替客户端出去；反向代理站在服务器这边、替服务器接客</span>。判断标准是「代理离谁近、替谁隐身」。你做 LLM 服务用到的<strong>几乎全是反向代理</strong>——Nginx 挡在最前面，对外暴露一个统一的 `api.example.com:443`，背后可能是一群 vLLM 实例、几个 Python 网关。反向代理带来的价值：</p>
+
+<ul>
+  <li><strong>隐藏与保护后端</strong>：后端 IP、端口、拓扑对外全不可见，攻击面收窄到 Nginx 一层。</li>
+  <li><strong>统一入口做横切</strong>：TLS 终止、限流、缓存、压缩、鉴权、日志，全在这一层集中做，后端只管业务逻辑。</li>
+  <li><strong>负载均衡与灰度</strong>：把流量分发到多个后端（下一节），或按比例切到新版本。</li>
+</ul>
+
+<p>最简反向代理只要一条 <code>proxy_pass</code>：</p>
+
+<pre><code>server {
+    listen 80;
+    server_name api.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;     # 把请求转发给本机 8000 的后端
+        proxy_set_header Host $host;           # 把原始 Host 头传给后端
+        proxy_set_header X-Real-IP $remote_addr;  # 把真实客户端 IP 告诉后端
+    }
+}</code></pre>
+
+<p><code>proxy_set_header</code> 很关键：请求经过代理后，后端直接看到的「来源 IP」是 Nginx 的 IP。要让后端知道真实用户 IP，必须由 Nginx 用 <code>X-Real-IP</code> / <code>X-Forwarded-For</code> 头传过去。<strong>这也是安全上的一个坑</strong>——后端如果无脑信任 <code>X-Forwarded-For</code>，攻击者可以伪造它来绕过基于 IP 的限流或封禁（这个我们放到连结部分细说）。</p>
+
+<h2 id="s5">5. upstream：反向代理 + 负载均衡</h2>
+
+<p>当后端不止一个实例时，用 <code>upstream</code> 块定义一组后端，Nginx 就成了<span class="term">负载均衡器</span>（这与 Day 23 的 L4/L7 负载均衡呼应，Nginx 是典型的 L7 应用层 LB）：</p>
+
+<pre><code>upstream llm_backend {
+    # 默认调度算法：加权轮询（weighted round-robin）
+    server 10.0.0.1:8000 weight=3;      # 权重 3，性能好的机器多分点
+    server 10.0.0.2:8000 weight=1;
+    server 10.0.0.3:8000 backup;        # 备用，只有前面全挂了才启用
+
+    # 被动健康检查：某后端连续失败 3 次，摘除 30 秒
+    # （写在每个 server 上：max_fails=3 fail_timeout=30s）
+}
+
+server {
+    location /v1/ {
+        proxy_pass http://llm_backend;   # 指向 upstream 的名字，而非具体 IP
+        proxy_read_timeout 300s;         # LLM 推理慢，读超时要调大！
+    }
+}</code></pre>
+
+<p>Nginx 内置几种<span class="key">调度算法</span>（呼应 Day 23）：</p>
+
+<table>
+<tr><th>算法</th><th>指令</th><th>怎么分</th><th>适用</th></tr>
+<tr><td>加权轮询</td><td>（默认）</td><td>按权重依次轮流</td><td>后端无状态、性能相近</td></tr>
+<tr><td>最少连接</td><td><code>least_conn;</code></td><td>发给当前活跃连接最少的后端</td><td><strong>LLM 场景首选</strong>——请求耗时差异大</td></tr>
+<tr><td>IP 哈希</td><td><code>ip_hash;</code></td><td>同一客户端 IP 固定打到同一后端</td><td>需要会话粘性（sticky session）</td></tr>
+</table>
+
+<p>对 LLM 服务，<code>least_conn</code> 通常比轮询更合理：一次推理请求可能跑 200ms 也可能跑 30s，轮询会把新请求盲目塞给一个正在跑长任务、已经排满队的后端；最少连接则天然把请求导向最空闲的实例。<strong>健康检查</strong>也至关重要——Nginx 开源版自带「被动」健康检查（<code>max_fails</code> + <code>fail_timeout</code>）：转发失败到某后端达到阈值，就临时把它摘出去，隔一阵再试。这样某个 vLLM 实例 OOM 崩了，Nginx 会自动绕开它，用户几乎无感。</p>
+
+<h2 id="s6">6. gzip 压缩与 proxy_cache 缓存</h2>
+
+<p>这两个都是「省带宽 / 提速度」的经典手段，在 Nginx 里各一行开关背后是重要的机制。</p>
+
+<h3>gzip 压缩</h3>
+
+<p><span class="term">gzip</span> 让 Nginx 在把响应发回客户端前先压缩，文本类内容（JSON、HTML、JS、CSS）通常能压到原来的 <strong>20%~30%</strong>。它靠 HTTP 的内容协商完成：浏览器在请求头带 <code>Accept-Encoding: gzip</code> 表示「我能解压」，Nginx 压缩后在响应头回 <code>Content-Encoding: gzip</code>。</p>
+
+<pre><code>http {
+    gzip on;
+    gzip_types application/json text/plain text/css application/javascript;
+    gzip_min_length 1024;     # 小于 1KB 的不压（压缩本身也有 CPU 开销）
+    gzip_comp_level 5;        # 压缩级别 1~9，越高越小但越费 CPU，5 是平衡点
+}</code></pre>
+
+<div class="note">
+<strong>LLM 服务的一个反直觉点</strong>：SSE 流式响应<strong>不要开 gzip</strong>。gzip 需要攒够一块数据才能压缩输出，这会让「逐 token 吐出」的流式效果被缓冲住、卡顿。流式接口通常显式关掉 gzip 并设 <code>proxy_buffering off;</code>，让 token 一产生就立即透传给用户——这是保证「打字机效果」流畅的关键配置。
+</div>
+
+<h3>proxy_cache 缓存</h3>
+
+<p>反向代理可以把后端的响应<strong>缓存</strong>在 Nginx 本地，下次相同请求直接由 Nginx 返回，根本不打扰后端。对「结果稳定、重复请求多」的接口（模型列表、静态配置、公开的 embedding 查询）能极大减轻后端压力：</p>
+
+<pre><code>http {
+    # 定义一块缓存区：磁盘路径 + 内存里的 key 索引（10MB）+ 最大 1GB
+    proxy_cache_path /var/cache/nginx keys_zone=api_cache:10m max_size=1g
+                     inactive=60m;
+
+    server {
+        location /v1/models {
+            proxy_pass http://llm_backend;
+            proxy_cache api_cache;
+            proxy_cache_valid 200 5m;      # 200 响应缓存 5 分钟
+            add_header X-Cache-Status $upstream_cache_status;  # HIT/MISS 可观测
+        }
+    }
+}</code></pre>
+
+<p>响应头里的 <code>X-Cache-Status</code> 会告诉你这次是 <code>HIT</code>（命中缓存，没打后端）还是 <code>MISS</code>（未命中，回源了）。<strong>但对 LLM 要极其小心</strong>：绝大多数推理请求是「一次一变」的（prompt 不同、带随机采样），缓存命中率极低还可能返回错误的旧结果；缓存只适合真正幂等、无个性化的接口。缓存与安全的交叉点——<span class="key">缓存投毒（cache poisoning）</span>和<span class="key">跨用户缓存泄露</span>——我们放到连结部分。</p>
+
+<h2 id="s7">7. 限流：limit_req（漏桶）与 limit_conn</h2>
+
+<p>限流是 Nginx 作为守门人最重要的防御能力，用来抵挡突发流量、爬虫、以及针对 LLM 的<strong>资源耗尽攻击</strong>。Nginx 提供两个正交的维度。</p>
+
+<h3>limit_req：限制「请求速率」（漏桶算法）</h3>
+
+<p><code>limit_req</code> 实现的是<span class="term">漏桶算法（leaky bucket）</span>：请求像水一样倒进桶里，桶底以恒定速率漏出（= 允许的处理速率），桶满了就溢出（多余请求被拒或排队）。</p>
+
+<pre><code>http {
+    # 定义一个限流区：以客户端 IP 为 key，平均速率 10 请求/秒，索引占 10MB
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+
+    server {
+        location /v1/ {
+            limit_req zone=api_limit burst=20 nodelay;
+            # rate=10r/s：稳态每秒放行 10 个
+            # burst=20  ：允许瞬时积压 20 个的缓冲（应对正常抖动）
+            # nodelay   ：burst 内的请求立即处理，不强行排队等待
+            proxy_pass http://llm_backend;
+        }
+    }
+}</code></pre>
+
+<p>三个参数的配合是精髓：<code>rate</code> 是长期平均速率，<code>burst</code> 是允许的短时突发桶容量，<code>nodelay</code> 决定突发的请求是「立即放行」还是「匀速排队」。超出 burst 的请求会被返回 <code>503</code>。<code>$binary_remote_addr</code> 是用二进制形式存客户端 IP（比字符串省内存），10MB 的 zone 大约能存 16 万个 IP 的状态。</p>
+
+<h3>limit_conn：限制「并发连接数」</h3>
+
+<p><code>limit_conn</code> 限制的是「同一时刻」某个 key 的活跃连接数，与速率无关：</p>
+
+<pre><code>http {
+    limit_conn_zone $binary_remote_addr zone=conn_limit:10m;
+
+    server {
+        location /v1/chat {
+            limit_conn conn_limit 5;   # 每个 IP 最多 5 条并发连接
+            proxy_pass http://llm_backend;
+        }
+    }
+}</code></pre>
+
+<p>两者解决不同问题：<span class="key">limit_req 防「打得太快」，limit_conn 防「占得太多」</span>。对 LLM 流式接口，<code>limit_conn</code> 尤其有用——单条 SSE 连接可能挂 30 秒并持续消耗一个后端的推理槽位，限制每个 IP 的并发连接数，能防止单个用户开几百条流式连接把你的 GPU 推理槽全占满（这是一种典型的<strong>慢速资源耗尽攻击</strong>）。生产实践通常两者叠加：既限速率又限并发。</p>
+
+<h2 id="s8">8. SSL / TLS 终止（SSL termination）</h2>
+
+<p><span class="term">SSL 终止</span>（也叫 TLS termination / TLS offloading）指的是：<strong>加密的 HTTPS 连接在 Nginx 这一层被解密，Nginx 到后端之间走明文 HTTP</strong>。回顾 Day 18 的 TLS 知识——TLS 握手、证书验证、对称加解密都是有成本的 CPU 密集操作，把它集中在 Nginx 层做，后端 Python/vLLM 就只处理明文、专注业务。</p>
+
+<div class="ascii">   用户                Nginx（TLS 终止点）        后端
+   [浏览器] ══HTTPS/443══► [解密 · 验证 · 加密]  ──HTTP──► [vLLM :8000]
+            (TLS 加密隧道)   证书 & 私钥在这里         (内网明文，同一可信网络)
+                            ↑ 加密到此为止</div>
+
+<pre><code>server {
+    listen 443 ssl http2;              # 443 端口，启用 SSL 和 HTTP/2
+    server_name api.example.com;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;   # 证书链
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;     # 私钥（严格权限 600!）
+    ssl_protocols       TLSv1.2 TLSv1.3;   # 禁用老旧不安全的 TLS 1.0/1.1
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;  # 注意是 http://，到后端已是明文
+    }
+}
+
+# 把所有 80 的明文请求 301 跳转到 443
+server {
+    listen 80;
+    server_name api.example.com;
+    return 301 https://$host$request_uri;
+}</code></pre>
+
+<p>SSL 终止的好处：证书和私钥<strong>集中管理在一处</strong>（续期、轮转只改 Nginx），后端无需各自配 TLS；CPU 密集的加解密集中优化。它的<strong>安全前提</strong>是：Nginx 到后端的那段明文链路必须在<span class="key">可信网络</span>内（同一台机器的 loopback、或同一 VPC 的内网）。如果这段链路会跨越不可信网络，就要升级成 <code>proxy_pass https://...</code> 做「TLS 重加密」，或按 Day 18 讲的用 <span class="term">mTLS</span>（双向 TLS）保证后端只接受来自可信 Nginx 的连接——这正是 Week 16 零信任 / service mesh 会展开的话题。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. Nginx 是 LLM 服务的第一道安全闸门。</strong>你的 vLLM/推理网关不应该直接裸奔在公网。把 Nginx 放在最前面，就把「限流、TLS、鉴权、日志、隐藏后端」这些横切安全能力收敛到一层。攻击者扫描到的只有 Nginx，看不到后端拓扑、端口、版本——攻击面从「一群后端」收窄成「一层代理」。设计 Agent 安全产品的入口层时，这是默认起点。</p>
+
+<p><strong>2. limit_req / limit_conn 是抵御 LLM 资源耗尽攻击的第一层。</strong>Day 01 就埋过伏笔：攻击者用超长 prompt 或高频请求把你的 GPU 推理槽、显存打满，让正常用户无法服务（一种 DoS）。在 Nginx 层用 <code>limit_req</code> 卡请求速率、<code>limit_conn</code> 卡并发连接，是最廉价、最不可绕过的第一道闸——因为它在请求还没到达昂贵的推理层之前就拦掉了。但要记住这只是「第一层」：真正的 token 级配额、按用户的成本控制，还需要在应用层（Day 156 推理网关）做。</p>
+
+<p><strong>3. X-Forwarded-For 伪造会击穿你的 IP 限流。</strong>第 4 节埋的坑在这里引爆：如果你的限流或封禁是基于客户端 IP，而后端/Nginx 无脑信任请求头里的 <code>X-Forwarded-For</code>，攻击者只要每次请求伪造一个不同的 XFF 值，就能让每个「假 IP」都刚好卡在限流阈值以下，绕过整个限流体系。正确做法：只信任由<strong>你自己可信代理链</strong>设置的 XFF（用 <code>real_ip_header</code> + <code>set_real_ip_from</code> 指定可信来源），对外部传入的 XFF 一律覆盖或忽略。这是 Agent 网关做速率控制时必查的一个点。</p>
+
+<p><strong>4. proxy_cache 的跨用户泄露与缓存投毒。</strong>如果你给带鉴权/个性化的 LLM 接口错误地开了缓存，用户 A 的响应可能被缓存后返回给用户 B——<span class="key">跨用户数据泄露</span>。更隐蔽的是「缓存投毒」：攻击者构造一个带特殊头的请求，让 Nginx 缓存下一个被污染的响应，之后所有用户都拿到这个坏结果。原则：<strong>任何带用户身份、带敏感数据的接口默认不缓存</strong>；要缓存必须把用户身份纳入 cache key，并严格控制哪些请求头参与缓存。</p>
+
+<p><strong>5. SSL 终止后的「内网明文」是常被忽视的暴露面。</strong>很多人以为「上了 HTTPS 就安全了」，但 SSL 在 Nginx 终止后，Nginx→后端那段是明文 HTTP。如果 Agent 系统里有一个被攻破的 sidecar、或攻击者拿到了内网某个立足点，就能在这段明文链路上嗅探到完整的 prompt、模型输出、甚至用户会话。做威胁建模（Day 167 会正式学 STRIDE）时，这段「可信内网明文」必须显式标注为一个信任边界——高敏场景要用 mTLS 把它也加密上。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：起一个反向代理 + 限流</strong></p>
+<p>用 Docker 跑一个 Nginx，把它配成一个带限流的反向代理，后端用 Python 一行起个假服务。</p>
+<pre><code># 终端 A：起一个假后端（返回自己的时间戳）
+python3 -m http.server 8000
+
+# 写一个最小配置 mini.conf（放当前目录）：
+cat > mini.conf <<'EOF'
+events {}
+http {
+  limit_req_zone $binary_remote_addr zone=t:10m rate=2r/s;
+  server {
+    listen 80;
+    location / {
+      limit_req zone=t burst=3 nodelay;
+      proxy_pass http://host.docker.internal:8000;
+    }
+  }
+}
+EOF
+
+# 终端 B：用官方 nginx 镜像挂载这个配置
+docker run --rm -p 8080:80 -v "$PWD/mini.conf:/etc/nginx/nginx.conf:ro" nginx
+
+# 终端 C：快速打 10 个请求，观察被限流（部分返回 503）
+for i in $(seq 1 10); do curl -s -o /dev/null -w "%{http_code}\n" localhost:8080; done</code></pre>
+<p>问题：你看到几个 <code>200</code>、几个 <code>503</code>？把 <code>rate</code> 改成 <code>5r/s</code> 再打一遍，结果如何变化？（体会 rate 和 burst 的作用。）</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：看真实网站的响应头</strong></p>
+<p>用 curl 看几个大站的响应头，从中读出它们用了什么代理层做了什么：</p>
+<pre><code>curl -sI https://www.cloudflare.com | grep -iE "server|cache|content-encoding|via"
+curl -sI -H "Accept-Encoding: gzip" https://www.wikipedia.org | grep -i "content-encoding"</code></pre>
+<p>问题：哪些站的 <code>Server:</code> 头暴露了 nginx？哪些返回了 <code>Content-Encoding: gzip</code>？有没有看到 <code>X-Cache</code> 或 <code>CF-Cache-Status</code> 之类的缓存状态头？想一想：暴露 <code>Server: nginx/1.18.0</code> 这样的精确版本号，为什么是个（小）安全问题？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考题：给 LLM 网关设计限流</strong></p>
+<p>你要为一个公网 LLM 推理网关设计 Nginx 前置限流。已知：普通用户平均每秒发 1 个请求；每个流式请求会挂 10~40 秒；你有 8 个 vLLM 后端，总共约 32 个推理槽位。请回答：</p>
+<ol type="a">
+  <li>你会用 <code>limit_req</code> 还是 <code>limit_conn</code>，还是两个都用？各设成多少？为什么？</li>
+  <li>SSE 流式接口，你会不会开 gzip？会不会开 proxy_cache？为什么？</li>
+  <li>如果一个攻击者用 XFF 头伪造成千上万个不同 IP，你上面的限流会不会失效？怎么补救？</li>
+</ol>
+<p>提示：把第 7 节的两种限流维度、第 6 节 SSE 的两个坑、连结第 3 点的 XFF 陷阱串起来。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 25 · 服务通信进阶：服务发现、超时重试、熔断降级</strong>。今天我们让 Nginx 静态地写死了后端 IP，但真实微服务里后端是动态漂移的——实例随时扩缩容、崩溃重启。明天我们学<span class="term">服务发现</span>（Consul / etcd / Nacos 怎么让服务自动「登记」和「被找到」）、心跳健康检查，以及当后端不稳定时的三大韧性武器：<strong>超时、重试、熔断</strong>，还有限流算法的进一步细化。这是从「单机代理」走向「分布式服务网格」的关键一跳。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
