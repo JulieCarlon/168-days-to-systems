@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 26 · 服务通信动手（gRPC / .proto / Nginx / 压测 / SSE）</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+    --lab-bg: #f0f9ff;
+    --lab-border: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin { background: var(--callout-bg); border-left: 3px solid var(--accent-soft); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note { background: var(--callout-bg); border-left: 4px solid var(--accent-soft); padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .lab-block { background: var(--lab-bg); border-left: 4px solid var(--lab-border); border-radius: 6px; padding: 18px 22px; margin: 22px 0; }
+  .lab-block h3 { margin-top: 8px; color: #0369a1; }
+  .lab-step { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .lab-step .label { display: inline-block; background: #0369a1; color: white; font-size: 11px; padding: 1px 8px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+  .expect { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 3px; }
+  .expect strong { color: #92400e; }
+  .warn { background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: #991b1b; }
+  .connect { background: var(--callout-bg); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 18px 22px; margin: 16px 0; }
+  .exercise-num { display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; font-size: 12px; line-height: 22px; margin-right: 8px; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent-soft); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 26 · 🔧 LAB 服务通信动手：gRPC / .proto / Nginx / 压测 / SSE</h1>
+  <div class="meta">Week 04 · 周五 · 2026-07-06 · 主线：网络与服务通信（动手 LAB）· 预计 2h（少读多敲）</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：本周四天我们把应用层协议（REST / gRPC / SSE / WebSocket）、负载均衡、Nginx、服务发现都讲了个遍——但那些还停留在"知道"。今天把它们<strong>全部落到你自己机器上跑起来</strong>。我们用一条主线串起来：<span class="key">从零搭一个「迷你推理网关」</span>——底层是 gRPC 推理服务，中间是一个 HTTP/SSE 门面，最外层用 Nginx 做反向代理，最后用 <code>ab</code> / <code>wrk</code> 压测量化它到底能扛多少 QPS。全部命令 mac 可直接 copy-paste。今天结束，你会亲手体验到：为什么 gRPC 要写 <code>.proto</code>、为什么 SSE 过 Nginx 会"卡住不吐字"、以及一个真实的 vLLM 前面的网关长什么样。</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s0">今天要搭的架构（一张图看懂）</a></li>
+  <li><a href="#s1">LAB 1：写第一个 <code>.proto</code> 并生成 stub</a></li>
+  <li><a href="#s2">LAB 2：gRPC server + client 跑起来</a></li>
+  <li><a href="#s3">LAB 3：<code>.proto</code> 进阶——四种调用模式 &amp; 流式</a></li>
+  <li><a href="#s4">LAB 4：套一个 HTTP/SSE 门面（Flask）</a></li>
+  <li><a href="#s5">LAB 5：Nginx 反向代理 + SSE 不缓冲的坑</a></li>
+  <li><a href="#s6">LAB 6：<code>ab</code> / <code>wrk</code> 压测量化性能</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s0">0. 今天要搭的架构</h2>
+
+<p>先看全景。我们要在<strong>一台 mac 上</strong>启动三个进程，用三种不同的通信方式把它们连成一条链路。这正是真实 LLM 推理服务的极简骨架：</p>
+
+<div class="ascii">                        ┌──────────────────┐
+  curl / 浏览器  ──────▶ │   Nginx  :8080    │   反向代理 · 限流 · SSE 不缓冲
+                        └────────┬─────────┘
+                                 │  HTTP/1.1（明文）
+                        ┌────────▼─────────┐
+                        │  gateway.py :8000 │   Flask 门面
+                        │   POST /v1/predict│   ← 一元
+                        │   POST /v1/stream │   ← SSE 流式（逐 token 吐）
+                        └────────┬─────────┘
+                                 │  gRPC（HTTP/2 + protobuf 二进制）
+                        ┌────────▼─────────┐
+                        │  server.py :50051 │   gRPC 推理服务（假装是 vLLM）
+                        │   Predict()       │   ← 一元 RPC
+                        │   PredictStream() │   ← 服务端流式 RPC
+                        └───────────────────┘</div>
+
+<p>三段链路各用了本周学的一种协议范式：<span class="term">浏览器↔Nginx↔门面</span>走人类友好的 HTTP/JSON；<span class="term">门面↔推理服务</span>走机器友好的 gRPC（HTTP/2 多路复用 + Protobuf 紧凑二进制）；而<span class="term">流式那条线</span>用 SSE 把 gRPC 的 server-streaming 一路透传到浏览器。做一遍你就理解了：<span class="key">为什么内部服务间用 gRPC、对外用 HTTP/SSE</span>——这不是随便选的，是各自协议特性决定的。</p>
+
+<div class="note">
+<strong>环境准备（先做这一步）</strong>：建一个干净目录，装依赖。gRPC 的 Python 包叫 <code>grpcio</code>（运行时）+ <code>grpcio-tools</code>（编译 .proto 的工具），门面用 Flask。
+<pre><code>mkdir -p ~/lab-day26 &amp;&amp; cd ~/lab-day26
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install grpcio grpcio-tools flask
+# 压测工具：ab 是 mac 自带；wrk 需要 brew
+brew install wrk    # 没有 brew 可跳过，ab 已够用</code></pre>
+</div>
+
+<h2 id="s1">1. LAB 1：写第一个 <code>.proto</code> 并生成 stub</h2>
+
+<p>gRPC 的哲学是<strong>「接口即契约，契约即代码」</strong>。你不写 JSON 文档靠嘴约定字段，而是写一份 <code>.proto</code> 文件——它同时是<span class="key">文档、数据格式定义、和代码生成的源头</span>。写完用编译器一键生成两端的类型化代码，客户端和服务端永远对得上。</p>
+
+<div class="lab-block">
+<h3>LAB 1 步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>新建 <code>inference.proto</code>，定义一个「推理服务」。</div>
+<pre><code>// inference.proto
+syntax = "proto3";
+
+package inference;
+
+// service = 一组 RPC 方法的集合（相当于一个「类」）
+service Inference {
+  // 一元 RPC：一个请求 → 一个响应
+  rpc Predict (PredictRequest) returns (PredictReply);
+  // 服务端流式 RPC：一个请求 → 一串响应（关键字 stream）
+  rpc PredictStream (PredictRequest) returns (stream Token);
+}
+
+// message = 一个结构体。等号后面的数字是「字段编号」(tag)，不是默认值！
+message PredictRequest {
+  string prompt = 1;
+  int32  max_tokens = 2;
+}
+
+message PredictReply {
+  string text = 1;
+  int32  tokens_used = 2;
+}
+
+message Token {
+  string piece = 1;   // 一个 token 片段
+  int32  index = 2;   // 它是第几个 token
+}</code></pre>
+
+<div class="expect"><strong>关键理解</strong>：字段后面的 <code>= 1</code> <code>= 2</code> 是<strong>字段编号（tag）</strong>，不是赋默认值。Protobuf 在网络上传输时<strong>不传字段名</strong>，只传「编号 + 值」，这就是它比 JSON 省一半以上字节的原因（JSON 每条消息都要重复传 <code>"prompt":</code> 这样的键名）。编号一旦上线就<strong>永不能改</strong>——改了老客户端就解析错乱，这是 protobuf 向后兼容的铁律。</div>
+
+<div class="lab-step"><span class="label">B</span>用 <code>grpc_tools.protoc</code> 编译，生成 Python stub。</div>
+<pre><code>python3 -m grpc_tools.protoc -I. \
+    --python_out=. \
+    --grpc_python_out=. \
+    inference.proto
+
+# 看生成了什么
+ls -1 inference_pb2*.py</code></pre>
+
+<div class="expect"><strong>预期输出</strong>：多出两个文件——<code>inference_pb2.py</code>（消息类：<code>PredictRequest</code>、<code>Token</code> 等）和 <code>inference_pb2_grpc.py</code>（服务的骨架 <code>InferenceServicer</code> 和客户端 <code>InferenceStub</code>）。你一行手写代码都没写，两端的类型定义就都有了。打开 <code>inference_pb2_grpc.py</code> 扫一眼，你会看到里面已经把序列化/反序列化函数都接好了。</div>
+</div>
+
+<h2 id="s2">2. LAB 2：gRPC server + client 跑起来</h2>
+
+<p>有了 stub，服务端只要「填空」——继承生成的 <code>InferenceServicer</code>，实现里面的方法。我们不接真模型，用一个假的「echo 推理」占位（真实场景这里就是调 vLLM）。</p>
+
+<div class="lab-block">
+<h3>LAB 2 步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>写服务端 <code>server.py</code>。</div>
+<pre><code># server.py
+import time
+from concurrent import futures
+import grpc
+import inference_pb2
+import inference_pb2_grpc
+
+class InferenceServicer(inference_pb2_grpc.InferenceServicer):
+    # 一元 RPC：填这个方法
+    def Predict(self, request, context):
+        text = f"echo「{request.prompt}」"
+        return inference_pb2.PredictReply(text=text, tokens_used=len(text))
+
+    # 服务端流式 RPC：用 yield 一次吐一个 token
+    def PredictStream(self, request, context):
+        words = f"这是对『{request.prompt}』的流式回答 结束".split()
+        for i, w in enumerate(words):
+            time.sleep(0.3)                       # 模拟逐 token 生成的延迟
+            yield inference_pb2.Token(piece=w + " ", index=i)
+
+def serve():
+    # gRPC 用线程池并发处理请求；HTTP/2 单连接可多路复用
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    inference_pb2_grpc.add_InferenceServicer_to_server(InferenceServicer(), server)
+    server.add_insecure_port("[::]:50051")        # 明文，生产要用 TLS
+    server.start()
+    print("gRPC 推理服务已启动 :50051")
+    server.wait_for_termination()
+
+if __name__ == "__main__":
+    serve()</code></pre>
+
+<div class="lab-step"><span class="label">B</span>写客户端 <code>client.py</code>，两种调用都试。</div>
+<pre><code># client.py
+import grpc
+import inference_pb2
+import inference_pb2_grpc
+
+with grpc.insecure_channel("localhost:50051") as channel:
+    stub = inference_pb2_grpc.InferenceStub(channel)
+
+    # 一元调用：像调本地函数一样
+    reply = stub.Predict(inference_pb2.PredictRequest(prompt="你好", max_tokens=50))
+    print("[一元] ", reply.text, "| tokens=", reply.tokens_used)
+
+    # 流式调用：返回值是个可迭代对象，服务端 yield 一个你就收一个
+    print("[流式] ", end="", flush=True)
+    for tok in stub.PredictStream(inference_pb2.PredictRequest(prompt="流式测试")):
+        print(tok.piece, end="", flush=True)
+    print()</code></pre>
+
+<div class="lab-step"><span class="label">C</span>开两个终端窗口跑起来。</div>
+<pre><code># 终端 1（记得先 source .venv/bin/activate）
+python3 server.py
+
+# 终端 2
+python3 client.py</code></pre>
+
+<div class="expect"><strong>预期现象</strong>：一元调用瞬间返回 <code>echo「你好」</code>；流式调用会<strong>一个词一个词地蹦出来</strong>（每个间隔 0.3 秒）——这就是你在 ChatGPT 里看到的打字机效果的服务端本质。注意：<code>stub.Predict(...)</code> 用起来<strong>和调本地函数一模一样</strong>，但底层已经是一次跨进程的 HTTP/2 网络往返了。这种「远程调用伪装成本地调用」正是 RPC（Remote Procedure Call）的核心卖点。</div>
+</div>
+
+<div class="note">
+<strong>gRPC vs REST 你刚亲手体会到的差别</strong>：① 你没有手写任何"解析 JSON / 拼 URL / 设 header"的代码——契约生成搞定了一切；② 流式是<strong>一等公民</strong>，一个 <code>stream</code> 关键字就有了，REST 要靠 SSE/WebSocket 额外造；③ 传的是二进制，抓包看不到明文（这既是性能优点，也是调试痛点）。
+</div>
+
+<h2 id="s3">3. LAB 3：<code>.proto</code> 进阶——四种调用模式</h2>
+
+<p>gRPC 一共有四种调用模式，由 <code>.proto</code> 里 <code>stream</code> 关键字加在<strong>请求侧还是响应侧</strong>决定。你已经玩过前两种，把四种放一起对比记忆：</p>
+
+<table>
+<tr><th>模式</th><th>proto 写法</th><th>典型 LLM 场景</th></tr>
+<tr><td>一元 Unary</td><td><code>rpc F(Req) returns (Rep)</code></td><td>短文本分类、embedding 单条</td></tr>
+<tr><td>服务端流式</td><td><code>rpc F(Req) returns (stream Rep)</code></td><td><strong>逐 token 生成</strong>（最常用）</td></tr>
+<tr><td>客户端流式</td><td><code>rpc F(stream Req) returns (Rep)</code></td><td>上传长音频/大文档分块喂入</td></tr>
+<tr><td>双向流式</td><td><code>rpc F(stream Req) returns (stream Rep)</code></td><td>实时语音对话、多轮 Agent</td></tr>
+</table>
+
+<div class="lab-block">
+<h3>LAB 3 步骤（观察 protobuf 到底省了多少字节）</h3>
+
+<div class="lab-step"><span class="label">A</span>直接在 Python 里量一条消息的二进制大小，和等价 JSON 对比。</div>
+<pre><code>python3 - &lt;&lt;'PY'
+import json, inference_pb2
+
+msg = inference_pb2.PredictRequest(prompt="hello world", max_tokens=128)
+pb_bytes = msg.SerializeToString()                 # protobuf 二进制
+js_bytes = json.dumps({"prompt": "hello world",
+                       "max_tokens": 128}).encode() # 等价 JSON
+
+print("protobuf:", len(pb_bytes), "字节 →", pb_bytes)
+print("json    :", len(js_bytes), "字节 →", js_bytes)
+PY</code></pre>
+
+<div class="expect"><strong>预期</strong>：protobuf 大约 17 字节，JSON 大约 40+ 字节。差距来自——JSON 把 <code>"prompt"</code>、<code>"max_tokens"</code> 这些<strong>键名当数据反复传</strong>，还要传引号、冒号、括号；protobuf 只传「字段编号 1 + 长度 + 内容」。消息越大、字段越多，差距越夸张。这就是内部高频服务间选 gRPC 的硬理由：<span class="key">同样带宽能塞更多请求</span>。</div>
+
+<div class="lab-step"><span class="label">B</span>用 <code>grpcurl</code>（gRPC 版的 curl）在命令行直接调服务，无需写客户端。</div>
+<pre><code>brew install grpcurl
+# proto3 默认没开反射，用 -proto 指定契约文件即可
+grpcurl -plaintext -proto inference.proto \
+  -d '{"prompt": "命令行调用", "max_tokens": 20}' \
+  localhost:50051 inference.Inference/Predict</code></pre>
+
+<div class="expect"><strong>意义</strong>：gRPC 因为是二进制，不能像 REST 那样直接 <code>curl</code> 调试——这是它最大的工程痛点。<code>grpcurl</code> 就是为解决这个而生的工具。记住这个工具，以后排查内部 gRPC 服务时你会天天用它。</div>
+</div>
+
+<h2 id="s4">4. LAB 4：套一个 HTTP/SSE 门面</h2>
+
+<p>gRPC 好用，但<strong>浏览器原生调不了 gRPC</strong>（浏览器无法直接控制 HTTP/2 帧，只能走 gRPC-Web + 代理）。所以真实架构里，对外那一层几乎都是 HTTP/JSON。我们写一个 Flask 门面：对内用 gRPC 调推理服务，对外暴露普通 HTTP，并用 <span class="term">SSE（Server-Sent Events）</span>把流式透传给浏览器。</p>
+
+<p>SSE 是本周重点：它就是一个<strong>「一直不结束的 HTTP 响应」</strong>，服务器持续往里写 <code>data: xxx\n\n</code> 格式的文本，浏览器用 <code>EventSource</code> 逐条收。比 WebSocket 简单得多，且天然适配「服务器单向推、客户端只收」的 LLM 流式场景。</p>
+
+<div class="lab-block">
+<h3>LAB 4 步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>写门面 <code>gateway.py</code>。</div>
+<pre><code># gateway.py
+import json
+import grpc
+from flask import Flask, request, Response, stream_with_context
+import inference_pb2
+import inference_pb2_grpc
+
+app = Flask(__name__)
+channel = grpc.insecure_channel("localhost:50051")
+stub = inference_pb2_grpc.InferenceStub(channel)
+
+@app.route("/v1/predict", methods=["POST"])
+def predict():
+    prompt = request.json.get("prompt", "")
+    reply = stub.Predict(inference_pb2.PredictRequest(prompt=prompt, max_tokens=100))
+    return {"text": reply.text, "tokens": reply.tokens_used}
+
+@app.route("/v1/stream", methods=["POST"])
+def stream():
+    prompt = request.json.get("prompt", "")
+    def gen():
+        # 把 gRPC 服务端流 → 逐条转成 SSE 事件
+        for tok in stub.PredictStream(inference_pb2.PredictRequest(prompt=prompt)):
+            data = json.dumps({"piece": tok.piece, "index": tok.index},
+                              ensure_ascii=False)
+            yield f"data: {data}\n\n"        # SSE 格式：data: + 两个换行
+        yield "data: [DONE]\n\n"             # 约定的结束标记（OpenAI 也这么干）
+    return Response(stream_with_context(gen()), mimetype="text/event-stream")
+
+if __name__ == "__main__":
+    app.run(port=8000, threaded=True)</code></pre>
+
+<div class="lab-step"><span class="label">B</span>启动门面（server.py 要保持运行），直连 :8000 测试。</div>
+<pre><code># 终端 3
+python3 gateway.py
+
+# 终端 4：一元
+curl -s -X POST http://127.0.0.1:8000/v1/predict \
+  -H "Content-Type: application/json" -d '{"prompt":"你好"}'
+
+# 终端 4：SSE 流式（-N = 关掉 curl 自己的缓冲，才能看到逐条到达）
+curl -N -X POST http://127.0.0.1:8000/v1/stream \
+  -H "Content-Type: application/json" -d '{"prompt":"流式"}'</code></pre>
+
+<div class="expect"><strong>预期现象</strong>：一元返回一坨 JSON；流式那条会<strong>每 0.3 秒蹦出一行</strong> <code>data: {"piece":"...","index":0}</code>，最后一行 <code>data: [DONE]</code>。<strong>务必加 <code>-N</code></strong>——不加的话 curl 会把整个流攒完再一次性打印，你就误以为"没流式"。这个 <code>[DONE]</code> 结束标记不是随便写的，OpenAI 的 <code>/v1/chat/completions</code> 流式响应用的就是同一套 SSE + <code>[DONE]</code> 协议。</div>
+</div>
+
+<h2 id="s5">5. LAB 5：Nginx 反向代理 + SSE 不缓冲的坑</h2>
+
+<p>现在把 Nginx 摆到最前面当<span class="term">反向代理</span>。为什么要这层？生产里它负责：TLS 终止、限流、负载均衡多个门面实例、隐藏内部拓扑。今天先做最基础的反代，并踩一个<strong>90% 的人第一次做 SSE 都会踩的坑</strong>。</p>
+
+<div class="lab-block">
+<h3>LAB 5 步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>装 Nginx，找到配置目录（mac homebrew 路径）。</div>
+<pre><code>brew install nginx
+# Apple Silicon 配置在 /opt/homebrew/etc/nginx/，Intel 在 /usr/local/etc/nginx/
+nginx -V 2>&amp;1 | tr ' ' '\n' | grep conf-path   # 确认你的路径</code></pre>
+
+<div class="lab-step"><span class="label">B</span>新建 <code>servers/gateway.conf</code>（Apple Silicon 放 <code>/opt/homebrew/etc/nginx/servers/</code>）。</div>
+<pre><code>upstream gateway_pool {
+    server 127.0.0.1:8000;      # 有多个门面实例就在这里加几行，自动轮询
+}
+
+server {
+    listen 8080;
+
+    # 普通接口：正常反代
+    location /v1/predict {
+        proxy_pass http://gateway_pool;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # SSE 流式接口：必须关闭缓冲！否则 Nginx 会把整个流攒着，一次性吐给客户端
+    location /v1/stream {
+        proxy_pass http://gateway_pool;
+        proxy_buffering off;            # ← 核心：关掉响应缓冲
+        proxy_cache off;
+        proxy_http_version 1.1;         # SSE 需要 HTTP/1.1 长连接
+        proxy_set_header Connection ''; # 清掉 Connection，保持连接不被关
+        chunked_transfer_encoding off;
+    }
+}</code></pre>
+
+<div class="lab-step"><span class="label">C</span>校验配置、重载、测试。</div>
+<pre><code>nginx -t                 # 语法检查，必须 syntax is ok
+nginx                     # 启动（已启动则用 nginx -s reload）
+
+# 走 Nginx（:8080）测一元
+curl -s -X POST http://127.0.0.1:8080/v1/predict \
+  -H "Content-Type: application/json" -d '{"prompt":"过网关"}'
+
+# 走 Nginx 测流式——注意观察是逐条还是一次性
+curl -N -X POST http://127.0.0.1:8080/v1/stream \
+  -H "Content-Type: application/json" -d '{"prompt":"过网关流式"}'</code></pre>
+
+<div class="warn"><strong>动手验证这个坑</strong>：把 <code>proxy_buffering off;</code> 那行<strong>注释掉</strong>，<code>nginx -s reload</code>，再跑一次流式 curl。你会看到——token <strong>不再逐条蹦出来了，而是等 server 全部生成完，一次性哗啦全出来</strong>。原因：Nginx 默认开缓冲，会先把上游响应攒进 buffer 再转发。对 SSE 这种"实时性就是产品体验"的场景，这等于把流式退化成了一元。<span class="key">生产上无数"流式为什么不流式了"的工单，根子都在这一行。</span>验证完记得把它加回去。</div>
+</div>
+
+<h2 id="s6">6. LAB 6：<code>ab</code> / <code>wrk</code> 压测量化性能</h2>
+
+<p>服务能跑 ≠ 服务能扛。上线前必须回答：<strong>它每秒能处理多少请求（QPS）？延迟分布怎样？并发拉高会不会崩？</strong> 这就是压测。我们用两个经典工具量化这条链路。</p>
+
+<div class="lab-block">
+<h3>LAB 6 步骤</h3>
+
+<div class="lab-step"><span class="label">A</span><code>ab</code>（Apache Bench，mac 自带）——最快上手。</div>
+<pre><code># 准备请求体
+echo '{"prompt":"benchmark"}' &gt; body.json
+
+# -n 总请求数  -c 并发数  -p POST体  -T content-type
+ab -n 2000 -c 50 -p body.json -T application/json \
+   http://127.0.0.1:8080/v1/predict</code></pre>
+
+<div class="expect"><strong>怎么读结果</strong>：重点看四个数——<code>Requests per second</code>（吞吐/QPS）、<code>Time per request</code>（平均延迟）、<code>Failed requests</code>（失败数，理想是 0）、以及底部的<strong>百分位延迟表</strong>（<code>50%</code>、<code>95%</code>、<code>99%</code> 各是多少 ms）。<span class="key">P99 比平均值重要得多</span>——平均 20ms 但 P99 500ms，说明有长尾，1% 的用户体验很差。</div>
+
+<div class="lab-step"><span class="label">B</span><code>wrk</code>（更现代，多线程，能压出更高负载）。</div>
+<pre><code># 写个 lua 脚本描述 POST 请求
+cat &gt; post.lua &lt;&lt;'LUA'
+wrk.method = "POST"
+wrk.body   = '{"prompt":"benchmark"}'
+wrk.headers["Content-Type"] = "application/json"
+LUA
+
+# -t 线程数  -c 连接数  -d 持续时间  --latency 打印延迟分布
+wrk -t4 -c100 -d15s --latency -s post.lua \
+    http://127.0.0.1:8080/v1/predict</code></pre>
+
+<div class="expect"><strong>对比实验</strong>：分别压 <code>:8000</code>（直连门面）和 <code>:8080</code>（过 Nginx），看 QPS 差多少。Nginx 会引入一点点开销，但换来了限流、TLS、负载均衡的能力——这就是工程权衡。再把 <code>-c</code> 从 50 一路加到 500，观察 QPS 到某个点<strong>不再上升反而延迟飙升</strong>——那个拐点就是你这套配置的容量上限（瓶颈通常是 Flask 的 <code>threaded</code> 线程数 + GIL）。</div>
+
+<div class="lab-step"><span class="label">C</span>顺手加一层 Nginx 限流，再压一次看效果。</div>
+<pre><code># 在 gateway.conf 的 server{} 外层（http 上下文）加：
+#   limit_req_zone $binary_remote_addr zone=api:10m rate=100r/s;
+# 在 location /v1/predict 里加：
+#   limit_req zone=api burst=20 nodelay;
+# reload 后用 wrk 高并发压，会看到部分请求返回 503——限流生效了</code></pre>
+
+<div class="expect"><strong>意义</strong>：这就是本周三讲的 <code>limit_req</code>（令牌桶/漏桶）在真机上的效果。对 LLM 服务尤其关键——一个请求可能吃几秒 GPU，不限流的话几十个恶意并发就能把你的推理集群拖垮。你亲手看到 503 出现的那一刻，就理解了"限流是保护后端的最后一道闸"。</div>
+</div>
+
+<div class="note">
+<strong>收尾清理</strong>：<code>nginx -s stop</code> 停 Nginx；两个 Python 进程 <code>Ctrl-C</code>；<code>deactivate</code> 退出虚拟环境。今天的四个进程（server / gateway / nginx + 压测）合起来就是一套最小可用的推理网关雏形，Week 16 讲 API 网关、Week 23 讲推理引擎时会回到它。
+</div>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. gRPC 的"二进制黑盒"是双刃剑</strong>。你今天体会到 gRPC 抓包看不到明文——这对性能是优点，但对<span class="key">安全审计是盲区</span>。内部服务间全走 gRPC，传统的 HTTP WAF、日志中间件全都失效，看到的只是一堆二进制。做 Agent 安全产品时，如果要审计"Agent 调了哪个内部工具、传了什么参数"，你得在 gRPC 的 <code>interceptor</code> 层埋点解码，而不是指望网络层抓包。记住 <code>grpcurl</code> 和 interceptor 这两个词，它们是你审计 gRPC 流量的钥匙。</p>
+
+<p><strong>2. SSE 流式是 prompt injection 数据外泄的隐蔽通道</strong>。流式响应逐 token 吐、且经常关闭缓冲（你今天亲手关了 <code>proxy_buffering</code>），意味着输出内容是<strong>边生成边发出</strong>的。如果 Agent 被 indirect injection 诱导去泄露敏感信息，流式模式下数据会在你的输出过滤器还没看到完整响应前就已经发出去了一部分。所以对高敏感场景，"流式 + 输出审查"要么改成攒一段再审再放（牺牲体验），要么在 token 级别做实时检测——这是本周架构直接引出的防御设计难题。</p>
+
+<p><strong>3. Nginx 反代层是限流与身份校验的黄金位置</strong>。你今天在 Nginx 加了 <code>limit_req</code> 看到 503。真实的 LLM 网关会在这一层做得多得多：JWT 校验、per-user 配额、按 token 数计费的预扣。把安全策略下沉到网关（而非每个业务代码里重复写），是"安全左移"和"纵深防御"的工程落地。攻击者要打你的推理服务，第一道墙就是这层——它的配置质量直接决定资源耗尽攻击（Day 55 会讲）能不能得逞。</p>
+
+<p><strong>4. 服务间明文通信 = 内网横向移动的高速路</strong>。今天为了简单，gRPC 和 HTTP 都用了明文（<code>insecure_channel</code>、<code>listen 8080</code> 无 TLS）。生产里这是大忌：一旦攻击者进了内网（下周六 Day 27 讲反弹 shell 就是干这个的），明文的服务间通信让他能随意嗅探、篡改、重放内部 RPC。这就是为什么零信任架构要求<span class="term">服务间 mTLS</span>（Day 111 专题）——不因为"在内网"就信任任何流量。</p>
+
+<p><strong>5. 压测数字是安全容量规划的基线</strong>。你今天用 wrk 找到的"QPS 拐点"，正是防御 DoS 的关键参数。不知道自己能扛多少 QPS，就无法合理设限流阈值：设太松挡不住攻击，设太紧误伤正常用户。Agent 安全里更微妙——LLM 请求的成本极不均匀（一个 8k token 的请求可能是普通请求的百倍开销），所以对 LLM 服务的"压测"和"限流"不能只按请求数算，得按 <span class="key">token 预算</span>算。今天的 QPS 思维是起点，Week 23 会升级到 token-aware 的容量模型。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手 · 给链路加一个「慢客户端」并观测背压</strong></p>
+<p>把 <code>server.py</code> 里 <code>PredictStream</code> 的 <code>time.sleep(0.3)</code> 改成 <code>0.05</code>，让 token 吐得飞快。然后用一个"慢读"的客户端接收——在 client 的流式循环里加 <code>time.sleep(1)</code>。观察：服务端会不会一口气生成完所有 token，还是被客户端拖着慢慢来？（提示：gRPC 有流控/背压机制，服务端 <code>yield</code> 会被下游消费速度反压。）思考这对"用户关掉了浏览器但 GPU 还在狂算"这个真实浪费场景意味着什么。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察 · 对比三种传输的字节数与延迟</strong></p>
+<p>同一个 <code>prompt="hello world"</code>，分别测量：① gRPC protobuf 序列化后字节数（LAB 3 已给方法）；② 等价 JSON 字节数；③ 用 <code>ab -n 1000 -c 1</code> 分别压门面的一元接口（JSON over HTTP）。把"字节数"和"平均延迟"列成一张小表。问题：字节数省一半，端到端延迟省了多少？为什么延迟的节省远小于字节的节省？（提示：想想延迟由哪几部分组成——序列化只是其中一小块。）</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考 · 内部 gRPC，对外 HTTP/SSE，为什么这样分</strong></p>
+<p>今天的架构是「内部服务间 gRPC，对外网关 HTTP/SSE」。请从三个维度论证这个划分的合理性：<strong>(a) 性能</strong>——内部为什么能承受二进制的调试代价？<strong>(b) 兼容性</strong>——对外为什么不能用 gRPC？<strong>(c) 安全</strong>——把"面向不可信外部"和"面向可信内部"用不同协议+不同信任级别隔开，对纵深防御有什么好处？用本周学的协议特性支撑你的论证。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 27（周六 🔐 安全专题）· 反弹 shell + C2 框架</strong>。本周把服务通信搭通了，明天我们换到红队视角：当攻击者已经在你的服务里执行到了代码，他下一步想要的是一个「回连到自己的 shell」。我们会讲清 bind shell 与 reverse shell 的区别、各语言的 payload 一行怎么写、防火墙为什么挡不住反弹、DNS/ICMP 隧道如何绕过、以及 Cobalt Strike / Sliver / Mythic 这类 C2 框架的设计哲学与蓝队检测思路——并亲手在本机复现一次反弹 shell。今天你搭的那套明文内网服务，正是明天攻击者眼里的猎物。</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
