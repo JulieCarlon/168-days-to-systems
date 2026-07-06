@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 25 · 服务通信进阶：发现、容错与限流</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 25 · 服务通信进阶：发现、容错与限流</h1>
+  <div class="meta">Week 04 · 周四 · 2026-07-06 · 主线：网络与服务通信 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天你会了负载均衡——把流量分发到一组后端。但这带来一个新问题：<strong>负载均衡器怎么知道后端有哪些实例、它们在哪个 IP、哪个还活着？</strong>在容器时代，一个服务的实例每分钟都在被销毁和重建，IP 变来变去，写死配置根本不可能。今天我们回答分布式服务通信里最实际的三个问题：（1）服务之间<span class="key">怎么找到彼此</span>——服务发现；（2）下游服务<span class="key">挂了或变慢时怎么自保</span>——超时、重试、熔断、降级；（3）流量暴涨时<span class="key">怎么保护自己不被打垮</span>——限流。这三件事合起来，就是让一堆脆弱的单机服务，组装成一个能扛住真实世界流量的系统。学完今天，你会明白为什么「调一个 HTTP 接口」在生产环境里从来不是一行代码那么简单。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">服务发现：为什么需要，两种模式</a></li>
+  <li><a href="#s2">注册中心四强：Consul / etcd / Nacos / Eureka</a></li>
+  <li><a href="#s3">心跳与健康检查：怎么知道一个实例还活着</a></li>
+  <li><a href="#s4">超时与重试：调用别人时怎么自保</a></li>
+  <li><a href="#s5">熔断器：给下游故障装一个保险丝</a></li>
+  <li><a href="#s6">降级：优雅地提供次等服务</a></li>
+  <li><a href="#s7">限流算法与多层限流</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 服务发现：为什么需要，两种模式</h2>
+
+<p>先从一个具体的痛点讲起。假设你有一个 <code>gateway</code> 服务要调用 <code>inference</code> 服务。在单机时代，你会在配置文件里写死：</p>
+
+<pre><code>INFERENCE_URL = "http://10.0.1.23:8000"</code></pre>
+
+<p>这在容器/K8s 时代<strong>立刻崩溃</strong>，原因有三：</p>
+
+<ul>
+  <li><strong>实例是动态的</strong>。<code>inference</code> 服务可能有 3 个副本，也可能因为 HPA 自动扩容到 30 个。每个副本的 Pod IP 都不一样，而且每次重启都会变。</li>
+  <li><strong>实例会挂</strong>。某个副本崩了、被驱逐了、节点宕机了，它的 IP 就不能再用了，但配置文件不会自己更新。</li>
+  <li><strong>你需要负载均衡</strong>。就算写死也只能写一个 IP，无法把请求均摊到 30 个副本上。</li>
+</ul>
+
+<p><span class="term">服务发现（Service Discovery）</span>就是解决「一个服务的实例集合是动态变化的，调用方怎么在运行时拿到当前可用的实例列表」这个问题。核心是引入一个中间角色——<span class="key">注册中心（Registry）</span>，它是一张持续更新的「服务电话簿」：</p>
+
+<div class="ascii">                      ┌───────────────────────┐
+      ①注册/续约         │      注册中心 Registry     │
+   ┌───────────────────▶│  inference → [           │
+   │                    │     10.0.1.23:8000 (健康) │
+   │                    │     10.0.1.24:8000 (健康) │
+┌──┴──────────┐         │     10.0.1.99:8000 (下线) │
+│ inference    │         │  ]                       │
+│ 实例们        │         │  gateway → [ ... ]       │
+└─────────────┘         └───────────┬───────────┘
+                                    │ ②查询「inference 有哪些健康实例」
+                          ┌─────────▼─────────┐
+                          │   gateway 调用方    │
+                          └───────────────────┘</div>
+
+<p>整个流程分两半：<strong>写</strong>的一半——每个 <code>inference</code> 实例启动时向注册中心<span class="term">注册（register）</span>自己的地址，并定期<span class="term">续约（heartbeat）</span>证明自己还活着；<strong>读</strong>的一半——<code>gateway</code> 想调用时，向注册中心<span class="term">查询（discover）</span>当前健康的实例列表，再从中挑一个发请求。</p>
+
+<h3>两种发现模式：客户端发现 vs 服务端发现</h3>
+
+<p>「查询—选实例—发请求」这套动作发生在哪，决定了两种架构：</p>
+
+<table>
+<tr><th>模式</th><th>谁来查注册中心 + 做负载均衡</th><th>代表</th><th>特点</th></tr>
+<tr><td><strong>客户端发现</strong><br>Client-side</td><td>调用方进程内的 SDK / 库</td><td>Netflix Eureka + Ribbon、gRPC 内置 LB、Nacos SDK</td><td>少一跳、延迟低；但每种语言都要一套 SDK，客户端变"重"</td></tr>
+<tr><td><strong>服务端发现</strong><br>Server-side</td><td>独立的负载均衡器 / 网关 / Sidecar</td><td>K8s Service（kube-proxy）、Nginx+Consul、Istio Envoy</td><td>客户端"无脑"直连一个固定地址；对业务代码透明，但多一跳</td></tr>
+</table>
+
+<p><strong>类比</strong>：客户端发现像你自己拿着最新的外卖商家名单，亲自挑一家、亲自打电话；服务端发现像你只管跟前台说「我要吃饭」，前台帮你查名单、帮你选、帮你转接。前者你要自己维护名单（SDK），后者前台（LB/Sidecar）替你操心。</p>
+
+<p><span class="key">K8s 用户其实天天在用服务端发现而不自知</span>：你在代码里写 <code>http://inference:8000</code>，这个 <code>inference</code> 是 K8s Service 名，DNS 把它解析成一个虚拟 ClusterIP，kube-proxy（或 IPVS）在内核层把请求转发到某个健康的 Pod。注册中心是 etcd，健康列表是 EndpointSlice——这些我们 Week 11 会拆开讲，今天你先建立这个心智模型。</p>
+
+<h2 id="s2">2. 注册中心四强：Consul / etcd / Nacos / Eureka</h2>
+
+<p>注册中心本质上是一个「高可用的、支持监听变更的键值存储」。市面上四个主流选择，理解它们的差异就理解了这个领域的所有权衡：</p>
+
+<table>
+<tr><th>组件</th><th>出身</th><th>一致性模型</th><th>健康检查</th><th>一句话定位</th></tr>
+<tr><td><span class="term">etcd</span></td><td>CoreOS，Go</td><td>强一致（Raft，CP）</td><td>靠 TTL 租约（lease）</td><td>K8s 的"数据库"，通用高一致 KV</td></tr>
+<tr><td><span class="term">Consul</span></td><td>HashiCorp，Go</td><td>强一致（Raft，CP）</td><td>内置丰富健康检查（HTTP/TCP/脚本）</td><td>功能最全，自带 DNS + KV + 健康检查 + Mesh</td></tr>
+<tr><td><span class="term">Nacos</span></td><td>阿里，Java</td><td>可切换 AP/CP（Distro/Raft）</td><td>心跳 + 主动探测</td><td>国内主流，注册中心 + 配置中心二合一</td></tr>
+<tr><td><span class="term">Eureka</span></td><td>Netflix，Java</td><td>最终一致（AP）</td><td>客户端心跳续约</td><td>Spring Cloud 老搭档，为可用性牺牲一致性</td></tr>
+</table>
+
+<p>这里出现了一个你在 Week 21 会系统学的核心概念——<span class="term">CAP 权衡</span>。今天先直觉地理解：当注册中心自己出现网络分区（集群被网络切成两半）时，它要么选<strong>一致性 C</strong>（宁可拒绝服务也不返回可能过时的数据），要么选<strong>可用性 A</strong>（宁可返回可能过时的实例列表也继续服务）。</p>
+
+<p><span class="key">对服务发现这个场景，可用性往往比一致性更重要</span>——这是 Eureka 的设计哲学。想象一下：注册中心集群内部网络抖了一下，如果它选 CP（像 etcd/Consul），可能直接不可用，导致所有服务都查不到对方、整个系统雪崩；而选 AP（像 Eureka），它会继续返回「稍微过时」的实例列表，最坏情况是有几个请求打到了已经下线的实例上——这个错误远比"全站瘫痪"轻。<strong>这就是为什么服务发现领域 AP 系统一直有市场，尽管强一致听起来更"正确"。</strong></p>
+
+<div class="note">
+<strong>为什么 etcd 是 CP 却成了 K8s 的地基？</strong> 因为 K8s 用 etcd 存的是「集群的期望状态」（有哪些 Deployment、副本数是多少），这种数据必须强一致——不能一半节点认为副本数是 3、另一半认为是 5。而具体的服务发现（Pod IP 列表）是在 etcd 之上由 controller 派生出来的。<strong>选 CP 还是 AP，取决于你存的数据"容不容忍短暂的不一致"。</strong>
+</div>
+
+<h2 id="s3">3. 心跳与健康检查：怎么知道一个实例还活着</h2>
+
+<p>注册中心里的实例列表要"新鲜"，就必须持续验证每个实例是否还活着。这里要区分两个词，很多人混用但含义不同：</p>
+
+<h3>心跳（Heartbeat / 续约）——实例主动报平安</h3>
+
+<p>实例每隔几秒主动向注册中心发一个「我还在」的信号，这叫<span class="term">续约（renew lease）</span>。注册中心给每个实例挂一个<span class="term">TTL（Time To Live，租约有效期）</span>，比如 30 秒。只要实例在 TTL 内续约，就保持"健康"；一旦超过 TTL 没续约，注册中心就认为它死了，把它从列表里摘除。</p>
+
+<p>etcd 的 lease 机制是最干净的实现，你可以亲手体验：</p>
+
+<pre><code># 启动一个单机 etcd（用 docker 最快）
+docker run -d --name etcd -p 2379:2379 \
+  quay.io/coreos/etcd:v3.5.12 \
+  /usr/local/bin/etcd --advertise-client-urls http://0.0.0.0:2379 \
+  --listen-client-urls http://0.0.0.0:2379
+
+# 建一个 10 秒的租约，拿到 lease id
+docker exec etcd etcdctl lease grant 10
+# 输出: lease 694d... granted with TTL(10s)
+
+# 把实例地址挂在这个租约下
+docker exec etcd etcdctl put /services/inference/node1 "10.0.1.23:8000" --lease=694d...
+
+# 如果你不去 keep-alive，10 秒后这个 key 自动消失
+docker exec etcd etcdctl get /services/inference/node1
+# 10 秒内: 有值；10 秒后: 空 —— 实例"自动下线"了</code></pre>
+
+<p>这就是「实例挂了会自动从注册中心消失」的底层原理——<strong>不是有人去删它，而是它没能续约、租约到期自然消亡</strong>。这个设计极其优雅：即使实例是被 <code>kill -9</code> 猝死的、来不及主动注销，它也会在一个 TTL 后自动清理。</p>
+
+<h3>健康检查（Health Check）——外部主动探测</h3>
+
+<p>光有心跳还不够。一个进程可能<strong>活着但已经不健康</strong>——比如它的数据库连接池耗尽了、它卡在一个死锁里、它 OOM 边缘只能返回 500。它的心跳线程还在跳，但它已经不能正常服务了。所以需要额外的<span class="term">健康检查</span>：由注册中心或负载均衡器<strong>主动去探测</strong>实例的一个专门端点。</p>
+
+<p>约定俗成有三种探针（K8s 把它们标准化了，Week 11 详讲）：</p>
+
+<table>
+<tr><th>探针</th><th>问的问题</th><th>失败后果</th></tr>
+<tr><td>liveness（存活）</td><td>"进程死没死？"</td><td>失败 → 重启容器</td></tr>
+<tr><td>readiness（就绪）</td><td>"现在能不能接流量？"</td><td>失败 → 从负载均衡摘除，但不重启</td></tr>
+<tr><td>startup（启动）</td><td>"启动完成了吗？"</td><td>给慢启动服务的宽限期</td></tr>
+</table>
+
+<p>一个健康检查端点通常长这样，注意它不能只返回 200，而应该真正检查关键依赖：</p>
+
+<pre><code>@app.get("/healthz")
+def health():
+    # readiness：真正检查关键依赖，而不是无脑返回 200
+    if not gpu_available():        return Response(503, "no gpu")
+    if not model_loaded():         return Response(503, "loading")
+    if db_pool.free() == 0:        return Response(503, "db saturated")
+    return Response(200, "ok")</code></pre>
+
+<p><span class="key">这里有个反直觉的经验</span>：一个「返回 200 就行」的假健康检查比没有健康检查更危险——因为它会让负载均衡器把流量持续送给一个实际已经瘫痪的实例。健康检查的价值全在于它检查得<strong>够真</strong>。</p>
+
+<h2 id="s4">4. 超时与重试：调用别人时怎么自保</h2>
+
+<p>现在切换视角：假设你是 <code>gateway</code>，已经通过服务发现拿到了 <code>inference</code> 的地址，要发起调用。<strong>下游随时可能变慢或出错，你必须假设它不可靠。</strong>第一道防线是超时。</p>
+
+<h3>超时（Timeout）：不设超时 = 慢性自杀</h3>
+
+<p>最常见、也最致命的生产事故就是<span class="key">没设超时</span>。想象 <code>inference</code> 因为 GPU 卡住变得极慢，一个请求要 60 秒才返回。如果 <code>gateway</code> 没设超时，会发生连锁反应：</p>
+
+<div class="ascii">inference 变慢(60s) → gateway 的请求全部卡住等待
+   → gateway 的线程/连接池被占满(每个都等 60s)
+   → gateway 无法处理新请求 → gateway 自己也"挂了"
+   → 上游看到 gateway 挂了 → 继续向上传导 …… → 雪崩</div>
+
+<p>这叫<span class="term">级联失败（cascading failure）</span>：一个下游的慢，会顺着调用链把上游全部拖死。<strong>超时的作用就是斩断这条传导链</strong>——「等你 2 秒，超过就放弃，把资源还给我自己」。</p>
+
+<pre><code>import requests
+# 永远、永远给外部调用设超时。connect 超时和 read 超时分开设
+requests.get("http://inference:8000/predict",
+             timeout=(1, 2))   # 1s 建连超时，2s 读超时
+# 不设 timeout 参数 = 可能永久阻塞，这是生产事故的头号来源</code></pre>
+
+<h3>重试（Retry）：把偶发失败磨平，但小心放大故障</h3>
+
+<p>网络会偶尔抖动、实例会偶尔重启，一次失败重试一下往往就成功了。但重试是一把<strong>双刃剑</strong>，用错了会把小故障放大成大灾难。三条铁律：</p>
+
+<p><strong>铁律一：只重试幂等操作。</strong> <span class="term">幂等（idempotent）</span>指「执行一次和执行多次效果相同」。查询、GET 天然幂等；「扣款」「发消息」不幂等——重试可能导致重复扣款。对不幂等操作，要么别重试，要么用<span class="term">幂等键（idempotency key）</span>让下游能识别并去重。</p>
+
+<p><strong>铁律二：必须用指数退避 + 抖动。</strong> 如果失败后立刻重试、且所有客户端同时重试，会形成<span class="term">重试风暴（retry storm）</span>——本来下游只是抖了一下，结果瞬间被 N 倍流量彻底打死。正确做法是每次重试间隔翻倍（指数退避），再加一个随机抖动打散时间：</p>
+
+<pre><code>import random, time
+def call_with_retry(fn, max_retries=3, base=0.1, cap=2.0):
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except TransientError:
+            if attempt == max_retries:
+                raise
+            # 指数退避: 0.1, 0.2, 0.4 ... 再加 [0, backoff) 的随机抖动
+            backoff = min(cap, base * (2 ** attempt))
+            time.sleep(backoff + random.uniform(0, backoff))  # jitter 是关键</code></pre>
+
+<p><strong>铁律三：给重试设总预算，别让重试穿透整条链路。</strong> 如果 A→B→C 每层都重试 3 次，最底层 C 会承受 3×3=9 倍放大。业界经验是<span class="key">只在最接近用户的一层做有限重试</span>，或者用「重试预算」（比如整个请求最多额外发 10% 的重试流量）来封顶。</p>
+
+<h2 id="s5">5. 熔断器：给下游故障装一个保险丝</h2>
+
+<p>超时和重试处理的是<strong>偶发</strong>故障。但如果下游是<strong>持续</strong>挂了呢？这时继续发请求（还带重试）纯属浪费——每个请求都注定要等满超时再失败，白白占用你的资源。<span class="term">熔断器（Circuit Breaker）</span>就是解决这个问题：<strong>检测到下游持续故障时，直接快速失败，不再发请求，给下游喘息恢复的机会。</strong></p>
+
+<p><strong>类比</strong>：就是家里的电路保险丝。电流过大时保险丝熔断，切断电路，保护整个屋子不被烧毁；等你排查修好后再合闸。熔断器把这个思想搬到了服务调用上。</p>
+
+<p>它是一个有三个状态的状态机，这是今天最需要背下来的一张图：</p>
+
+<div class="ascii">          失败率超过阈值(如 50%)
+  ┌──────────┐ ──────────────────▶ ┌──────────┐
+  │  CLOSED  │                     │   OPEN   │
+  │ (闭合)    │                     │ (断开)    │
+  │ 正常放行   │ ◀────────────────── │ 直接快速失败│
+  └──────────┘   探测成功，恢复正常     └────┬─────┘
+        ▲                                │ 冷却时间到(如 30s)
+        │  探测成功                        ▼
+        │            ┌─────────────────────────┐
+        └─────────── │       HALF-OPEN          │
+           探测失败    │  (半开) 放几个试探请求进去   │
+           退回 OPEN  └─────────────────────────┘</div>
+
+<ul>
+  <li><span class="term">CLOSED（闭合）</span>：正常状态，请求正常放行。同时统计失败率，一旦在时间窗口内失败率超过阈值（比如 50%），跳到 OPEN。</li>
+  <li><span class="term">OPEN（断开）</span>：熔断状态，<strong>所有请求立即失败</strong>（不再真的去调下游），直接走降级逻辑。这样调用方不会被拖住，下游也没有新流量、能安心恢复。等一个冷却期后，进入 HALF-OPEN。</li>
+  <li><span class="term">HALF-OPEN（半开）</span>：试探状态，放<strong>少量</strong>请求真的打到下游。如果成功 → 认为下游恢复了，回到 CLOSED；如果还失败 → 回到 OPEN 再等一个冷却期。</li>
+</ul>
+
+<p>关键洞察：<span class="key">OPEN 状态下"快速失败"本身就是一种保护</span>。它把「等 2 秒超时再失败」变成「0 毫秒立即失败」，既救了调用方的资源，也给了下游不被持续冲击的恢复窗口。历史上 Netflix 的 Hystrix 让这个模式流行起来，如今 Resilience4j（Java）、阿里 Sentinel、以及 Istio/Envoy 的 outlier detection 都内置了熔断。</p>
+
+<h2 id="s6">6. 降级：优雅地提供次等服务</h2>
+
+<p>熔断器 OPEN 之后，请求"快速失败"了——但失败之后给用户返回什么？直接抛 500 错误页是最差的选择。<span class="term">降级（Fallback / Degradation）</span>就是：<strong>当理想的完整服务不可用时，退而求其次，提供一个"能用但打折"的结果，而不是彻底崩溃。</strong></p>
+
+<p>降级有几种典型形态：</p>
+
+<table>
+<tr><th>降级策略</th><th>例子</th></tr>
+<tr><td>返回缓存/兜底数据</td><td>推荐服务挂了 → 返回一份预热好的"热门榜单"而不是空白</td></tr>
+<tr><td>返回默认值/空结果</td><td>用户画像服务挂了 → 用默认画像继续走主流程，别让下单卡住</td></tr>
+<tr><td>关闭非核心功能</td><td>大促时主动关掉"猜你喜欢""历史足迹"，把资源全留给"下单支付"</td></tr>
+<tr><td>切换到更便宜的路径</td><td>大模型推理超载 → 降级到小模型 / 规则引擎给个基础回答</td></tr>
+</table>
+
+<pre><code>def get_recommendation(user):
+    if circuit_breaker.is_open("rec-service"):
+        return CACHED_HOT_LIST          # 降级：返回兜底热门榜
+    try:
+        return rec_service.query(user, timeout=0.5)
+    except (Timeout, ServiceError):
+        return CACHED_HOT_LIST          # 出错也降级，绝不把异常抛给用户</code></pre>
+
+<p>降级的核心思想是<span class="key">分清核心与非核心</span>：识别出「哪些功能挂了会死人（支付、鉴权），哪些挂了只是体验差点（推荐、评论数）」，在系统承压时果断牺牲后者保住前者。这需要业务判断，不是纯技术问题。它和熔断是绝配——<strong>熔断负责"什么时候放弃调用"，降级负责"放弃之后拿什么顶上"。</strong></p>
+
+<h2 id="s7">7. 限流算法与多层限流</h2>
+
+<p>前面几节都是「我调别人时怎么自保」。最后一节反过来：<strong>别人调我、流量暴涨时，我怎么保护自己不被打垮？</strong>答案是<span class="term">限流（Rate Limiting）</span>——设定一个速率上限，超过就拒绝或排队。核心是四种算法，理解它们的差异是面试和实战的高频点。</p>
+
+<h3>算法一：固定窗口计数器</h3>
+
+<p>最简单：把时间切成固定窗口（如每 1 秒），每来一个请求计数 +1，超过阈值就拒绝，窗口结束清零。缺点是<span class="term">临界突刺</span>——如果限 100/秒，在第 1 秒的最后 0.5 秒来 100 个、第 2 秒的前 0.5 秒又来 100 个，这 1 秒内实际放行了 200 个，超了一倍。</p>
+
+<h3>算法二：滑动窗口</h3>
+
+<p>为解决临界突刺，把窗口做成"滑动"的——统计的是「当前时刻往前推 1 秒」这个动态区间内的请求数。更平滑，但要记录每个请求的时间戳，成本略高。</p>
+
+<h3>算法三：漏桶（Leaky Bucket）</h3>
+
+<p><strong>类比</strong>：一个底部有小孔的水桶，请求像水一样流进来，桶以<strong>恒定速率</strong>漏水（处理请求）。桶满了，新来的水就溢出（被拒绝）。特点是<span class="key">输出速率绝对恒定、绝对平滑</strong>，无论入口多突发，出口都是匀速——适合保护那些"处理速率必须稳定"的下游。缺点是无法应对合理的短时突发。</p>
+
+<h3>算法四：令牌桶（Token Bucket）——最常用</h3>
+
+<p><strong>类比</strong>：一个桶以恒定速率往里<strong>放令牌</strong>（比如每秒放 100 个），桶有容量上限。每个请求要先<strong>拿走一个令牌</strong>才能通过，没令牌就被限流。它的妙处在于：平时没流量时令牌会攒着（攒到桶满），所以<span class="key">允许一定程度的突发</span>——积攒的令牌可以让一波突发请求瞬间通过，之后回落到恒定速率。这个"平时匀速、允许突发"的特性使它成为最广泛使用的算法（Nginx <code>limit_req</code>、Guava RateLimiter、云 API 网关基本都是它）。</p>
+
+<pre><code># 令牌桶的核心逻辑（简化）
+class TokenBucket:
+    def __init__(self, rate, capacity):
+        self.rate = rate            # 每秒放 rate 个令牌
+        self.capacity = capacity    # 桶容量（决定最大突发量）
+        self.tokens = capacity
+        self.last = now()
+    def allow(self):
+        # 按经过的时间补充令牌，但不超过容量
+        self.tokens = min(self.capacity,
+                          self.tokens + (now() - self.last) * self.rate)
+        self.last = now()
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True             # 有令牌，放行
+        return False                # 没令牌，限流</code></pre>
+
+<div class="note">
+<strong>漏桶 vs 令牌桶一句话记忆</strong>：漏桶管"<strong>出口</strong>恒定"（削峰，绝不允许突发穿透）；令牌桶管"<strong>平均</strong>恒定但允许攒着突发一下"（更友好，是默认之选）。选漏桶还是令牌桶，取决于你下游能不能吃突发。
+</div>
+
+<h3>多层限流：限流要立体地做</h3>
+
+<p>生产环境从来不是在一个点上限流，而是<span class="term">多层限流</span>——请求从入口到核心，每一层都设一道闸，层层收窄：</p>
+
+<div class="ascii">用户 → [①接入层 Nginx/网关]  按 IP 限流、防刷、防 DDoS（粗粒度、大流量）
+         → [②应用层限流]      按 API、按用户/租户配额限流
+           → [③下游保护限流]   保护 DB/GPU 等稀缺资源，按调用方限并发
+             → 核心资源(DB/GPU)</div>
+
+<p>为什么要分层？因为每一层的目的不同、粒度不同：接入层挡的是恶意大流量（一个 IP 每秒几千请求，明显是攻击），成本低、要快；应用层做的是<strong>公平性</strong>（防止某个租户/用户吃掉所有配额，饿死别人）；最内层保护的是最贵、最脆弱的资源（数据库连接、GPU 显存）。<span class="key">越往里越贵、越要省着用，所以越要用更细的粒度限流保护。</span>分布式环境下，应用层限流通常用 Redis + Lua 脚本做全局计数（保证多个应用副本共享同一个配额），这是 Week 18 会动手写的内容。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 令牌桶就是 LLM API 配额系统的骨架。</strong> 你以后一定会做（或攻击）LLM 网关的配额限流。OpenAI 的 RPM（每分钟请求数）和 TPM（每分钟 token 数）就是两个并行的令牌桶——一个按请求数放令牌，一个按 token 数放令牌。理解令牌桶「允许突发但限制平均」的特性，你就能推理出攻击者如何"贴着上限刷"来最大化滥用，以及防御方为什么要同时限 RPM 和 TPM（只限请求数挡不住"少量超长 prompt 吃光算力"的攻击）。</p>
+
+<p><strong>2. 熔断 + 降级是 LLM 服务的成本与稳定护城河。</strong> 当主推理集群（大模型、贵）过载时，一个成熟的 LLM 网关会熔断到小模型或规则引擎降级应答，而不是让所有用户一起超时。作为安全工程师，你要意识到：<span class="key">降级路径本身是一个攻击面</span>——如果攻击者能故意打满主模型触发降级，就可能把所有用户"逼"到防护更弱、更容易被 prompt injection 绕过的小模型上。降级链路必须和主链路同等安全。</p>
+
+<p><strong>3. 重试风暴是资源耗尽攻击的放大器。</strong> 攻击者只要让最内层的推理服务偶尔失败，配置不当的多层重试就会把攻击流量放大好几倍（3 层各重试 3 次 = 9 倍）。你审计 Agent 系统时要专门检查：工具调用、子 Agent 调用有没有做无限重试或无退避重试？一个"Agent 调工具失败就立刻重试"的循环，配合恶意输入，就是一个自带放大器的 DoS。</p>
+
+<p><strong>4. 服务发现和健康检查是横向移动与投毒的目标。</strong> 如果攻击者能往注册中心（etcd/Consul）里<strong>注册一个恶意实例</strong>，就能把正常流量骗到自己控制的节点上——这是一种服务发现投毒，可用于窃取请求数据或中间人篡改。这也是为什么 etcd 必须开 mTLS 和 RBAC（Week 11/12 安全课重点）。反过来，一个只返回 200 的假健康检查，会让被攻陷、行为异常的实例一直留在服务列表里不被摘除。</p>
+
+<p><strong>5. 多层限流的思想直接迁移到 Agent 的行为约束。</strong> 一个自主 Agent 应该像多层限流一样被立体地约束：入口限制它每分钟能发起多少次工具调用（防失控循环），中间限制它对高危工具（执行代码、发网络请求、写文件）的调用速率和总量，最内层用配额保护它接触的敏感资源（数据库、外部 API 密钥的调用次数）。<span class="key">"给失控的自动化装保险丝"这个工程直觉，是从熔断和限流里长出来的，也是 Agent 安全设计的核心心法。</span></p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：用 etcd 租约体验"实例自动下线"</strong></p>
+<p>按第 3 节的命令启动一个 docker etcd，然后完整跑一遍租约实验：</p>
+<pre><code>docker run -d --name etcd -p 2379:2379 quay.io/coreos/etcd:v3.5.12 \
+  /usr/local/bin/etcd --advertise-client-urls http://0.0.0.0:2379 \
+  --listen-client-urls http://0.0.0.0:2379
+
+# 建一个 10s 租约，把它的 id 记下来（下面用 $L 代替）
+docker exec etcd etcdctl lease grant 10
+docker exec etcd etcdctl put /svc/inference/n1 "10.0.1.23:8000" --lease=$L
+
+# 立刻查（有值），等 12 秒再查（消失了）
+docker exec etcd etcdctl get /svc/inference --prefix
+sleep 12
+docker exec etcd etcdctl get /svc/inference --prefix</code></pre>
+<p>然后试试 <code>etcdctl lease keep-alive $L</code>（在另一个终端持续续约），观察这次 key 不会消失。<strong>体会「续约 = 保持在线，停止续约 = 自动下线」这个服务发现的核心机制。</strong></p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：找出你身边系统里的超时与限流</strong></p>
+<p>做两个小观察，把抽象概念落到实物上：</p>
+<ul>
+  <li>用 <code>curl -w</code> 观察一次真实请求的耗时分布，思考如果要给它设超时该设多少：<br>
+  <code>curl -o /dev/null -s -w "connect:%{time_connect} total:%{time_total}\n" https://api.github.com</code></li>
+  <li>连续快速多次调用某个公开 API（如 GitHub 的 <code>https://api.github.com/rate_limit</code>），看响应头里的 <code>X-RateLimit-Limit</code> / <code>X-RateLimit-Remaining</code> / <code>X-RateLimit-Reset</code> 三个字段。<strong>这就是一个令牌桶的外部投影：Limit 是桶容量，Remaining 是当前令牌数，Reset 是补充时间。</strong></li>
+</ul>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考：一次调用要经过几道防线？</strong></p>
+<p>你的 <code>gateway</code> 要调用 <code>inference</code> 服务。把今天学的 5 个容错手段——<strong>服务发现、超时、重试、熔断、降级</strong>——按请求经过的<strong>先后顺序</strong>排列，并说明每一个"如果没有它会发生什么"。</p>
+<p>进阶思考：假设 <code>inference</code> 只是<strong>变慢</strong>（不是彻底挂），上面五个手段里，<span class="key">哪几个会先起作用、哪几个几乎不起作用</span>？（提示：想清楚"慢"和"错"触发的是不同机制——超时会触发，但只有当慢导致大量超时失败、失败率越过阈值后，熔断才会介入。）</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 26 · 🔧 LAB：服务通信动手</strong>。今天全是概念，明天全部落到手上：用 <code>grpcio</code> 写一个真正的 gRPC server + client，定义 <code>.proto</code> 契约；用 Nginx 配一个反向代理把两个后端负载均衡起来；用 <code>ab</code> / <code>wrk</code> 对你的服务做压测，亲眼看到 QPS 和延迟分位数；最后写一个 SSE 流式接口，模拟 LLM 逐 token 返回。今天理解的超时、限流，明天你会在压测里真实地把它们打爆一次。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
