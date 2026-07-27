@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 29 · CPU 工作原理</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 29 · CPU 工作原理</h1>
+  <div class="meta">Week 05 · 周一 · 2026-07-27 · 主线：CPU 架构（Phase 2 开篇）· 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：Phase 1 我们把操作系统和网络这两层软件抽象啃了下来。从今天起进入 Phase 2——<span class="key">硬件</span>。作为一个天天调 CUDA、盯着 GPU 利用率、抱怨推理慢的人，你其实一直在和硅片打交道，却从没真正打开过那个黑盒。今天我们从最核心的 CPU 开始，回答一个你八成从没细想过的问题：<span class="key">「一条 <code>a = b + c</code> 的指令，CPU 内部到底做了哪几步？」</span>。我们会讲清楚 6 个核心概念：冯诺依曼架构、CPU 三大部件、指令周期、衡量性能的 IPC 公式、x86 与 ARM 的分家、以及 CISC vs RISC 的百年之争。学完你应该能理解一件事——<strong>为什么「时钟频率高」不等于「跑得快」</strong>，这个直觉会一路贯穿到后面 GPU 和 LLM 推理的性能分析。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">冯诺依曼架构 vs 哈佛架构</a></li>
+  <li><a href="#s2">CPU 三大部件：ALU、寄存器、控制单元</a></li>
+  <li><a href="#s3">指令周期：取指—译码—执行—写回</a></li>
+  <li><a href="#s4">性能公式：时间 = 指令数 × CPI × 周期</a></li>
+  <li><a href="#s5">IPC 与「频率不代表性能」</a></li>
+  <li><a href="#s6">CISC vs RISC：指令集的两种哲学</a></li>
+  <li><a href="#s7">x86 vs ARM：两大王朝的现实分工</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 冯诺依曼架构 vs 哈佛架构</h2>
+
+<p>今天你能写 Python，根子上要感谢 1945 年一份未完成的报告。数学家 <span class="term">冯·诺依曼（John von Neumann）</span>在设计 EDVAC 计算机时写下了一个至今仍统治所有主流计算机的思想：<span class="key">程序和数据一样，都存在同一块内存里，都是二进制。</span></p>
+
+<p>这句话今天听起来平平无奇，但它是革命性的。在此之前的机器（如 ENIAC）要「换程序」意味着<strong>用手重新插拔几千根电缆</strong>，改一次程序要几天。冯诺依曼说：既然指令也能编码成数字，那就把它和数据一起塞进内存，CPU 挨个把指令读出来执行就行了。换程序 = 换一段内存里的字节。这就是<span class="term">「存储程序（stored-program）」</span>思想——你能 <code>python a.py</code> 然后 <code>python b.py</code> 秒切，本质就是它。</p>
+
+<div class="ascii">冯诺依曼架构（今天的 PC / 手机 / 服务器）
+        ┌──────────────────────────────┐
+        │          CPU                 │
+        │   控制单元 + ALU + 寄存器      │
+        └───────────────┬──────────────┘
+                        │  一条总线（指令和数据挤同一条路）
+        ┌───────────────┴──────────────┐
+        │   内存（指令 + 数据 混在一起）   │
+        └──────────────────────────────┘</div>
+
+<p><strong>类比</strong>：把 CPU 想成厨师，内存是仓库。冯诺依曼架构里，菜谱（指令）和食材（数据）堆在同一个仓库、走同一条送货通道。好处是仓库统一管理、灵活；坏处是<span class="key">送菜谱和送食材要抢同一条路</span>——这就是著名的<span class="term">「冯诺依曼瓶颈（von Neumann bottleneck）」</span>：CPU 再快，指令和数据都得从同一条内存总线挤过来，总线带宽成了天花板。你后面会发现，LLM 推理慢的核心原因（memory-bound）就是这个瓶颈的现代放大版。</p>
+
+<p><span class="term">哈佛架构（Harvard）</span>是另一条路：指令和数据<strong>分开存、分开走两条独立总线</strong>。好处是取指令和取数据可以同时进行，吞吐翻倍；坏处是不灵活（程序区通常只读，不能自我修改）。纯哈佛架构今天主要活在<strong>单片机、DSP、以及 CPU 内部的一级缓存里</strong>——现代 CPU 对外是冯诺依曼（主存统一），但 L1 缓存却分成了 L1-I（指令）和 L1-D（数据）两块，这叫<span class="term">「改良哈佛架构（modified Harvard）」</span>。所以真实的 CPU 是两种思想的缝合体。</p>
+
+<ul>
+  <li><strong>冯诺依曼</strong>：统一内存、单总线、灵活、有带宽瓶颈 → 通用计算机。</li>
+  <li><strong>哈佛</strong>：分离内存、双总线、高吞吐、不灵活 → 嵌入式 / DSP / 缓存层。</li>
+  <li>现代 CPU：主存冯诺依曼 + L1 缓存哈佛，取两者所长。</li>
+</ul>
+
+<h2 id="s2">2. CPU 三大部件：ALU、寄存器、控制单元</h2>
+
+<p>打开 CPU 这个黑盒，抛开缓存、分支预测那些高级玩意（后面几天专门讲），最核心的只有三样东西。</p>
+
+<h3>① 算术逻辑单元 ALU（Arithmetic Logic Unit）</h3>
+<p>这是 CPU 里真正「干活」的电路，负责所有<span class="key">算术运算（加减乘）和逻辑运算（与或非、比较、移位）</span>。它本质是一大堆晶体管搭成的组合逻辑电路：两个输入 + 一个操作码，吐出一个结果和几个标志位（是否为零、是否溢出、是否进位）。你写的 <code>b + c</code>、<code>x &gt; 0</code>、<code>flags &amp; MASK</code>，最终都落到 ALU 上跑一遍。</p>
+
+<h3>② 寄存器（Registers）</h3>
+<p>寄存器是 CPU <strong>内部</strong>的一小撮存储单元，是整个存储金字塔里<span class="key">最快、最贵、最少</span>的一层——访问延迟接近 0（1 个时钟周期内），但一颗 x86-64 CPU 通用寄存器也就 16 个（RAX、RBX、RCX…），每个 64 bit。为什么这么少？因为它们直接焊在 ALU 旁边，越多布线越长、越慢、越占面积。</p>
+<p><strong>类比</strong>：寄存器是厨师手里正握着的那几样东西——刀、正在切的菜。仓库（内存）里东西再多，你要用也得先拿到手上。ALU 只能对寄存器里的值动手，<span class="key">任何来自内存的数据，都必须先 load 进寄存器才能参与运算</span>。这条铁律解释了为什么后面「缓存命中率」这么重要。</p>
+
+<h3>③ 控制单元 CU（Control Unit）</h3>
+<p>控制单元是 CPU 的「大脑指挥中心」。它不算数，只负责<strong>协调</strong>：从内存把下一条指令取出来、翻译它是什么操作、指挥 ALU 和寄存器按顺序动作、决定下一条指令的地址。它靠两个关键寄存器工作：</p>
+<ul>
+  <li><span class="term">PC（Program Counter，程序计数器）</span>：存着「下一条要执行的指令」的内存地址。每执行完一条，PC 自动 +1（指向下一条）。<code>if</code>/<code>for</code>/函数调用的本质就是往 PC 里写一个新地址（跳转）。</li>
+  <li><span class="term">IR（Instruction Register，指令寄存器）</span>：存着「当前正在执行」的那条指令本身。</li>
+</ul>
+
+<div class="note">
+<strong>关键直觉</strong>：CPU 没有任何「智能」，它是一台极其死板的机器——<span class="key">PC 指到哪，就取哪条指令，翻译，执行，PC 前进，循环。</span>一秒钟做几十亿次。你所有的 if/for/递归/多线程，在这一层全部塌缩成「不断地读指令、改 PC」。理解了这点，你就理解了汇编、也理解了后面缓冲区溢出攻击为什么能「劫持 PC」。
+</div>
+
+<h2 id="s3">3. 指令周期：取指—译码—执行—写回</h2>
+
+<p>CPU 执行一条指令，走的是一个固定的循环，叫<span class="term">指令周期（instruction cycle）</span>，也叫 fetch-decode-execute 循环。经典地分成 4~5 步：</p>
+
+<ol>
+  <li><strong>取指 Fetch</strong>：控制单元根据 PC 的值，去内存（实际先查缓存）把这条指令的二进制码搬进 IR。</li>
+  <li><strong>译码 Decode</strong>：把 IR 里那串 01 翻译成「这是一条加法，操作数在 RBX 和 RCX，结果放 RAX」。</li>
+  <li><strong>执行 Execute</strong>：ALU 真正做运算，或者控制单元发出内存读写信号。</li>
+  <li><strong>访存 Memory</strong>（如果需要）：load/store 指令在这一步真正读写内存。</li>
+  <li><strong>写回 Write-back</strong>：把结果写回目标寄存器，同时更新 PC 指向下一条。</li>
+</ol>
+
+<p>我们用一段能直接看的汇编把它落地。你在 Mac/Linux 上可以这样看 Python 一行加法背后的 C 级汇编（这里用一段 C 演示更清楚）：</p>
+
+<pre><code># 把 C 编译成汇编看看（Linux；Mac 用 clang 同理）
+cat &gt; add.c &lt;&lt;'EOF'
+int add(int b, int c) {
+    int a = b + c;
+    return a;
+}
+EOF
+gcc -O0 -S add.c -o add.s      # -S 只编译成汇编，-O0 不优化方便读
+cat add.s</code></pre>
+
+<p>你会看到类似（x86-64，简化后）：</p>
+
+<pre><code>add:
+    mov   eax, edi        # 取指+译码+执行：把参数 b(edi) 搬进 eax 寄存器
+    add   eax, esi        # ALU 执行：eax = eax + c(esi)
+    ret                   # 写回并跳转：结果在 eax，PC 跳回调用者</code></pre>
+
+<p>短短两行运算，CPU 内部却是「取指→译码→ALU 加法→写回 eax→PC 前进」这套流程走了三遍（三条指令）。一条 <code>a=b+c</code> 在硬件层不是一个动作，而是<strong>一串微操作</strong>。这就是为什么理解硬件后，你对「这段代码到底慢在哪」会有完全不同的判断力。</p>
+
+<div class="note">
+<strong>历史彩蛋</strong>：早期 CPU 是「一条指令走完 4 步才开始下一条」，ALU 大部分时间在发呆。现代 CPU 用<span class="term">流水线（pipeline）</span>让第 1 条在写回时、第 2 条在执行、第 3 条在译码、第 4 条在取指——像洗衣店同时洗/烘/叠多批衣服。这是 Day 30 的主角，今天先埋个伏笔。
+</div>
+
+<h2 id="s4">4. 性能公式：时间 = 指令数 × CPI × 周期</h2>
+
+<p>现在到了今天最有价值的一节。你天天说「这个模型跑得慢」，但「快慢」到底由什么决定？计算机体系结构里有一个<span class="key">黄金公式（Iron Law of Performance）</span>，一次性讲清楚了所有 CPU 性能的来源：</p>
+
+<div class="ascii">程序运行时间 = 指令数(N) × 每条指令周期数(CPI) × 时钟周期长度(T)
+
+           = N × CPI × (1 / 频率)
+
+其中：
+  N   = Instruction Count，你的程序被编译成多少条机器指令
+  CPI = Cycles Per Instruction，平均每条指令花几个时钟周期
+  T   = 一个时钟周期的时间 = 1 / 主频（3GHz → T ≈ 0.33 纳秒）</div>
+
+<p>这个公式的威力在于，它把「性能」拆成三个<strong>相互独立、由不同角色掌控</strong>的因子：</p>
+
+<table>
+<tr><th>因子</th><th>谁能改变它</th><th>例子</th></tr>
+<tr><td><strong>N 指令数</strong></td><td>算法 + 编译器 + 指令集</td><td>换更好的算法、开 <code>-O2</code> 优化、用 SIMD 一条指令算 8 个数</td></tr>
+<tr><td><strong>CPI 每指令周期</strong></td><td>CPU 微架构</td><td>流水线、乱序执行、缓存命中率——缓存 miss 一次 CPI 飙到几百</td></tr>
+<tr><td><strong>T 周期长度</strong></td><td>主频 / 制程工艺</td><td>超频、更先进的 3nm 工艺让频率更高</td></tr>
+</table>
+
+<p><strong>为什么这个公式对你极其重要</strong>：绝大多数外行只盯着 T（「我的 CPU 有 5GHz！」），但真正决定 AI 负载快慢的往往是 N 和 CPI。举例：你把一个 Python 循环改成 numpy 向量化，主频一点没变（T 不变），但 N 暴跌（一条 SIMD 指令干原来 8 条的活）、CPI 也改善（数据连续、缓存友好），于是快了几十倍。<span class="key">性能优化的本质，就是在这三个因子上做文章。</span></p>
+
+<h2 id="s5">5. IPC 与「频率不代表性能」</h2>
+
+<p><span class="term">IPC（Instructions Per Cycle，每周期指令数）</span>就是 CPI 的倒数：CPI 是「每条指令花几个周期」，IPC 是「每个周期能完成几条指令」。现代 CPU 通过流水线 + 超标量（一个周期发射多条指令）能把 IPC 做到 3~6,远大于 1。</p>
+
+<p>把黄金公式换个写法，你会得到一个更顺口的版本：</p>
+
+<div class="ascii">性能 ∝ 频率 × IPC / 指令数
+
+           每秒完成的有效工作 = 频率 × IPC
+                              = (每秒周期数) × (每周期指令数)</div>
+
+<p>这解释了 CPU 圈一个反直觉的现象：<span class="key">高频率 ≠ 高性能。</span>2004 年 Intel 的 Pentium 4 主频冲到 3.8GHz（当年天文数字），但它为了拉高频率把流水线拉到 31 级，IPC 反而很低，结果被主频只有 2GHz 出头、但 IPC 高得多的对手吊打。近年 Apple M 系列芯片主频只有 3GHz 出头，却能打赢 5GHz 的 x86,靠的就是<strong>极宽的乱序执行 + 超高 IPC</strong>。</p>
+
+<div class="note">
+<strong>一句话记住</strong>：频率是「转多快」，IPC 是「每转干多少活」。真正的性能是两者的乘积。厂商爱吹频率是因为它是一个好懂的大数字；工程师看性能要同时看 IPC。你以后看 GPU 也一样——别只看 boost 频率，要看它每周期能吞多少 FLOP。
+</div>
+
+<p>你可以在自己机器上直接测 IPC。Linux 下 <code>perf</code> 会同时报告指令数和周期数，两者一除就是 IPC：</p>
+
+<pre><code># Linux: 测一段命令的真实 IPC（insn per cycle）
+perf stat -e instructions,cycles python3 -c "sum(range(10_000_000))"
+
+# 输出里会有类似：
+#   30,000,123      instructions      #    0.85  insn per cycle
+#   35,300,456      cycles
+# 那个 0.85 就是 IPC。Python 解释器 IPC 通常偏低（分支多、缓存不友好），
+# 换成 numpy 向量化后 IPC 会明显上升。</code></pre>
+
+<p>Mac 上没有 <code>perf</code>,但可以用 <code>sudo powermetrics</code> 或 Instruments 看类似指标——今天先建立概念，周五的 LAB（Day 33）会带你系统地实操 <code>perf stat</code> 看 cache miss 和 IPC。</p>
+
+<h2 id="s6">6. CISC vs RISC：指令集的两种哲学</h2>
+
+<p>前面说 CPU 死板地「取指令、译码、执行」。那么<strong>「指令」长什么样、有多少种，是谁规定的？</strong>答案是<span class="term">指令集架构（ISA，Instruction Set Architecture）</span>——它是硬件和软件之间的合同：CPU 承诺认识这些指令，编译器负责把你的代码翻译成这些指令。历史上分出两大哲学流派：</p>
+
+<table>
+<tr><th></th><th>CISC（复杂指令集）</th><th>RISC（精简指令集）</th></tr>
+<tr><td>代表</td><td>x86 / x86-64</td><td>ARM / RISC-V / MIPS</td></tr>
+<tr><td>指令数量</td><td>多、复杂（上千条）</td><td>少、简单（几十到几百条）</td></tr>
+<tr><td>单条指令</td><td>一条能干复杂事（如「从内存读、算、写回」一条搞定）</td><td>每条只干一件小事，load/store 专门指令</td></tr>
+<tr><td>指令长度</td><td>变长（1~15 字节）</td><td>定长（多为 4 字节），译码简单</td></tr>
+<tr><td>理念</td><td>让硬件复杂点，程序短一点（N 小）</td><td>让指令简单点，好流水线、好并行（CPI 小、频率高）</td></tr>
+</table>
+
+<p><strong>类比</strong>：CISC 像一台功能超多的多功能料理机——一个按钮「打豆浆」自动完成泡豆、打磨、加热、过滤；RISC 像一套基础厨具——你得分别「加水、加豆、开火、搅拌」，每步简单但你能灵活组合、每步都能优化到极致。</p>
+
+<p>这场争论的<span class="key">现代结局很有意思</span>：两者在内部融合了。今天的 x86 CPU 表面上收的是复杂的 CISC 指令，但进 CPU 后第一件事就是把每条 CISC 指令<strong>拆解成若干条内部的类 RISC 微操作（micro-ops / μops）</strong>,再喂给一个 RISC 风格的高效执行核心。所以「CISC vs RISC」在 2020 年代已经不是硬件之争，更多是<strong>ISA 生态和授权模式之争</strong>——这就引出了下一节。</p>
+
+<h2 id="s7">7. x86 vs ARM：两大王朝的现实分工</h2>
+
+<p>作为搞 AI 基建的人,你几乎每天都同时接触这两套架构而不自知:你的开发 Mac 大概率是 ARM(Apple Silicon),你训练/推理的服务器大概率是 x86(Intel/AMD),而云上越来越多的省钱实例是 ARM(AWS Graviton)。搞清它们的分工很实用:</p>
+
+<table>
+<tr><th></th><th>x86-64（Intel / AMD）</th><th>ARM（Apple / Graviton / 手机）</th></tr>
+<tr><td>指令集类型</td><td>CISC（内部转 RISC μops）</td><td>RISC（AArch64）</td></tr>
+<tr><td>商业模式</td><td>Intel/AMD 自己造芯片、卖芯片</td><td>ARM 只卖 IP 授权，别人自己造（Apple、亚马逊、高通）</td></tr>
+<tr><td>能效</td><td>性能强、功耗高</td><td>每瓦性能极佳，先占领手机、正在攻数据中心</td></tr>
+<tr><td>典型阵地</td><td>桌面、传统服务器、绝大多数训练集群</td><td>手机、Apple Mac、AWS Graviton、边缘设备</td></tr>
+<tr><td>软件生态</td><td>历史包袱重但最全，几乎所有软件原生支持</td><td>崛起中；部分 x86 二进制需转译（Rosetta 2 / QEMU）</td></tr>
+</table>
+
+<p>你可以立刻在自己机器上确认你手里是哪个架构:</p>
+
+<pre><code># 看你当前 CPU 架构
+uname -m
+#   x86_64   → 你在 Intel/AMD 机器上
+#   arm64    → 你在 Apple Silicon 或 ARM 服务器上
+
+# Mac 上看 CPU 详细型号
+sysctl -n machdep.cpu.brand_string
+
+# Linux 上看指令集支持的特性（有没有 avx2、avx512、neon 等）
+lscpu | grep -i flags</code></pre>
+
+<p>为什么这对 AI 工程重要?两个直接后果:<strong>①</strong> 你在 M 系列 Mac 上 <code>pip install</code> 一个含 C 扩展的库(如某些旧版 pytorch、老 wheel),可能因为没有 arm64 预编译版而报错或跑进 Rosetta 转译层变慢;<strong>②</strong> Docker 镜像有架构之分,你在 Mac(arm64)上 build 的镜像直接推到 x86 服务器会跑不起来,必须用 <code>docker buildx</code> 做多架构构建——这个坑你在 Phase 3 学容器时会正面撞上。今天先在脑子里种下「架构不是一个东西」这个意识。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 「频率不代表性能」直接映射到 GPU 选型。</strong> 你未来要为推理服务选 GPU,如果只看 boost 频率就会做错决策。真正决定 LLM 吞吐的是「每周期能做多少张量运算」——也就是 GPU 版的 IPC(Tensor Core 吞吐)乘以频率,再乘以显存带宽。今天建立的「性能 = 频率 × 每周期工作量」这个乘积直觉,是你 Week 07 分析 GPU、Week 08 分析推理瓶颈的地基。</p>
+
+<p><strong>2. 冯诺依曼瓶颈是 LLM「memory-bound」的祖师爷。</strong> 今天讲的「指令和数据挤同一条总线」在 LLM 推理里被放大成「模型权重和 KV cache 都要从显存搬到计算单元,搬运比计算慢得多」。Day 38 你会推导出「为什么 decode 阶段是 memory-bound」,那套推理的原始直觉就是今天的冯诺依曼瓶颈。</p>
+
+<p><strong>3. 指令集差异 = 供应链攻击面。</strong> 你的 Agent 沙箱如果跨架构部署(开发机 arm64、生产 x86),一个被投毒的多架构镜像可能在不同架构上表现不同——攻击者甚至可以让恶意逻辑只在 x86 生产环境触发,在你 arm64 开发机上测试时完全正常。理解架构差异,才能审计「同一份镜像在不同平台是否真的等价」。</p>
+
+<p><strong>4. PC(程序计数器)劫持是内存攻击的核心。</strong> 今天你知道了 CPU 靠 PC 决定「下一条执行什么」。Day 41 的缓冲区溢出攻击,本质就是覆盖栈上的返回地址,骗 CPU 把 PC 设成攻击者的 shellcode 地址。理解 PC 的死板机制,才能理解为什么「数据」能变成「被执行的指令」这种攻击成立。</p>
+
+<p><strong>5. 微架构 = 侧信道的物理来源。</strong> 今天提到的乱序执行、缓存,这些为了提升 IPC 的优化,恰恰是 Spectre/Meltdown(Day 34)侧信道攻击的物理根源。CPU 为了快而「推测执行」,把不该看到的数据短暂放进了缓存,攻击者再通过缓存时序把它读出来。搞 Agent 安全,尤其是多租户共享 GPU 的场景,这类硬件级泄露是你绕不开的威胁模型。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>10 分钟 · 动手题</strong></p>
+<p>在你的机器上依次运行下面命令,记录结果并回答:你的机器是什么架构?支持 AVX2 或 NEON 吗?</p>
+<pre><code>uname -m
+sysctl -n machdep.cpu.brand_string   # Mac
+# 或 Linux:
+lscpu | grep -iE 'model name|flags' | head</code></pre>
+<p>进阶:写一个 C 文件 <code>add.c</code>(见正文第 3 节),用 <code>gcc -O0 -S</code> 和 <code>gcc -O2 -S</code> 各生成一次汇编,对比两份 <code>.s</code> 文件的指令数——体会「编译器优化」是怎么砍掉黄金公式里的 N 的。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察题</strong></p>
+<p>(Linux 有 perf 者)运行下面两条命令,记下各自的 <code>insn per cycle</code>(IPC):</p>
+<pre><code>perf stat -e instructions,cycles python3 -c "s=0
+for i in range(10_000_000): s+=i"
+perf stat -e instructions,cycles python3 -c "import numpy as np; np.arange(10_000_000).sum()"</code></pre>
+<p>问题:两者的指令数(N)和 IPC 各差多少倍?numpy 快,主要是赢在黄金公式的哪个因子上?(没有 perf 的用 <code>python3 -m timeit</code> 比运行时间,并从原理上推测 N 和 IPC 的差异。)</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考题</strong></p>
+<p>厂商 A 的 CPU:主频 5.0GHz,平均 IPC = 1.2。厂商 B 的 CPU:主频 3.2GHz,平均 IPC = 2.5。假设两者跑同一个程序、指令数 N 相同。<strong>哪个更快?快多少倍?</strong> 算完后再想:如果这个程序的瓶颈其实是「等内存」(大量 cache miss),那么提高哪一个因子(频率 / IPC / 减少指令数)最不管用?为什么?</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 30 · 流水线、分支预测与乱序执行</strong>。今天我们把 CPU 当成「一条一条老实执行指令」的死板机器。明天要打破这个假象:现代 CPU 其实同时在处理十几条指令(流水线)、会赌你的 <code>if</code> 往哪走(分支预测)、甚至不按你写的顺序执行(乱序)。我们会讲清 5 级流水线、三种「冒险(hazard)」、分支预测的原理,以及这些「为了快」的把戏如何埋下了 Spectre 漏洞的种子。这是理解现代 CPU 为什么能把 IPC 做到大于 1 的关键一课。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
