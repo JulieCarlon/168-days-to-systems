@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 30 · 流水线、分支预测与乱序执行</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 30 · 流水线、分支预测与乱序执行</h1>
+  <div class="meta">Week 05 · 周二 · 2026-07-28 · 主线：CPU 架构 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们把 CPU 描述成一个老实巴交的机器：取指、译码、执行、写回，一条做完做下一条。<span class="key">这幅图景在 1985 年之后就已经是假的了。</span>今天要拆掉它。真实的现代 CPU 在任意一个瞬间，内部同时躺着一两百条「正在进行中」的指令；它会赌你的 <code>if</code> 往哪边走，赌错了就把已经算了几十步的结果全部扔掉重来；它敢不按你写的顺序执行指令，只要保证最后「看起来像是按顺序执行的」。今天我们讲清楚 7 件事：五级流水线、三种冒险、forwarding、分支预测与 BTB、超标量、乱序执行、以及推测执行——最后你会看到，<strong>Spectre 这个撼动整个云计算行业的漏洞，不是某个工程师写错了一行代码，而是这套「为了快」的设计哲学的必然产物</strong>。这也是你从「会用 GPU」走向「懂硬件」路上最重要的一次思维转变：性能来自并行与猜测，而<span class="key">猜测必然泄露信息</span>。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">五级流水线：CPU 的流水作业</a></li>
+  <li><a href="#s2">三种冒险：流水线为什么会卡住</a></li>
+  <li><a href="#s3">Forwarding 与流水线停顿</a></li>
+  <li><a href="#s4">分支预测：CPU 怎么赌你的 if</a></li>
+  <li><a href="#s5">超标量：一个周期发射多条指令</a></li>
+  <li><a href="#s6">乱序执行：寄存器重命名与 ROB</a></li>
+  <li><a href="#s7">推测执行与 Spectre 的根源</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 五级流水线：CPU 的流水作业</h2>
+
+<p>回忆昨天的指令周期：一条指令要走完<span class="term">取指（IF）→ 译码（ID）→ 执行（EX）→ 访存（MEM）→ 写回（WB）</span>五步。如果 CPU 老老实实地「一条走完五步，再开始下一条」，会发生什么？假设每步占 1 个时钟周期，那么<span class="key">每 5 个周期才完成 1 条指令，CPI = 5，IPC = 0.2</span>。更糟的是：当指令在 EX 阶段时，负责取指的那部分电路完全闲着；在 WB 阶段时，ALU 也闲着。硬件利用率只有 20%。</p>
+
+<p><span class="term">流水线（pipeline）</span>的想法极其简单：既然五个阶段用的是五套不同的电路，那就<strong>让它们同时工作，各自处理不同的指令</strong>。第 1 条指令进入 EX 时，第 2 条正在 ID，第 3 条正在 IF。</p>
+
+<div class="ascii">无流水线（5 周期 1 条）：
+周期:  1    2    3    4    5    6    7    8    9   10
+指令1: IF   ID   EX   MEM  WB
+指令2:                          IF   ID   EX   MEM  WB
+
+五级流水线（稳态下 1 周期 1 条）：
+周期:  1    2    3    4    5    6    7    8    9
+指令1: IF   ID   EX   MEM  WB
+指令2:      IF   ID   EX   MEM  WB
+指令3:           IF   ID   EX   MEM  WB
+指令4:                IF   ID   EX   MEM  WB
+指令5:                     IF   ID   EX   MEM  WB
+                           ↑ 从这里开始，每个周期「流出」一条完成的指令</div>
+
+<p><strong>类比</strong>：想象一家洗衣店。洗（IF）、烘（ID）、叠（EX）、装袋（MEM）、交付（WB）。笨办法是一批衣服全流程走完，才收下一批客人——洗衣机在烘干时是空转的。流水线做法是：第一批在烘干时，第二批已经进洗衣机了。<span class="key">单批衣服的处理时间（延迟 latency）没有变短，但单位时间处理的批次数（吞吐 throughput）提高了 5 倍。</span>这个「延迟不变、吞吐倍增」的区分，是你后面理解 GPU、理解 LLM 推理 batching 的地基——GPU 之所以强，本质上就是把这个思想推到了极致。</p>
+
+<h3>流水线的代价与深度之争</h3>
+
+<p>流水线不是白拿的。每两个阶段之间要插入<span class="term">流水线寄存器（pipeline register）</span>来暂存中间结果，这本身有开销。更关键的是：<strong>时钟周期由最慢的那一级决定</strong>。如果 EX 阶段要 3ns，其他阶段只要 1ns，整个 CPU 的周期就得是 3ns。于是设计者的自然反应是——<span class="key">把慢的阶段再切细</span>。切得越细，每级越短，时钟频率就能拉得越高。</p>
+
+<p>这就引出了处理器史上最著名的一次豪赌：Intel 的 <span class="term">Pentium 4（NetBurst 架构，2000 年）</span>把流水线做到了 20 级，后期 Prescott 甚至到 31 级，为的就是把主频推上 4GHz 去打营销战。结果是灾难性的——流水线越深，<strong>一次预测错误要冲刷掉的指令就越多</strong>，惩罚从几个周期涨到几十个周期。Pentium 4 频率高得吓人，实际性能却被主频低得多的 AMD Athlon 和后来的 Core 架构吊打。这正是昨天那个结论的硬件注脚：<span class="key">频率 ≠ 性能</span>。今天主流 x86 的流水线深度回落在 14~20 级之间，是一个精心平衡的结果。</p>
+
+<ul>
+  <li>流水线不缩短单条指令的<strong>延迟</strong>，只提升<strong>吞吐</strong>。</li>
+  <li>理想稳态 CPI = 1（IPC = 1）；实际会被「冒险」拖低。</li>
+  <li>流水线越深 → 可达频率越高，但分支预测失败惩罚越大。</li>
+  <li>典型深度：经典 RISC 5 级；Pentium 4 达 20~31 级；现代 x86 约 14~19 级；Apple M 系列约 8~10 级但极宽。</li>
+</ul>
+
+<h2 id="s2">2. 三种冒险：流水线为什么会卡住</h2>
+
+<p>上面那张漂亮的流水线图有个隐含假设：<strong>每条指令都独立、互不干扰</strong>。真实程序当然不是这样。当某条指令因为前面指令的存在而无法在预定周期执行时，就发生了<span class="term">冒险（hazard）</span>。冒险分三类，你必须能张口说出来。</p>
+
+<h3>结构冒险（Structural Hazard）</h3>
+
+<p>两条指令在同一周期抢同一个硬件资源。经典例子：如果指令和数据共用一个内存端口（纯冯诺依曼），那么指令 1 在 MEM 阶段访问数据的同一个周期，指令 4 正想 IF 取指令——两者抢同一条总线，必然有一个要等。</p>
+
+<p><strong>解法</strong>就是昨天讲的<span class="key">改良哈佛架构</span>：把 L1 拆成 L1-I 和 L1-D，取指和访存走不同的缓存端口，结构冒险直接消失。所以昨天那个「L1 为什么要分家」的问题，答案在今天：<strong>为了让流水线不卡住</strong>。类似地，浮点单元、除法器等长延迟部件如果只有一份，也会造成结构冒险，现代 CPU 的做法是多备几份（这就是下面要讲的超标量的前提）。</p>
+
+<h3>数据冒险（Data Hazard）</h3>
+
+<p>最常见的一类。后一条指令需要前一条指令还没算完的结果：</p>
+
+<pre><code>add  x1, x2, x3    # x1 = x2 + x3
+sub  x4, x1, x5    # x4 = x1 - x5   ← 需要 x1，但 add 还没写回！</code></pre>
+
+<p><code>add</code> 要到第 5 周期（WB）才把 x1 写进寄存器，而 <code>sub</code> 在第 4 周期（EX）就要用 x1。按原始流水线，<code>sub</code> 会读到旧的、错误的 x1。这种「读在写之后」的依赖叫 <span class="term">RAW（Read After Write）</span>，是<strong>真依赖（true dependency）</strong>——数据是真的还没算出来，谁也变不出来。</p>
+
+<p>另外两种依赖 <span class="term">WAR（Write After Read）</span>和 <span class="term">WAW（Write After Write）</span>属于<strong>假依赖（name dependency）</strong>：数据其实不冲突，只是恰好用了同一个寄存器名字。假依赖可以靠「换个名字」消除——这就是第 6 节的寄存器重命名。<span class="key">记住这个区分：真依赖是物理定律，假依赖只是命名问题。</span></p>
+
+<h3>控制冒险（Control Hazard）</h3>
+
+<p>流水线要在第 1 周期就取下一条指令，但如果当前指令是 <code>if</code> 编译成的条件跳转（branch），<strong>下一条指令的地址得等这条 branch 在 EX 阶段算完条件才知道</strong>。在此之前，取指单元根本不知道该去哪儿取。</p>
+
+<pre><code>cmp  x1, x2
+beq  label        # 相等就跳到 label，否则顺序执行
+add  x3, x4, x5   # 这条到底要不要执行？在 beq 算完之前不知道
+...
+label:
+mul  x6, x7, x8</code></pre>
+
+<p>这是三种冒险里最要命的一种，因为分支指令在真实代码里的密度极高——<span class="key">平均每 5~7 条指令就有一条是分支</span>（想想 Python 里满地的 <code>if</code>、<code>for</code>、函数调用/返回）。如果每遇到分支就停下来等，20 级流水线的 CPU 会有一半时间在发呆。整个第 4 节和第 7 节都是在解决这一个问题。</p>
+
+<h2 id="s3">3. Forwarding 与流水线停顿</h2>
+
+<p>先解决数据冒险。最笨的办法是<span class="term">停顿（stall / bubble）</span>：让 <code>sub</code> 在 ID 阶段原地等两个周期，等 <code>add</code> 写回了再走。硬件插入的这些空转周期叫「气泡」，画在图上就是一段空白往下漂。</p>
+
+<div class="ascii">停顿（插 2 个气泡）：
+周期:   1    2    3    4    5    6    7
+add:    IF   ID   EX   MEM  WB
+sub:         IF   ID   --   --   EX   MEM   ← 停了 2 个周期</div>
+
+<p>但仔细想：<code>add</code> 的结果在<strong>第 3 周期 EX 结束时</strong>其实就已经躺在 ALU 的输出端了，只是还没走完 MEM、WB 的官方流程写回寄存器堆而已。既然结果已经在硅片上存在了，为什么非要绕一圈？</p>
+
+<p><span class="term">Forwarding（旁路 / bypassing）</span>就是加一条物理导线，<strong>把 ALU 的输出直接接回 ALU 的输入端</strong>，绕过寄存器堆。<code>sub</code> 在第 4 周期进入 EX 时，硬件检测到「我要的 x1 正是上一条指令刚算出来的」，就直接从旁路线上取值，一个气泡都不用插。</p>
+
+<div class="ascii">Forwarding（零停顿）：
+周期:   1    2    3    4    5
+add:    IF   ID   EX ──┐ MEM  WB
+                       │ 旁路导线
+sub:         IF   ID   └→EX   MEM  WB</div>
+
+<p><strong>类比</strong>：厨房里 A 厨师切好葱，B 厨师要用。规矩流程是 A 把葱送回冷库入库、B 再去冷库领料。Forwarding 就是 A 切完直接从案板上递给 B。<span class="key">结果不变，省掉了往返仓库的时间。</span></p>
+
+<h3>Forwarding 也救不了的情况：load-use 冒险</h3>
+
+<p>有一种数据冒险 forwarding 无法完全消除：</p>
+
+<pre><code>ld   x1, 0(x2)    # 从内存加载到 x1，数据要到 MEM 阶段（第 4 周期）末尾才拿到
+add  x3, x1, x4   # 第 4 周期就要用 x1 —— 数据还在路上</code></pre>
+
+<p>加载指令的数据最早在 MEM 阶段末才可得，而下一条的 EX 就在同一周期。物理上无法把未来的数据传给现在，<span class="key">必须停 1 个周期</span>。这叫 <span class="term">load-use hazard</span>。编译器的一项经典优化就是<strong>指令调度（instruction scheduling）</strong>：把一条无关的指令挪到 load 和 use 中间，把气泡填掉。你昨天用 <code>gcc -O2 -S</code> 看到的指令重排，很大一部分就是在干这件事。</p>
+
+<div class="note">
+<strong>为什么这跟你有关</strong>：Python 是解释执行的，字节码分派循环里全是间接跳转和内存加载，load-use 冒险和分支预测失败极其密集——这是 CPython 比 C 慢几十倍的<strong>微架构层原因之一</strong>（另一部分是对象装箱带来的 cache miss，明天讲）。而 NumPy/PyTorch 的底层 kernel 是被编译器精心调度过的紧密循环，几乎榨干了流水线。你写 <code>for i in range(n)</code> 和写 <code>np.sum()</code> 的性能鸿沟，一半在这里。
+</div>
+
+<h2 id="s4">4. 分支预测：CPU 怎么赌你的 if</h2>
+
+<p>现在解决最难的控制冒险。既然分支结果要等几个周期才知道，而干等太亏，那就<span class="key">赌一把</span>——先按猜测的方向继续取指执行，猜对了白赚几个周期，猜错了把这几个周期做的事全部作废（flush）重来。这就是<span class="term">分支预测（branch prediction）</span>。</p>
+
+<p>关键在于：<strong>赌的准确率必须极高才划算</strong>。设预测失败惩罚为 15 个周期、分支占指令的 20%，若准确率 90%，则平均每条指令额外开销 = 0.2 × 0.1 × 15 = 0.3 个周期，CPI 直接从 1 涨到 1.3，性能掉 23%。若准确率 99%，开销只有 0.03。<span class="key">从 90% 到 99% 不是「好一点」，而是差了一个数量级的惩罚。</span>这就是为什么现代 CPU 在分支预测器上砸了惊人的晶体管预算。</p>
+
+<h3>预测器的演进</h3>
+
+<table>
+<tr><th>代际</th><th>机制</th><th>典型准确率</th></tr>
+<tr><td>静态预测</td><td>固定规则：向后跳（循环）预测「跳」，向前跳（if 跳出）预测「不跳」</td><td>~65%</td></tr>
+<tr><td>1-bit 动态</td><td>记住这条分支上次的结果，这次照抄</td><td>~80%</td></tr>
+<tr><td>2-bit 饱和计数器</td><td>需要连续错两次才改变预测，抗循环末尾的单次抖动</td><td>~90%</td></tr>
+<tr><td>两级自适应 / gshare</td><td>用「全局历史寄存器」的最近 N 次分支结果做索引，捕捉分支间的相关性</td><td>~95%</td></tr>
+<tr><td>TAGE / 感知机预测器</td><td>多张不同历史长度的表竞争 / 用类似神经元的加权求和做判断</td><td>&gt;99%</td></tr>
+</table>
+
+<p><strong>2-bit 饱和计数器</strong>值得单独理解，它是整个领域的基石思想。状态机有 4 个状态：强不跳 → 弱不跳 → 弱跳 → 强跳。预测「跳」时若跳了就向「强跳」移动一格，没跳就向回移一格。<span class="key">好处是一次意外不会立刻翻转预测。</span>想想一个 1000 次的 <code>for</code> 循环：分支「跳回循环头」发生 999 次、最后一次「不跳」退出。1-bit 预测器会因为这最后一次错误而在<strong>下次进入循环时也错一次</strong>（错 2 次）；2-bit 只错最后那 1 次。</p>
+
+<p><strong>感知机预测器（perceptron predictor）</strong>你会有亲切感：它真的就是一个线性感知机，输入是最近 N 次分支的历史（+1/-1），权重在线更新，输出符号即预测方向。这是 2001 年 Jiménez 和 Lin 的工作，AMD Zen 系列采用了它的变体。<span class="key">你的 CPU 里跑着一个每秒推理几十亿次的微型神经网络，只为猜你的 if 往哪走。</span></p>
+
+<h3>BTB：不只要猜「跳不跳」，还要猜「跳到哪」</h3>
+
+<p>预测方向只解决了一半问题。就算知道要跳，<strong>目标地址</strong>也得等指令译码完才知道。于是有了 <span class="term">BTB（Branch Target Buffer，分支目标缓冲）</span>：一张以「分支指令的 PC 地址」为 key、「上次跳到的目标地址」为 value 的小型缓存。取指阶段一边取指令，一边拿当前 PC 去查 BTB，命中就立刻按预测目标继续取指，连译码都不用等。</p>
+
+<p>还有一个专用结构 <span class="term">RAS（Return Address Stack，返回地址栈）</span>：函数 <code>call</code> 时把返回地址压栈，<code>ret</code> 时从栈顶预测返回目标。因为函数调用天然是后进先出的，RAS 的准确率能到 99% 以上。<span class="key">注意 BTB 和 RAS 都是「按地址索引的、跨进程共享的、有限容量的缓存」——这三个性质合起来，正是第 7 节 Spectre v2 攻击的攻击面。</span></p>
+
+<h2 id="s5">5. 超标量：一个周期发射多条指令</h2>
+
+<p>流水线把 IPC 从 0.2 拉到了 1。但 1 就是天花板了吗？只要一个周期只发射一条指令（<span class="term">标量 / scalar</span>），是的。突破口是<span class="term">超标量（superscalar）</span>：<strong>在每一级都放多套硬件，一个周期同时取 4~8 条指令、译码 4~8 条、把它们分派到多个并行的执行单元上。</strong></p>
+
+<div class="ascii">4-way 超标量的一个周期（简化）：
+
+  取指 4 条  ─→  译码 4 条  ─→  调度器 ─┬→ ALU 0    (整数加减)
+                                        ├→ ALU 1    (整数加减)
+                                        ├→ FPU/向量  (浮点/SIMD)
+                                        ├→ Load 单元 (读内存)
+                                        └→ Store 单元(写内存)
+
+  理论峰值 IPC = 4~6，实测通用代码 IPC ≈ 1~2</div>
+
+<p>这里出现了一个新概念：<span class="term">ILP（Instruction-Level Parallelism，指令级并行度）</span>——一段代码里「互相不依赖、理论上可以同时跑」的指令有多少。<span class="key">超标量提供了并行的硬件能力，但能不能用上，取决于你的代码有没有 ILP。</span>一串环环相扣的 RAW 依赖链（<code>a=a+1; a=a*2; a=a-3;</code>）无论多少个 ALU 都只能一条一条跑。这解释了一个反直觉的现象：<strong>两个指令数完全相同的程序，性能可以差 3 倍</strong>，差别全在依赖结构上。</p>
+
+<p>顺便区分一个容易混的概念：<span class="term">VLIW（超长指令字）</span>是另一条路——把「哪几条指令能并行」这件事交给<strong>编译器</strong>在编译期决定，打包成一条超长指令，硬件只管照做。好处是硬件极简（省电、省面积），坏处是编译器看不到运行时信息（比如这次 cache 会不会 miss），一旦猜错只能停顿。Intel 的安腾（Itanium）赌 VLIW 赌输了，是计算机史上最贵的失败之一；但 VLIW 思想在 DSP 和一些 AI 加速器（如早期 TPU、部分 NPU）里活得很好——<span class="key">因为神经网络的计算图是静态的、编译期完全可知的</span>。这个对比你以后设计推理加速方案时会反复遇到。</p>
+
+<ul>
+  <li>标量流水线上限 IPC = 1；超标量把上限提到 4~8。</li>
+  <li>实际 IPC 受限于代码的 ILP，通用代码 1~2 已经不错。</li>
+  <li>宽度（wide）与深度（deep）是两个正交的加速维度：Apple M 系列走「浅而极宽」（8 宽译码），Intel 走「深而较宽」。</li>
+  <li>VLIW 把并行调度交给编译器；超标量交给硬件。前者省电、后者适应性强。</li>
+</ul>
+
+<h2 id="s6">6. 乱序执行：寄存器重命名与 ROB</h2>
+
+<p>超标量有个致命问题：如果按程序顺序发射（<span class="term">顺序执行 in-order</span>），一旦队首那条指令卡住（比如它要的数据 cache miss，要等 200 个周期从内存拿），<strong>后面所有指令全部堵死</strong>，哪怕它们跟这条完全无关、数据早就就绪。这就像高速路最左道一辆车抛锚，后面几百辆全停——尽管右边三条道空着。</p>
+
+<p><span class="term">乱序执行（Out-of-Order Execution, OoO）</span>的思想：<span class="key">指令按程序顺序进入，按「数据就绪」的顺序执行，最后再按程序顺序退休。</span>这句话是整个现代 CPU 的核心，值得背下来。它拆成三段：</p>
+
+<h3>① 顺序进入 + 寄存器重命名</h3>
+
+<p>指令按序取指译码，然后做一件关键的事：<span class="term">寄存器重命名（register renaming）</span>。回忆第 2 节的假依赖——WAR 和 WAW 只是「撞了名字」。x86 架构上程序员可见的通用寄存器只有 16 个（<code>rax</code>、<code>rbx</code>…），编译器不得不反复复用，制造出大量假依赖。而 CPU 内部实际有 <strong>180~300 个物理寄存器</strong>。重命名器把每次对同一个架构寄存器的写入，映射到一个全新的物理寄存器上：</p>
+
+<pre><code>原始代码（看起来串行）：        重命名后（假依赖消失）：
+  mov rax, [mem1]                mov p37, [mem1]
+  add rax, 1                     add p38, p37, 1
+  mov [mem2], rax                mov [mem2], p38
+  mov rax, [mem3]   ← WAW        mov p52, [mem3]   ← 换了物理寄存器
+  add rax, 2                     add p53, p52, 2      与上面完全独立，可并行
+  mov [mem4], rax                mov [mem4], p53</code></pre>
+
+<p><strong>类比</strong>：这就像 Python 里的变量重用。你写 <code>x = f(); use(x); x = g(); use(x)</code>，两个 <code>x</code> 逻辑上毫无关系，只是懒得起名字。重命名器相当于自动改写成 <code>x1</code>、<code>x2</code>，于是两段可以并行跑。<span class="key">只有 RAW 真依赖会留下来，它们才是真正的物理约束。</span></p>
+
+<h3>② 乱序执行</h3>
+
+<p>重命名后的指令进入<span class="term">保留站 / 调度器（Reservation Station）</span>，在这里等待自己的操作数就位。这是 1967 年 IBM 的 Robert Tomasulo 为 System/360 Model 91 发明的算法，至今仍是所有 OoO CPU 的骨架。<strong>哪条指令的操作数先齐、且对应的执行单元空闲，哪条就先执行</strong>——完全不管程序顺序。一条等 cache miss 的 load 卡在那里时，后面几十条独立指令照跑不误。现代 CPU 的<span class="term">乱序窗口</span>（能同时在飞的指令数）在 300~600 条量级（Apple M 系列超过 600）。</p>
+
+<h3>③ 顺序退休：ROB</h3>
+
+<p>问题来了：既然乱序执行，那万一中间某条指令触发了页错误或除零异常，怎么保证程序状态是「精确」的（即：异常之前的指令全部生效，之后的一条都没生效）？答案是<span class="term">ROB（Reorder Buffer，重排序缓冲）</span>：一个环形队列，指令按程序顺序入队，执行结果先写进 ROB 里<strong>而不是真正提交</strong>；只有当一条指令走到队首、且它前面的都已正确完成时，它才<span class="term">退休（retire / commit）</span>，把结果真正写进架构寄存器和内存。</p>
+
+<div class="ascii">        乱序核心的三段结构
+
+  [顺序] 取指 → 译码 → 重命名 → ┐
+                                 ↓
+  [乱序]           保留站 / 调度器 → 执行单元们（并行、乱序）
+                                 ↓
+  [顺序]              ROB（重排序缓冲）→ 退休 → 架构状态生效
+                                          ↑
+                     只有退休了的结果，才是「程序真正看到的」</div>
+
+<p><span class="key">这就是那句名言的含义：现代 CPU 内部是彻底混乱的，但它对外维持了一个「一切按顺序发生」的幻觉。</span>这个幻觉叫「精确异常（precise exception）」，它是操作系统能正常工作的前提——没有它，缺页中断后内核根本不知道该从哪条指令恢复。而下周我们讲多核内存一致性时，你会发现：这个幻觉<strong>只对单个核心自己成立</strong>，别的核心看到的顺序可能完全不同，这就是内存屏障存在的理由。</p>
+
+<h2 id="s7">7. 推测执行与 Spectre 的根源</h2>
+
+<p>把前面几节拼起来，你已经能自己推出现代 CPU 最危险的那个特性了。</p>
+
+<p>分支预测猜了方向 → 超标量 + 乱序引擎立刻沿着猜测的路径大干快上，执行几十上百条指令 → 这些指令的结果全都暂存在 ROB 里没有退休。这个状态叫 <span class="term">推测执行（speculative execution）</span>：<strong>这些指令是「可能不该执行」的，它们的存在只是一场赌博。</strong>几十个周期后分支条件算出来了：</p>
+
+<ul>
+  <li><strong>猜对了</strong>：这些指令依次退休，白赚了几十个周期。</li>
+  <li><strong>猜错了</strong>：清空流水线（pipeline flush），把 ROB 里所有推测指令的结果<strong>全部丢弃</strong>，从正确地址重新取指。</li>
+</ul>
+
+<p>整个 CPU 设计界曾经有一个默认假设：<span class="key">被丢弃的推测执行「什么都没发生过」。</span>2018 年 1 月，Spectre 和 Meltdown 的公开证明了这个假设是错的——<strong>架构状态（寄存器、内存）确实被回滚了，但微架构状态没有。</strong>尤其是：那些推测执行期间发生的内存访问，已经把数据加载进了 <span class="term">CPU 缓存</span>，而缓存不会因为流水线冲刷而回滚。</p>
+
+<h3>Spectre v1（边界检查绕过）的骨架</h3>
+
+<pre><code>// 受害者代码里一段完全正常、看似安全的检查
+if (x &lt; array1_size) {          // ① 边界检查
+    y = array2[ array1[x] * 4096 ];  // ② 越界读 + 用读到的值去索引另一个数组
+}</code></pre>
+
+<p>攻击步骤：</p>
+<ol>
+  <li>攻击者先用几百次<strong>合法的</strong> <code>x</code>（都小于 <code>array1_size</code>）反复调用这段代码，把分支预测器<span class="key">训练成「这个分支总是成立」</span>。</li>
+  <li>攻击者设法让 <code>array1_size</code> 不在缓存里（比如用 <code>clflush</code> 刷掉），于是 ① 的比较要等几百个周期才能出结果。</li>
+  <li>此时传入一个<strong>越界的</strong> <code>x</code>（比如指向内核内存或另一个用户的密钥）。CPU 因为被训练过，<strong>推测执行了 ②</strong>：读出了本不该读的秘密字节 <code>k = array1[x]</code>，并且用它去访问 <code>array2[k * 4096]</code>——<span class="key">这一次访问把 array2 的第 k 页搬进了缓存</span>。</li>
+  <li>几百周期后 ① 算完，发现越界，CPU 冲刷流水线、丢弃所有结果。从架构层面看，什么都没发生，程序没有崩溃，没有任何异常。</li>
+  <li>攻击者随后遍历 <code>array2</code> 的 256 个页，逐个计时访问（这叫 <span class="term">FLUSH+RELOAD</span>）。哪一页访问特别快，说明它在缓存里，那个下标就是秘密字节 <code>k</code>。<strong>秘密被一个字节一个字节地泄露出来。</strong></li>
+</ol>
+
+<p><span class="key">注意这里最深刻的一点：没有任何一行代码是「有 bug 的」。</span>受害者代码做了正确的边界检查；CPU 正确地执行了它的规格；结果依然泄密。漏洞出在<strong>规格本身</strong>——ISA（指令集架构）只规定了「架构状态」的正确性，从未把「时间」和「缓存占用」当作需要保护的通道。这类攻击叫<span class="term">瞬态执行攻击（transient execution attack）</span>。</p>
+
+<p><span class="term">Spectre v2</span>更凶：攻击者训练的是<strong>间接跳转预测器（BTB）</strong>。因为 BTB 是按地址索引且在同一物理核上跨进程/跨虚拟机共享的（尤其在超线程下），攻击者可以在自己的进程里训练 BTB，让受害者进程的一次间接跳转<strong>推测跳到攻击者选定的代码片段（gadget）上</strong>，从而在受害者的地址空间里推测执行任意读操作。这直接击穿了进程隔离和虚拟机隔离——<span class="key">这就是为什么 Spectre 对云厂商是核弹级事件</span>。</p>
+
+<p><span class="term">Meltdown</span>机制略有不同（它利用的是「权限检查与数据加载并行进行」，让用户态代码在异常被投递前的窗口里推测读到内核内存），主要影响 Intel，缓解方案是 <span class="term">KPTI</span>（内核页表隔离），代价是每次系统调用都要换页表，syscall 密集的负载性能下降 5%~30%。这些缓解措施的性能代价你在 Day 34 会详细算。</p>
+
+<div class="note">
+<strong>一句话总结今天</strong>：CPU 之所以快，是因为它<strong>并行（流水线、超标量）、乱序、并且敢赌（推测执行）</strong>。而<span class="key">凡是「赌」，就一定会在时间和资源占用上留下痕迹；凡是留下痕迹，就是一条侧信道。</span>性能优化和信息隔离，在硬件层是一对根本矛盾。这个认识框架，你可以原样搬到 LLM 推理服务的安全分析上——这正是下面要讲的。
+</div>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>① 推测执行的「思维模型」直接映射到 LLM 推测解码。</strong>你在 Day 53 会学到 <span class="term">speculative decoding</span>：用一个小的 draft 模型快速猜出未来 5 个 token，再用大模型一次性并行验证，猜对就白赚 5 步、猜错就丢弃重来。<span class="key">这和 CPU 分支预测是同一个设计模式的两次独立发明</span>——都是「用廉价预测填满昂贵资源的空转」。而它也继承了同一个安全后果：不同请求的接受/拒绝率不同会导致生成延迟不同，攻击者可以从<strong>响应时间的细微差异</strong>反推被拒绝的 token 数，进而推断 draft 模型状态甚至输入内容。你做 Agent 安全时看到「推测」两个字，就该条件反射地问：<strong>失败路径留下了什么可观测的痕迹？</strong></p>
+
+<p><strong>② 多租户推理服务就是 Spectre 场景的翻版。</strong>Spectre 的前提是「共享的、按内容索引的、有限容量的缓存 + 可观测的时间差」。现在看你的 LLM 网关：vLLM 的 <span class="term">prefix caching</span> 让不同用户共享 KV cache 块，命中时 TTFT（首 token 延迟）显著低于未命中。攻击者只要构造若干候选前缀，逐个发请求测 TTFT，<span class="key">就能判断「某个特定的 prompt 前缀最近是否被别的用户提交过」</span>——这是一条完整的跨租户信息泄露通道，机制和 FLUSH+RELOAD 一模一样，只是把缓存行换成了 KV block。Day 42 讲 PagedAttention、Day 55 讲推理服务攻击面时会正式展开，今天先把这个类比刻在脑子里。</p>
+
+<p><strong>③ 「架构状态 vs 微架构状态」是审计 Agent 沙箱的正确框架。</strong>Spectre 的教训是：<strong>规格说「没发生」不等于物理上没留痕迹</strong>。你审计一个 Agent 的代码执行沙箱时，通常只检查架构层面：文件系统隔离了吗、网络禁了吗、进程 namespace 干净吗。但侧信道躲在下面一层——共享 CPU 的缓存占用、共享 GPU 的显存分配时序、共享向量库的查询延迟。<span class="key">被回滚的操作、被拒绝的请求、被过滤掉的输出，都可能通过耗时把信息带出沙箱。</span>一个被 guardrail 拦下的 prompt injection，如果拦截路径明显比正常路径快（或慢），攻击者就获得了一个免费的探测器，可以二分搜索出你的过滤规则。</p>
+
+<p><strong>④ 分支预测器的「训练—误导」范式，就是 prompt injection 的硬件版本。</strong>Spectre v1 的核心动作是：<span class="key">用几百次良性输入把预测器训练出一个偏见，然后用一次恶意输入利用这个偏见。</span>把「分支预测器」换成「LLM 的上下文」，你得到的正是多轮对话中的越狱手法——先用大量无害轮次建立角色和行为模式，让模型形成「这类请求都该照做」的隐式预期，再在建立好的轨道上投递真正的恶意指令。你做防御设计时，CPU 界的对策同样有启发意义：<strong>隔离（每个进程独立的预测器状态 ↔ 每个会话独立的、不可被历史软化的系统指令）、清空（切换上下文时刷新预测器 ↔ 高危操作前重申指令边界）、以及不信任推测结果直到验证完成（↔ 工具调用前的独立二次校验）</strong>。</p>
+
+<p><strong>⑤ 理解 IPC 和 ILP 让你能诊断真实的推理瓶颈。</strong>当你的推理服务变慢，「加机器」是最贵的解法。有了今天的框架，你能提出更锋利的问题：CPU 侧的 tokenizer / 采样 / 后处理是不是被分支预测失败拖垮了（大量数据依赖的 <code>if</code>、Python 层的动态分派）？<span class="key">用 <code>perf stat</code> 看 branch-miss 率超过 5% 基本就是红灯</span>，说明有热点循环里塞满了不可预测的分支——把它改成无分支的向量化写法（比如用掩码代替 <code>if</code>）经常能拿到 2~3 倍提升。Day 33 的 lab 会让你亲手量一次；这是「懂硬件的算法工程师」和「只会调 batch size 的算法工程师」在性能问题上的分水岭。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手题</strong></p>
+<p>亲手制造一次分支预测灾难。写下面这个脚本，比较<strong>排序后</strong>和<strong>未排序</strong>数组上同一段带 <code>if</code> 的循环的耗时（这是 Stack Overflow 上最著名的问题之一的复刻）：</p>
+<pre><code>python3 - &lt;&lt;'EOF'
+import random, time
+N = 2_000_000
+data = [random.randint(0, 255) for _ in range(N)]
+
+def bench(arr, label):
+    t = time.perf_counter()
+    s = 0
+    for v in arr:
+        if v &gt;= 128:      # 关键分支
+            s += v
+    print(f"{label}: {time.perf_counter()-t:.3f}s  sum={s}")
+
+bench(data, "未排序")
+bench(sorted(data), "已排序")
+EOF</code></pre>
+<p>两次循环的<strong>指令数完全相同</strong>、结果也相同，为什么排序后更快？（提示：排序后这个 <code>if</code> 变成了「连续几十万次不成立，再连续几十万次成立」。）进阶：用 C 写同一段逻辑，用 <code>gcc -O2</code> 编译再测——差距会大得多（通常 3~6 倍），想想为什么 Python 版差距被稀释了。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察题</strong></p>
+<p>直接量分支预测失败率。Linux 上用 perf（Mac 用户可用 <code>xcrun xctrace</code> 或跳到思考题）：</p>
+<pre><code>perf stat -e branches,branch-misses,instructions,cycles \
+    python3 -c "s=0
+for i in range(5_000_000):
+    if i % 3 == 0: s += i"
+
+perf stat -e branches,branch-misses,instructions,cycles \
+    python3 -c "import numpy as np
+a = np.arange(5_000_000); print(a[a % 3 == 0].sum())"</code></pre>
+<p>记录两者的 <code>branch-misses</code> 占 <code>branches</code> 的百分比、以及 IPC。问题：numpy 版本是怎么把「不可预测的分支」变成「可预测的顺序计算」的？（提示：<code>a % 3 == 0</code> 生成的是一个布尔掩码数组，不是分支。）这个技巧叫 <span class="term">branchless programming</span>。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考题</strong></p>
+<p>某 CPU 流水线深 18 级，分支预测失败惩罚 = 17 个周期。某程序中 22% 的指令是分支。<strong>(a)</strong> 分支预测准确率分别为 95% 和 99% 时，平均每条指令因预测失败增加多少周期？如果基准 CPI = 1，两种情况的实际 CPI 和性能差距是多少？<strong>(b)</strong> 现在假设厂商把流水线加深到 30 级换取 25% 的频率提升，惩罚涨到 29 周期，准确率不变（95%）。这次「加深换频率」到底是赚是亏？<strong>(c)</strong> 最后一问，往安全上想：如果你是云厂商，为了缓解 Spectre v2 而关闭超线程（SMT），你损失的是今天讲的哪一种并行度？为什么关掉 SMT 能缓解 BTB 攻击？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 31 · 缓存层级</strong>。今天末尾我们说「缓存不会因为流水线冲刷而回滚」，并且反复提到 cache miss 会让流水线堵死几百个周期——但缓存到底是什么、为什么它这么快、又为什么这么容易泄密，我们一直欠着。明天补上：L1/L2/L3 的三级金字塔、cache line（为什么是 64 字节）、直接映射与组相联、LRU 替换、写回 vs 写穿透、多核共享带来的 <strong>false sharing</strong>（一个能让多线程程序慢 10 倍的隐形杀手），以及怎么写「缓存友好」的数据结构。这一课直接决定你能不能读懂 Day 38 那个核心结论：<strong>为什么 LLM 推理是 memory-bound 的</strong>。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
