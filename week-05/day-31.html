@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 31 · 缓存层级</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 31 · 缓存层级（CPU Cache Hierarchy）</h1>
+  <div class="meta">Week 05 · 周三 · 2026-07-30 · 主线：CPU 架构 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们讲了流水线、乱序执行——CPU 每秒能跑几十亿条指令。但有一个残酷的事实：<span class="key">CPU 快，内存慢，而且慢得离谱</span>。一次 DRAM 访问要 ~100 纳秒，同一时间 CPU 本可以执行几百条指令。如果每次读数据都去内存，你那台价值不菲的 CPU 有 99% 的时间在发呆。缓存（Cache）就是为了填这道鸿沟而生的。今天我们把 CPU 缓存彻底讲清楚：为什么分成 <span class="key">L1/L2/L3 三层</span>、数据以 <span class="key">cache line</span> 为单位搬运、地址如何<span class="key">映射</span>到缓存、满了怎么<span class="key">替换</span>、写数据用什么<span class="key">策略</span>、多核下臭名昭著的 <span class="key">false sharing</span>、如何写<span class="key">缓存友好</span>的代码、以及 CPU 如何用 <span class="key">prefetch</span> 提前把数据搬进来。学完你会明白：为什么同样的双重循环，交换一下内层外层顺序，性能能差 10 倍。这对做 LLM 推理性能优化的人来说，是每天都在用的直觉。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">为什么需要缓存：内存墙与局部性原理</a></li>
+  <li><a href="#s2">L1 / L2 / L3 三层缓存</a></li>
+  <li><a href="#s3">cache line：缓存搬运的最小单位</a></li>
+  <li><a href="#s4">映射方式：地址如何找到缓存槽</a></li>
+  <li><a href="#s5">替换策略：满了淘汰谁</a></li>
+  <li><a href="#s6">写策略：write-through vs write-back</a></li>
+  <li><a href="#s7">false sharing：多核下的隐形杀手</a></li>
+  <li><a href="#s8">缓存友好数据结构 + prefetch</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#ex">今日小练习</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1 · 为什么需要缓存：内存墙与局部性原理</h2>
+
+<p>先记住一组数字，这是整个现代计算机性能优化的物理基础。假设 CPU 一个时钟周期是 0.3 纳秒（约 3.3 GHz），把每一级存储的延迟换算成「相当于多少个时钟周期」：</p>
+
+<table>
+<tr><th>存储层级</th><th>典型延迟</th><th>约等于时钟周期</th><th>类比（放大到「1 周期 = 1 秒」）</th></tr>
+<tr><td>寄存器 register</td><td>0.3 ns</td><td>1</td><td>1 秒（就在手边）</td></tr>
+<tr><td>L1 缓存</td><td>~1 ns</td><td>~4</td><td>4 秒（伸手拿桌上的东西）</td></tr>
+<tr><td>L2 缓存</td><td>~4 ns</td><td>~12</td><td>12 秒（起身走到书架）</td></tr>
+<tr><td>L3 缓存</td><td>~15 ns</td><td>~40</td><td>40 秒（走到隔壁房间）</td></tr>
+<tr><td>主内存 DRAM</td><td>~100 ns</td><td>~300</td><td>5 分钟（开车去趟超市）</td></tr>
+<tr><td>NVMe SSD</td><td>~100 μs</td><td>~300,000</td><td>3.5 天</td></tr>
+<tr><td>机械硬盘</td><td>~10 ms</td><td>~30,000,000</td><td>接近 1 年</td></tr>
+</table>
+
+<p>看到问题了吗？<span class="key">CPU 内核和主内存之间差了两个数量级</span>。这条鸿沟叫 <span class="term">内存墙（Memory Wall）</span>：几十年来 CPU 速度翻了几千倍，DRAM 延迟几乎没怎么降。如果没有缓存，CPU 每次取数都要等 ~300 个周期，流水线、乱序执行这些昨天讲的精妙设计全都白费。</p>
+
+<p>缓存能起作用，靠的是程序访问内存的两条统计规律，合称 <span class="term">局部性原理（Principle of Locality）</span>：</p>
+
+<ul>
+  <li><span class="term">时间局部性（Temporal Locality）</span>：刚访问过的数据，很可能马上又被访问。比如循环里的计数器 <code>i</code>、函数栈上的局部变量。→ 把它留在缓存里。</li>
+  <li><span class="term">空间局部性（Spatial Locality）</span>：访问了某个地址，很可能马上访问它旁边的地址。比如遍历数组 <code>a[0], a[1], a[2]...</code>、顺序执行的指令。→ 一次搬一整块进缓存。</li>
+</ul>
+
+<p>你可以用数学直觉理解：内存访问不是均匀随机分布，而是高度聚集的。缓存本质是一个赌局——赌「你接下来要的东西，我这里已经有了」。命中（hit）就赚了 300 个周期，未命中（miss）也只是回到没缓存的情况。只要命中率够高，期望收益巨大。</p>
+
+<div class="note">
+<strong>平均访问时间公式</strong>：<code>AMAT = 命中时间 + 未命中率 × 未命中代价</code>。假设 L1 命中 1 周期、未命中率 5%、未命中要去内存花 300 周期，那么 AMAT = 1 + 0.05 × 300 = 16 周期。命中率从 95% 提到 99%，AMAT 直接降到 1 + 0.01 × 300 = 4 周期。<span class="key">性能对命中率极其敏感</span>——这就是我们今天要学的一切的动机。
+</div>
+
+<h2 id="s2">2 · L1 / L2 / L3 三层缓存</h2>
+
+<p>既然缓存这么好，为什么不做一个巨大的、又快又大的缓存？答案是物理定律：<span class="key">存储越大越慢越贵</span>。SRAM（做缓存用的静态存储）比 DRAM 快，但每比特要 6 个晶体管，成本高、密度低。工程上的妥协就是<span class="term">分层</span>——用一小块极快的，配一块中等的，再配一块大的，形成金字塔。</p>
+
+<div class="ascii">
+        ┌──────────────┐
+        │   CPU 核心    │  寄存器（几百字节，0.3ns）
+        └──────┬───────┘
+        ┌──────┴───────┐
+        │  L1  I / D    │  32KB+32KB，~1ns，每核私有
+        └──────┬───────┘
+        ┌──────┴───────┐
+        │      L2       │  256KB~1MB，~4ns，每核私有
+        └──────┬───────┘
+        ┌──────┴───────┐
+        │      L3 (LLC) │  8~64MB，~15ns，多核共享
+        └──────┬───────┘
+        ┌──────┴───────┐
+        │  主内存 DRAM  │  16~512GB，~100ns
+        └──────────────┘
+</div>
+
+<ul>
+  <li><span class="term">L1</span>：最快最小，通常分成 <span class="term">L1i</span>（指令）和 <span class="term">L1d</span>（数据）两个独立缓存（哈佛结构，昨天提过），这样取指和取数据不打架。每核私有。</li>
+  <li><span class="term">L2</span>：稍大稍慢，一般是统一缓存（指令数据混放）。现代 CPU 里每核私有。</li>
+  <li><span class="term">L3（LLC，Last Level Cache）</span>：最大，通常<span class="key">被同一颗芯片上的所有核共享</span>。这是核间共享数据、以及后面 false sharing 问题的舞台。</li>
+</ul>
+
+<p>访问流程：CPU 要一个地址 → 先查 L1，命中就返回（~1ns）→ 没命中查 L2 → 再没命中查 L3 → 最后才去内存（~100ns），并把数据「回填」到各级缓存里，供下次使用。这叫 <span class="term">缓存层次（cache hierarchy）</span>的 lookup 链。</p>
+
+<p>在 Linux 上你可以直接看到自己机器的缓存配置：</p>
+
+<pre><code># 方法一：lscpu 一眼看全部层级大小
+lscpu | grep -i cache
+
+# 方法二：直接读 sysfs，看得更细（index0=L1d, index1=L1i, index2=L2, index3=L3）
+cat /sys/devices/system/cpu/cpu0/cache/index0/size          # 大小
+cat /sys/devices/system/cpu/cpu0/cache/index0/level         # 第几级
+cat /sys/devices/system/cpu/cpu0/cache/index0/type          # Data/Instruction/Unified
+cat /sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size   # cache line 大小
+cat /sys/devices/system/cpu/cpu0/cache/index0/ways_of_associativity # 相联度
+
+# macOS 上用 sysctl
+sysctl -a | grep cachesize
+sysctl hw.cachelinesize</code></pre>
+
+<h2 id="s3">3 · cache line：缓存搬运的最小单位</h2>
+
+<p>这是今天最重要的概念之一，请务必记牢。<span class="key">缓存和内存之间搬数据，不是一个字节一个字节搬，而是一整块一整块搬。</span>这个块叫 <span class="term">cache line（缓存行）</span>，在几乎所有现代 x86 和 ARM 上都是 <span class="key">64 字节</span>。</p>
+
+<p>也就是说，你哪怕只读一个 <code>char</code>（1 字节），CPU 也会把它所在的、对齐到 64 字节边界的那整行 64 字节全搬进缓存。为什么？因为空间局部性——你读了 <code>a[0]</code>，大概率马上要 <code>a[1]</code>，与其一个个搬，不如一次搬 64 字节（能装 16 个 int 或 8 个 double）。</p>
+
+<div class="note">
+<strong>类比</strong>：cache line 就像图书馆的「取书规则」。你只想看某本书的第 37 页，但管理员规定「一次必须借走整本书」。如果你接下来真要看第 38、39 页（顺序访问），这规则帮你省了无数趟；但如果你东翻一页西翻一页（随机访问），你每次都借一整本书却只看一页，浪费巨大——这就是「缓存不友好」的根源。
+</div>
+
+<p>这解释了一个经典现象：<span class="key">遍历二维数组，行优先比列优先快几倍</span>。C/NumPy 的二维数组默认按行连续存储（row-major）。按行遍历时，每读一个 cache line 就用满 16 个元素；按列遍历时，每次跳一整行的距离，每个 cache line 只用 1 个元素就被换出，命中率暴跌。我们今天的练习就来实测这个。</p>
+
+<pre><code># 用 Python 感受 cache line 效应（NumPy 底层是连续内存）
+import numpy as np, time
+n = 8000
+a = np.ones((n, n), dtype=np.float64)
+
+t = time.perf_counter()
+s = a.sum(axis=1)          # 按行求和：沿连续内存方向，缓存友好
+print("行优先:", time.perf_counter() - t)
+
+t = time.perf_counter()
+s = a.sum(axis=0)          # 按列求和：每次跨一整行，缓存不友好
+print("列优先:", time.perf_counter() - t)
+# 典型结果：列优先明显更慢，尽管计算量完全相同</code></pre>
+
+<h2 id="s4">4 · 映射方式：地址如何找到缓存槽</h2>
+
+<p>缓存比内存小得多，所以必然是「多个内存地址争抢同一批缓存槽」。给定一个内存地址，怎么决定它能放进缓存的哪个位置？这就是 <span class="term">映射方式（placement policy）</span>。有三种：</p>
+
+<h3>4.1 直接映射（Direct-Mapped）</h3>
+<p>每个内存块只能放进<span class="key">唯一一个</span>缓存槽。规则很简单：<code>槽号 = 块地址 mod 槽数</code>。硬件实现最便宜、查找最快，但缺点致命：如果两个热数据恰好映射到同一个槽，它们会不停把对方踢出去（叫 <span class="term">冲突未命中 / conflict miss</span>），哪怕缓存整体还很空。</p>
+
+<h3>4.2 全相联（Fully Associative）</h3>
+<p>一个内存块可以放进<span class="key">任意</span>缓存槽。灵活性最高、冲突未命中最少，但要查一个地址在不在缓存里，得同时比较所有槽的标签，硬件成本高得离谱。只用在极小的缓存（如 TLB）里。</p>
+
+<h3>4.3 组相联（Set-Associative）——实际采用的折中</h3>
+<p>把缓存分成若干「组（set）」，每组有 N 个槽（叫 N 路，N-way）。一个内存块先用取模确定放进<span class="key">哪个组</span>，然后在组内可以放进<span class="key">任意一路</span>。这就兼顾了两者：定位组便宜，组内小范围灵活。现代 CPU 的 L1 通常 8-way，L3 常见 16-way 甚至更高。</p>
+
+<p>一个 64 位物理地址被硬件切成三段来完成查找：</p>
+
+<div class="ascii">
+   ┌─────────── Tag ───────────┬──── Set Index ────┬── Offset ──┐
+   │  剩下的高位，用来在组内比对  │  选哪个组（set）    │ 行内偏移(6位)│
+   └───────────────────────────┴───────────────────┴────────────┘
+                                                     └ 64B line → 6 位
+</div>
+
+<ul>
+  <li><span class="term">Offset（偏移）</span>：cache line 是 64 字节 = 2⁶，所以低 6 位定位「行内第几个字节」。</li>
+  <li><span class="term">Set Index（组索引）</span>：中间几位选哪个组。有多少组就用多少位。</li>
+  <li><span class="term">Tag（标签）</span>：剩下的高位，存在缓存槽里；查找时和地址的 tag 逐路比对，确认「这一路存的正是我要的那块」。</li>
+</ul>
+
+<div class="note">
+<strong>为什么某些「2 的幂」的步长特别慢？</strong> 如果你以 4096 字节（正好一页、也是 2 的幂）为步长访问数组，这些地址的 Set Index 位可能完全相同 → 全挤进同一个组 → 组内 N 路很快被占满 → 疯狂冲突未命中。这叫 <span class="term">cache thrashing</span>。这也是为什么有些高性能库会故意给数组加一点「padding」，把 2 的幂的尺寸错开一点。
+</div>
+
+<h2 id="s5">5 · 替换策略：缓存满了淘汰谁</h2>
+
+<p>当一个组的 N 路都被占满，又来了一个新块要放进这个组，就得踢掉一个旧的。踢谁？这是 <span class="term">替换策略（replacement policy）</span>：</p>
+
+<ul>
+  <li><span class="term">LRU（Least Recently Used，最近最少使用）</span>：踢掉最久没被访问的那个。最符合时间局部性的直觉，效果好，但要精确记录每一路的访问顺序，路数一多硬件成本就高。</li>
+  <li><span class="term">Pseudo-LRU（伪 LRU）</span>：用一棵二叉树的几个 bit 近似 LRU，成本低效果接近，是实际 CPU 常用的。</li>
+  <li><span class="term">Random / RRIP 等</span>：随机替换实现最简单；现代 CPU（尤其 L3）常用更聪明的 RRIP 类策略来抵抗「一次性扫过大数组」这种把缓存冲垮的访问模式。</li>
+</ul>
+
+<p>作为软件工程师，你几乎不能直接控制替换策略（它在硬件里），但你要知道它的存在——它解释了为什么「工作集（working set）刚好超过缓存大小」时性能会有一个悬崖式下跌：只要你反复访问的数据总量能装进 L2，就一直命中；一旦稍微超过，LRU 就开始不停淘汰你马上又要用的东西，命中率崩盘。这个「悬崖」在今天的练习里能实测出来。</p>
+
+<h2 id="s6">6 · 写策略：write-through vs write-back</h2>
+
+<p>前面讲的都是「读」。写数据时，缓存里改了，什么时候同步回内存？这是 <span class="term">写策略</span>，两种主流：</p>
+
+<table>
+<tr><th></th><th>write-through（写直达）</th><th>write-back（写回）</th></tr>
+<tr><td>行为</td><td>写缓存的同时立刻写内存</td><td>只写缓存，标记为「脏(dirty)」，等这行被替换出去时才写回内存</td></tr>
+<tr><td>优点</td><td>内存始终是最新的，简单、一致性好</td><td>合并多次写、大幅减少内存流量，快得多</td></tr>
+<tr><td>缺点</td><td>每次写都碰内存，慢、占带宽</td><td>内存暂时是「旧的」，多核一致性更复杂</td></tr>
+</table>
+
+<p>现代 CPU 的数据缓存几乎都用 <span class="key">write-back</span>，因为写操作也高度聚集，合并起来收益巨大。为了缓和 write-through 的慢，还会配一个 <span class="term">write buffer（写缓冲）</span>，让 CPU 写完不必等内存确认就继续跑。</p>
+
+<p>还有一个配套问题：写一个<span class="key">当前不在缓存里</span>的地址时怎么办？</p>
+<ul>
+  <li><span class="term">write-allocate（写分配）</span>：先把那一行读进缓存，再在缓存里改。常和 write-back 搭配——因为赌你等会儿还会再写它。</li>
+  <li><span class="term">no-write-allocate（写不分配）</span>：直接写内存，不占缓存。常和 write-through 搭配。</li>
+</ul>
+
+<div class="note">
+<strong>脏行（dirty line）与 <code>dirty</code> 的联系</strong>：还记得 Week 02 讲页缓存时的「脏页」吗？那是 OS 层面「内存里的数据比磁盘新，还没写回」；这里的「脏 cache line」是硬件层面「缓存里的数据比内存新，还没写回」。同一个「延迟写、批量刷」的思想，在计算机系统里反复出现——从寄存器到缓存、到页缓存、到数据库 WAL，都是它。
+</div>
+
+<h2 id="s7">7 · false sharing：多核下的隐形性能杀手</h2>
+
+<p>这是本节的重头戏，也是并发编程里最坑的性能陷阱之一，做 LLM 推理并行时你一定会撞上。</p>
+
+<p>先补一个背景：多核 CPU 每核有自己的 L1/L2，同一份数据可能同时存在于多个核的缓存里。为了保证大家看到的是一致的值，硬件跑一套 <span class="term">缓存一致性协议（cache coherence，如 MESI）</span>（明天 Day 32 会细讲）。核心规则是：<span class="key">当一个核写了某个 cache line，其他核里这一行的副本必须作废（invalidate）</span>，下次要用得重新去拿最新的。</p>
+
+<p>关键在于：<span class="key">一致性是以整个 cache line（64 字节）为单位的，不是以变量为单位的</span>。于是灾难发生了——两个线程各自修改两个<span class="key">逻辑上毫不相关</span>、但恰好落在<span class="key">同一个 64 字节 cache line</span> 里的变量，硬件会误以为它们在争抢同一块数据，不停地互相 invalidate。这就是 <span class="term">false sharing（伪共享）</span>：没有真正的共享，却付出了共享的代价。</p>
+
+<div class="ascii">
+   一个 64 字节 cache line：
+   ┌──────────────┬──────────────┬─────────────────────────┐
+   │ counter[0]   │ counter[1]   │      ... 其余空间 ...      │
+   │ (线程0在写)   │ (线程1在写)   │                          │
+   └──────────────┴──────────────┴─────────────────────────┘
+     ↑ 逻辑上互不相关，物理上同一行 → 每次写都作废对方 → 性能暴跌
+</div>
+
+<pre><code># 用两个 Python 进程 + 共享内存演示（Python 有 GIL，用多进程绕开）
+# 直觉版：C/Go 里更明显。这里给出概念性对照代码
+import numpy as np
+from multiprocessing import Process, shared_memory
+
+# 坏：两个进程各写数组相邻位置 → 落在同一 cache line
+# 好：把每个进程写的位置隔开 ≥ 64 字节（8 个 float64）→ 落在不同 cache line
+
+def worker(shm_name, idx, iters):
+    shm = shared_memory.SharedMemory(name=shm_name)
+    arr = np.ndarray((16,), dtype=np.float64, buffer=shm.buf)
+    for _ in range(iters):
+        arr[idx] += 1.0          # idx=0,1 相邻 → false sharing
+    shm.close()
+# 把 idx 换成 0 和 8（隔开 64 字节），两个进程互不干扰，明显更快</code></pre>
+
+<p>解决办法叫 <span class="term">padding / 缓存行对齐</span>：故意在两个热变量之间塞满填充字节，把它们挤到不同的 cache line。C++ 有 <code>alignas(64)</code>、C++17 有 <code>std::hardware_destructive_interference_size</code>，Go 常用 <code>[64]byte</code> 填充，Java 有 <code>@Contended</code>。原则一句话：<span class="key">被不同线程频繁写的变量，让它们各占一整个 cache line。</span></p>
+
+<h2 id="s8">8 · 缓存友好数据结构 + prefetch</h2>
+
+<h3>8.1 写缓存友好的代码</h3>
+<p>把今天所有概念收拢成几条可操作的准则：</p>
+<ul>
+  <li><span class="key">顺序访问优于随机访问</span>：数组 &gt; 链表。链表节点散落在堆各处，每跳一个节点大概率一次 miss；数组连续，一个 cache line 顺带带出后续多个元素。</li>
+  <li><span class="key">按内存布局的方向遍历</span>：行主序数组就按行遍历（内层循环走连续维度）。这是矩阵乘法优化里「循环交换（loop interchange）」的基础。</li>
+  <li><span class="term">SoA vs AoS</span>：如果你每次只用对象的某几个字段，用「结构体数组（AoS）」会把用不到的字段也拖进缓存，浪费带宽；改成「数组的结构体（SoA）」——每个字段一个连续数组——只加载真正要用的，命中率更高。这正是列式数据库（Day 136 的 Parquet）和向量化计算快的底层原因。</li>
+  <li><span class="term">分块 / tiling</span>：处理大矩阵时，把它切成刚好能塞进 L2 的小块，在小块内把数据反复用完再换下一块，最大化缓存复用。这是所有高性能 GEMM（矩阵乘）内核的核心技巧。</li>
+  <li><span class="key">紧凑数据</span>：能用 <code>int32</code> 就别用 <code>int64</code>，能对齐就对齐。数据越小，一个 cache line 装得越多，等效缓存越大。这也是 LLM 量化（Day 52）不只省显存、还能提速的原因之一。</li>
+</ul>
+
+<h3>8.2 prefetch：把数据提前搬进来</h3>
+<p><span class="term">预取（prefetch）</span>是「在你真正需要数据之前，就提前把它从内存搬进缓存」，用来把 miss 的等待时间藏在其他计算后面。两种：</p>
+<ul>
+  <li><span class="term">硬件预取（hardware prefetcher）</span>：CPU 自动检测访问模式。它非常擅长「顺序 / 固定步长」的访问——你按顺序读数组，它就悄悄把后面几行提前拉进来。这也是顺序访问快的又一个原因。但它对随机访问、指针跳转无能为力。</li>
+  <li><span class="term">软件预取</span>：程序员显式插入预取指令（GCC 的 <code>__builtin_prefetch(ptr)</code>、x86 的 <code>PREFETCHT0</code>），告诉 CPU「我马上要用这个地址，先帮我搬」。用于硬件预取器猜不到的场景，比如遍历链表时预取下一个节点。用好了能大幅提速，用错了反而污染缓存。</li>
+</ul>
+
+<pre><code>// C 里的软件预取示例：遍历时提前拉下一批数据
+for (int i = 0; i < n; i++) {
+    __builtin_prefetch(&data[i + 16], 0, 3);  // 提前 16 个预取，0=读, 3=高时间局部性
+    process(data[i]);                          // 等真用到时，它已经在 L1 了
+}</code></pre>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1 · LLM 推理为什么是 memory-bound（后天 Day 38 的伏笔）。</strong> 今天的内存墙就是根源。decode 阶段每生成一个 token，都要把整个模型权重从显存搬到计算单元过一遍，而算术强度极低——搬得多、算得少，瓶颈完全在「搬数据」而非「算」。GPU 的 L1/L2、共享内存（shared memory）本质就是今天讲的缓存层级，FlashAttention 的核心思想正是「把注意力计算分块，让中间结果留在片上高速缓存里，避免反复往显存写 QK 矩阵」——就是 §8.1 的 tiling 在 GPU 上的翻版。</p>
+
+<p><strong>2 · 缓存侧信道攻击（后天专题 Day 34 的地基）。</strong> 缓存命中快、未命中慢，这个「时间差」本身就是信息泄露渠道。攻击者通过测量自己访问某地址的耗时，就能推断「受害者刚才是否访问过同一个 cache line」——这就是 Flush+Reload、Prime+Probe 等经典攻击。Spectre/Meltdown 的最后一步「把偷到的秘密带出来」，靠的就是把秘密编码成缓存状态再用时间测出来。今天你理解了 cache line、命中/未命中的时间差，明天的侧信道就水到渠成。做 Agent 安全时，多租户共享 GPU/CPU 的环境里，这类跨租户缓存侧信道是真实威胁。</p>
+
+<p><strong>3 · false sharing 拖垮推理服务吞吐。</strong> 高并发推理网关里，每个 worker 线程维护自己的计数器（请求数、token 数、延迟统计）。如果这些计数器在内存里挨着，就会 false sharing，核数越多越慢——你加机器加核，QPS 反而不涨。定位这类问题要靠 <code>perf</code> 看缓存一致性流量。写监控埋点、限流计数器时，给热计数器做 cache line 对齐是基本功。</p>
+
+<p><strong>4 · 缓存友好 = 成本优化。</strong> LLM 服务是算力密集型，同样的 GPU/CPU，缓存友好的实现能多服务几成请求。KV cache 的内存布局（连续 vs 分页，Day 42 的 PagedAttention）、batch 内 token 的排布，都在和缓存层级打交道。理解「顺序访问、紧凑数据、分块复用」这三板斧，是你把推理成本压下来的直接工具。</p>
+
+<p><strong>5 · 用缓存时间差做防御检测。</strong> 反过来，防御方也能用缓存行为建模。异常的缓存未命中模式（比如某进程在疯狂 flush 特定地址）可能是侧信道攻击的信号。基于硬件性能计数器（PMC，如 cache-misses、LLC-load-misses）的运行时检测，是容器/GPU 多租户环境里识别侧信道与挖矿等滥用行为的一条思路——这和你后面要学的 eBPF、Falco 运行时检测能接上。</p>
+</div>
+
+<h2 id="ex">今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手 · 实测行优先 vs 列优先。</strong> 运行 §3 的 NumPy 代码，记录 <code>sum(axis=1)</code> 和 <code>sum(axis=0)</code> 的耗时比。然后把 <code>n</code> 从 1000 逐步加到 8000，观察两者的差距是变大还是变小，思考为什么（提示：数组越大越装不进缓存，列访问的劣势越明显）。进阶：用 <code>lscpu | grep -i cache</code> 查出你机器各级缓存大小，估算数组多大时会「溢出」L2、L3。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察 · 找到你机器的 cache line 和层级。</strong> 在 Linux 上遍历 <code>/sys/devices/system/cpu/cpu0/cache/index*/</code>，把每一级的 <code>level / type / size / coherency_line_size / ways_of_associativity</code> 都打印出来，画出你这台机器的缓存金字塔（各级大小、相联度、line 大小）。macOS 用户用 <code>sysctl -a | grep cache</code>。确认 cache line 是不是 64 字节。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考 · 为什么链表在现代 CPU 上「越来越不划算」？</strong> 教科书说「链表插入删除 O(1)、数组 O(n)」，但实际中遍历链表常常比遍历数组慢一个数量级。用今天学的 cache line、空间局部性、硬件预取三个概念，写 200 字解释这个「理论 vs 现实」的落差。再想一步：如果一定要用链表，有什么办法让它对缓存更友好？（提示：把多个节点打包成一个连续块——unrolled linked list / 节点池分配。）</p>
+</div>
+
+<div class="next">
+<strong>明日预告</strong>：Day 32 我们进入 <strong>SIMD + 多核 + 内存一致性</strong>。今天埋了两个伏笔：一是「一个指令同时算多个数据」的 SIMD（SSE/AVX-512），它是向量化加速矩阵运算的硬件基础；二是今天 false sharing 里提到的<strong>缓存一致性协议 MESI</strong>——多核如何保证大家看到一致的内存。我们还会讲 NUMA、内存屏障、happens-before，以及那个让无数人栽跟头的「双重检查锁定（DCL）」陷阱。今天的 cache line 和一致性直觉，是明天一切的前提。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
