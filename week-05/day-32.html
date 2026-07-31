@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 32 · SIMD + 多核 + 内存一致性</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 32 · SIMD + 多核 + 内存一致性</h1>
+  <div class="meta">Week 05 · 周四 · 2026-07-31 · 主线：CPU 架构 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：前三天我们看的都是「一个核怎么把一条指令跑快」。今天换两个维度：<span class="key">一条指令同时处理多个数据</span>（SIMD），以及<span class="key">多个核同时跑时，它们看到的内存还是同一份吗</span>（一致性）。第一个维度回答了「为什么 NumPy 比 Python 循环快 100 倍」——不是因为 C 比 Python 快那么简单，而是因为一条 AVX-512 指令能一口气算 16 个 float。第二个维度回答了一个更反直觉的问题：<span class="key">你写的多线程代码，CPU 和编译器可能根本不按你写的顺序执行</span>，两个线程能看到互相矛盾的内存状态。今天我们把 SIMD 指令集、SMP/UMA/NUMA 拓扑、MESI 缓存一致性协议、内存屏障、happens-before、x86 与 ARM 内存模型的差别，以及那个坑了整整一代 Java/C++ 程序员的<span class="key">双重检查锁定（DCL）</span>陷阱，一次讲透。这是「懂硬件」和「只会调库」之间最陡的一道坎。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">SIMD：一条指令，多份数据</a></li>
+  <li><a href="#s2">SSE / AVX / AVX-512 与向量化实测</a></li>
+  <li><a href="#s3">多核拓扑：SMP、UMA 与 NUMA</a></li>
+  <li><a href="#s4">MESI：缓存一致性协议</a></li>
+  <li><a href="#s5">内存重排与内存屏障</a></li>
+  <li><a href="#s6">happens-before：并发的因果律</a></li>
+  <li><a href="#s7">x86 (TSO) vs ARM（弱序）内存模型</a></li>
+  <li><a href="#s8">DCL 双重检查锁定陷阱</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#ex">今日小练习</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1 · SIMD：一条指令，多份数据</h2>
+
+<p>先给一个精确定义。1966 年 Flynn 按「指令流 × 数据流」把计算机分成四类，这套分类今天还在用：</p>
+
+<table>
+<tr><th>分类</th><th>全称</th><th>含义</th><th>代表</th></tr>
+<tr><td>SISD</td><td>Single Instruction, Single Data</td><td>一条指令处理一个数据</td><td>传统标量 CPU</td></tr>
+<tr><td><span class="term">SIMD</span></td><td>Single Instruction, Multiple Data</td><td>一条指令同时处理多个数据</td><td>SSE / AVX / NEON、GPU</td></tr>
+<tr><td>MISD</td><td>Multiple Instruction, Single Data</td><td>多指令处理同一数据（罕见）</td><td>容错冗余系统</td></tr>
+<tr><td>MIMD</td><td>Multiple Instruction, Multiple Data</td><td>多核各干各的</td><td>现代多核 CPU、集群</td></tr>
+</table>
+
+<p><span class="term">SIMD</span> 的核心思想极其朴素：如果你要给一个 8 元素数组的每个元素都加 1，标量做法是循环 8 次、执行 8 条加法指令；SIMD 做法是把 8 个元素装进一个<span class="term">宽寄存器（vector register）</span>，执行<span class="key">一条</span>加法指令，硬件内部 8 个 ALU 并行算完。</p>
+
+<div class="ascii">
+标量（SISD）：                     SIMD（向量）：
+
+ a[0] + b[0] → c[0]   ← 指令1      ┌────┬────┬────┬────┐  寄存器 ymm0
+ a[1] + b[1] → c[1]   ← 指令2      │a[0]│a[1]│a[2]│a[3]│
+ a[2] + b[2] → c[2]   ← 指令3      └────┴────┴────┴────┘
+ a[3] + b[3] → c[3]   ← 指令4              +  ← 一条 VADDPS 指令
+                                   ┌────┬────┬────┬────┐  寄存器 ymm1
+ 4 条指令，4 个周期                 │b[0]│b[1]│b[2]│b[3]│
+                                   └────┴────┴────┴────┘
+                                              ↓
+                                   ┌────┬────┬────┬────┐  寄存器 ymm2
+                                   │c[0]│c[1]│c[2]│c[3]│
+                                   └────┴────┴────┴────┘
+                                   1 条指令，1 个周期（吞吐 4×）
+</div>
+
+<p><strong>数学类比</strong>：作为数学背景的人，你可以把标量运算理解为逐个计算 <code>c_i = a_i + b_i</code>，把 SIMD 理解为直接做<span class="key">向量加法 c = a + b</span>——不是符号上的简写，而是硬件真的把它当成一个原子操作。线性代数里我们习惯写 <code>y = Ax</code>，SIMD 就是让这个记号在硬件层面变成现实。这也是为什么深度学习框架的底层全是「向量化」——它们在把数学记号直接映射到硬件指令。</p>
+
+<p><strong>关键事实</strong></p>
+<ul>
+  <li>SIMD 是<span class="term">数据并行（data parallelism）</span>，不是任务并行。它在<span class="key">一个核、一个线程</span>内实现并行，和多线程是正交的两件事——两者可以叠加。</li>
+  <li>SIMD 的加速上限 = 向量宽度 ÷ 元素宽度。512 位寄存器装 float32（32 位）= 16 路并行，装 float64 = 8 路，装 int8 = 64 路。<span class="key">数据精度越低，SIMD 加速比越高</span>——这是量化（Day 52）能加速推理的硬件根因之一。</li>
+  <li>SIMD 讨厌分支。如果 8 个元素里有的要走 if、有的要走 else，硬件只能两条路都算一遍再用<span class="term">掩码（mask）</span>选结果。GPU 上这叫 <span class="term">warp divergence</span>（Day 45），是同一个问题在另一种硬件上的表现。</li>
+  <li>SIMD 要求数据在内存里<span class="key">连续且对齐</span>。非连续访问（stride、gather）会大幅掉速——这直接连回昨天的 cache line 和空间局部性。</li>
+</ul>
+
+<h2 id="s2">2 · SSE / AVX / AVX-512 与向量化实测</h2>
+
+<p>x86 的 SIMD 指令集是一条二十多年的演进线，你只需要记住宽度这条主线：</p>
+
+<table>
+<tr><th>指令集</th><th>年代</th><th>寄存器宽度</th><th>寄存器名</th><th>float32 并行度</th></tr>
+<tr><td>MMX</td><td>1997</td><td>64 位</td><td>mm0-7</td><td>仅整数</td></tr>
+<tr><td><span class="term">SSE / SSE2</span></td><td>1999 / 2001</td><td>128 位</td><td>xmm0-15</td><td>4</td></tr>
+<tr><td><span class="term">AVX / AVX2</span></td><td>2011 / 2013</td><td>256 位</td><td>ymm0-15</td><td>8</td></tr>
+<tr><td><span class="term">AVX-512</span></td><td>2016</td><td>512 位</td><td>zmm0-31</td><td>16</td></tr>
+<tr><td>AMX</td><td>2023</td><td>矩阵瓦片（tile）</td><td>tmm0-7</td><td>矩阵乘专用</td></tr>
+<tr><td>ARM NEON</td><td>2005</td><td>128 位</td><td>v0-31</td><td>4</td></tr>
+<tr><td>ARM SVE / SVE2</td><td>2016+</td><td>可变 128–2048 位</td><td>z0-31</td><td>与实现相关</td></tr>
+</table>
+
+<p>先查你的机器支持什么：</p>
+
+<pre><code># Linux：flags 里找 sse4_2 / avx / avx2 / avx512f
+lscpu | grep -o -E 'sse[0-9_]*|avx[0-9_]*|fma|neon' | sort -u
+
+# 或直接看 /proc/cpuinfo
+grep -m1 flags /proc/cpuinfo | tr ' ' '\n' | grep -E '^(sse|avx|fma)'
+
+# macOS（Intel）
+sysctl -a | grep machdep.cpu.features
+# macOS（Apple Silicon，ARM NEON 恒有，看具体特性）
+sysctl -a | grep hw.optional</code></pre>
+
+<p>再用 NumPy 实测向量化的威力。<span class="key">NumPy 快，本质是它把循环从 Python 层下沉到了被 SIMD 向量化的 C 循环</span>：</p>
+
+<pre><code>import numpy as np, time
+
+n = 10_000_000
+a = np.random.rand(n).astype(np.float32)
+b = np.random.rand(n).astype(np.float32)
+
+# 1) 纯 Python 循环（标量，还有解释器开销）
+la, lb = a[:200_000].tolist(), b[:200_000].tolist()
+t = time.perf_counter()
+lc = [x + y for x, y in zip(la, lb)]
+py = (time.perf_counter() - t) / 200_000 * n
+print(f"Python 列表推导（外推到 {n} 元素）: {py:.3f}s")
+
+# 2) NumPy 向量化（底层走 SIMD）
+t = time.perf_counter()
+c = a + b
+np_t = time.perf_counter() - t
+print(f"NumPy 向量化: {np_t:.4f}s   加速比 ≈ {py/np_t:.0f}×")
+
+# 3) 精度对加速的影响：float32 vs float64
+for dt in (np.float32, np.float64):
+    x = np.random.rand(n).astype(dt); y = np.random.rand(n).astype(dt)
+    t = time.perf_counter()
+    for _ in range(10): x * y + y      # 触发 FMA
+    print(f"{dt.__name__}: {(time.perf_counter()-t)/10:.4f}s")</code></pre>
+
+<p>典型结果：NumPy 比 Python 循环快 100～200 倍。这里面大约一个数量级来自「避开解释器」，另外 4～8 倍来自 SIMD。第三段实验里 float32 通常比 float64 快接近 2 倍——因为同样宽的寄存器能装下两倍的 float32。</p>
+
+<div class="note">
+<strong>为什么矩阵乘法是 SIMD 的主场？</strong> 矩阵乘 <code>C = A @ B</code> 的内层是「向量点积」：大量的<span class="key">乘加</span>（multiply-add）。现代 CPU 有 <span class="term">FMA（Fused Multiply-Add）</span>指令，一条指令完成 <code>a*b+c</code>，且中间不舍入（精度更高）。AVX-512 + FMA 意味着一条指令做 16 次乘法 + 16 次加法 = 32 次浮点运算。这就是 OpenBLAS/MKL 能逼近理论峰值算力的底层原因，也是 Day 36 Roofline 模型里「峰值 FLOPS」那条水平线的来历。
+</div>
+
+<p>查看 NumPy 到底链的哪个 BLAS（决定了它用不用 AVX-512）：</p>
+
+<pre><code>python3 -c "import numpy as np; np.show_config()"
+# 关注 openblas / mkl / accelerate，以及 SIMD extensions 字段
+python3 -c "import numpy as np; print(np.show_runtime())"   # NumPy>=1.24</code></pre>
+
+<h2 id="s3">3 · 多核拓扑：SMP、UMA 与 NUMA</h2>
+
+<p>SIMD 是「一个核内的并行」。现在把镜头拉远：多个核如何共享内存？</p>
+
+<p><span class="term">SMP（Symmetric Multi-Processing，对称多处理）</span>：所有 CPU 核地位对等，共享同一份主内存和同一个操作系统实例，任何核都能跑任何任务。今天你能买到的服务器 CPU 几乎都是 SMP 架构。「对称」是相对于早期「主处理器 + 协处理器」的非对称设计而言的。</p>
+
+<p>在 SMP 内部，按「访问内存的代价是否一致」又分两种：</p>
+
+<div class="ascii">
+UMA（Uniform Memory Access）——所有核访存代价相同
+  ┌────┐ ┌────┐ ┌────┐ ┌────┐
+  │Core│ │Core│ │Core│ │Core│
+  └──┬─┘ └──┬─┘ └──┬─┘ └──┬─┘
+     └──────┴──┬───┴──────┘
+          ┌────┴─────┐            ← 共享总线成为瓶颈
+          │  内存控制器 │
+          └────┬─────┘
+          ┌────┴─────┐
+          │   DRAM   │
+          └──────────┘
+
+NUMA（Non-Uniform Memory Access）——就近的快，跨节点的慢
+  ┌─── Node 0 ──────────┐   ┌─── Node 1 ──────────┐
+  │ Core Core Core Core │   │ Core Core Core Core │
+  │        │            │   │        │            │
+  │   内存控制器 ─ DRAM0 │◄──┤   内存控制器 ─ DRAM1 │
+  └─────────┬───────────┘   └──────────┬──────────┘
+            └──── UPI / Infinity Fabric ┘
+        本地访问 ~80ns    跨节点访问 ~130ns（约 1.5-2×）
+</div>
+
+<p><strong>为什么会出现 NUMA？</strong> 核越多，共享一个内存控制器就越挤——总线竞争、控制器排队，UMA 的扩展性在十几个核以上就崩了。工程解法是把 CPU 切成若干<span class="term">节点（node）</span>，每个节点自带内存控制器和一片本地 DRAM，节点之间用高速互联（Intel UPI、AMD Infinity Fabric）连起来。<span class="key">地址空间仍然是统一的，程序照常读写任意地址，只是「碰巧在别人家的内存」会慢一截</span>。</p>
+
+<p><strong>日常类比</strong>：UMA 像全公司共用一个中央档案室，人一多就排长队；NUMA 像每个部门有自己的资料柜，本部门取件很快，借隔壁部门的要走流程。系统能跑，但你如果不注意「把资料放在用它的部门」，性能就白白漏掉三四成。</p>
+
+<pre><code># 查看 NUMA 拓扑（Linux）
+numactl --hardware          # 节点数、每节点内存、节点间距离矩阵
+lscpu | grep -i numa        # NUMA node0 CPU(s): 0-15 这类映射
+lstopo-no-graphics          # hwloc 包，画出完整拓扑树（含缓存、PCIe、GPU）
+
+# 把进程绑到 node 0 的 CPU 和内存上
+numactl --cpunodebind=0 --membind=0 python3 train.py
+
+# 观察跨节点访问是否严重
+numastat -p $(pgrep -f python3)   # numa_hit / numa_miss / numa_foreign</code></pre>
+
+<p><span class="key">这对多卡训练是实打实的性能问题</span>：GPU 挂在特定 NUMA 节点的 PCIe 上，如果 DataLoader 的 worker 进程被调度到另一个节点，每一批数据都要跨 UPI 搬一次才能进 GPU。Day 37 我们会专门用一整天拆 NUMA，今天先建立「内存不是均匀的」这个直觉。</p>
+
+<h2 id="s4">4 · MESI：缓存一致性协议</h2>
+
+<p>现在是今天最核心的一节。昨天我们学了每个核有私有的 L1/L2 缓存。问题立刻来了：<span class="key">变量 x 在内存里只有一份，但可能同时被缓存在 4 个核的 L1 里。Core 0 改了自己缓存里的 x，Core 1 怎么知道？</span></p>
+
+<p>如果不管，程序就完全乱套了：Core 1 会一直读到旧值。硬件必须保证——这就是 <span class="term">缓存一致性（Cache Coherence）</span>。工业界的主流方案是 <span class="term">MESI 协议</span>（及其变体 MESIF、MOESI），它给每个 cache line 打上四种状态之一：</p>
+
+<table>
+<tr><th>状态</th><th>全称</th><th>含义</th><th>内存里的值</th><th>其他核有吗</th></tr>
+<tr><td><span class="term">M</span></td><td>Modified</td><td>我改过，只有我有</td><td>已过期（脏）</td><td>没有</td></tr>
+<tr><td><span class="term">E</span></td><td>Exclusive</td><td>只有我有，但我没改</td><td>一致</td><td>没有</td></tr>
+<tr><td><span class="term">S</span></td><td>Shared</td><td>大家都有，只读</td><td>一致</td><td>可能有</td></tr>
+<tr><td><span class="term">I</span></td><td>Invalid</td><td>这行作废了，不能用</td><td>—</td><td>—</td></tr>
+</table>
+
+<p>协议靠<span class="term">总线嗅探（bus snooping）</span>工作：每个核的缓存控制器都盯着总线（现代 CPU 用目录式 directory-based 更可扩展，但思想一致）。核心规则只有两条：</p>
+
+<ul>
+  <li><span class="key">要写一行，必须先让所有其他核的这行变成 I</span>（发出 <code>RFO, Request For Ownership</code> 请求，即「独占所有权」）。</li>
+  <li><span class="key">读到一行别的核处于 M 状态的数据，持有者必须先把它写回（或直接转发），双方降为 S</span>。</li>
+</ul>
+
+<p>走一遍完整剧本，假设变量 <code>x</code> 初值 0：</p>
+
+<div class="ascii">
+时刻  动作                     Core0 状态   Core1 状态   说明
+ t1   Core0 读 x               E            I           独占，内存里也是 0
+ t2   Core1 读 x               S            S           两边都有只读副本
+ t3   Core0 写 x=1             M            I           发 RFO，Core1 的副本作废
+ t4   Core1 读 x               S            S           Core0 写回/转发 1，双方降 S
+ t5   Core1 写 x=2             I            M           轮到 Core1 发 RFO
+</div>
+
+<p><strong>这解释了昨天的 false sharing</strong>：两个核各自频繁写<span class="key">不同的变量，但这两个变量在同一条 cache line 上</span>。MESI 只认 cache line，不认变量。于是 t3、t5 这样的「抢所有权」在两个核之间无限来回（cache line ping-pong），每次都是几十上百个周期。逻辑上毫无冲突的代码，性能却像加了锁一样。</p>
+
+<div class="note">
+<strong>缓存一致性 ≠ 内存一致性</strong>。这是最容易混淆的一对概念，务必分清：
+<ul>
+<li><span class="term">Cache Coherence（缓存一致性）</span>：针对<span class="key">单个地址</span>——所有核对同一个变量的写，看到的顺序是一致的。这是硬件用 MESI 免费提供的，你不用做任何事。</li>
+<li><span class="term">Memory Consistency（内存一致性 / 内存模型）</span>：针对<span class="key">多个地址之间的相对顺序</span>——我先写 a 再写 b，别的核是否一定先看到 a 的新值？<span class="key">这个硬件不保证</span>，需要你用屏障/原子操作显式要求。下一节就讲它。</li>
+</ul>
+</div>
+
+<h2 id="s5">5 · 内存重排与内存屏障</h2>
+
+<p>MESI 保证了「每个变量的值最终对所有核可见」。但它<span class="key">不保证顺序</span>。原因是 CPU 为了不让写操作卡住流水线，在核和 L1 之间加了一个 <span class="term">store buffer（写缓冲）</span>：写指令把数据丢进 store buffer 就算「执行完了」，真正刷进缓存、发 RFO 是异步的。加上编译器为了优化也会调换指令顺序，结果就是——<span class="key">你写的顺序、CPU 执行的顺序、其他核观察到的顺序，可能是三个不同的顺序</span>。</p>
+
+<p>经典的 <span class="term">Store Buffer 例子</span>（也叫 Dekker 模式）。初值 <code>x = y = 0</code>：</p>
+
+<pre><code>线程 A            线程 B
+x = 1;            y = 1;
+r1 = y;           r2 = x;</code></pre>
+
+<p>直觉上，无论两个线程怎么交错，<code>r1</code> 和 <code>r2</code> 至少有一个是 1。但真实硬件上 <span class="key">r1 == 0 && r2 == 0 是可能发生的</span>：A 的 <code>x=1</code> 还躺在 A 的 store buffer 里没对 B 可见，B 的 <code>y=1</code> 也还在 B 的 store buffer 里，两边各自读到了对方的旧值。<span class="key">连 x86 这种「强内存模型」的 CPU 都允许这种重排</span>（StoreLoad 重排）。</p>
+
+<p>四种可能的重排组合：</p>
+
+<table>
+<tr><th>重排类型</th><th>含义</th><th>x86 允许？</th><th>ARM/POWER 允许？</th></tr>
+<tr><td>LoadLoad</td><td>两个读被调换</td><td>否</td><td>是</td></tr>
+<tr><td>LoadStore</td><td>读被推到写之后</td><td>否</td><td>是</td></tr>
+<tr><td>StoreStore</td><td>两个写被调换</td><td>否</td><td>是</td></tr>
+<tr><td><span class="term">StoreLoad</span></td><td>写被推到读之后</td><td><span class="key">是</span></td><td>是</td></tr>
+</table>
+
+<p>要禁止重排，就要插 <span class="term">内存屏障（Memory Barrier / Fence）</span>——一条告诉 CPU「这条线两边的内存操作不许跨越」的指令：</p>
+
+<pre><code>// x86 汇编层面的三条屏障指令
+mfence   // 全屏障：前面所有读写完成后，后面的读写才能开始
+sfence   // 写屏障（StoreStore）
+lfence   // 读屏障（LoadLoad）
+lock xchg / lock add   // 带 lock 前缀的原子指令，隐含全屏障（实践中最常用）
+
+// ARM
+dmb ish  // data memory barrier, inner shareable
+dsb / isb
+
+// C11 / C++11 标准写法（推荐，跨平台）
+atomic_thread_fence(memory_order_seq_cst);</code></pre>
+
+<p><strong>类比</strong>：内存屏障像高速公路上的收费站。平时车（内存操作）可以在车道间随意超车；到了收费站，必须<span class="key">前面所有车都过了站，后面的车才能过</span>。它牺牲的正是乱序执行带来的性能，所以屏障是有真实代价的（几十个周期起），不能乱撒。</p>
+
+<p><strong>关键事实</strong></p>
+<ul>
+  <li>屏障不是「把数据刷到内存」，而是<span class="key">约束顺序</span>。数据的可见性由 MESI 负责，屏障只管「什么先什么后」。</li>
+  <li>你几乎不需要手写屏障。用语言提供的<span class="term">原子类型</span>（C++ <code>std::atomic</code>、Java <code>volatile</code>/<code>AtomicX</code>、Rust <code>Atomic*</code>、Go <code>sync/atomic</code>）和<span class="term">锁</span>，编译器会在正确的位置替你插。</li>
+  <li>锁（mutex）之所以能保证正确性，不只是「互斥」，还因为<span class="key">加锁隐含获取屏障、解锁隐含释放屏障</span>。这是很多人从没意识到的一半功能。</li>
+  <li>Python 因为有 GIL（Day 03），单个字节码之间不会被打断，你极少直接撞上重排问题——但一旦你用 C 扩展、多进程共享内存、或读别人的 C++/Go/Rust 代码，这套知识就是必需品。</li>
+</ul>
+
+<h2 id="s6">6 · happens-before：并发的因果律</h2>
+
+<p>直接跟硬件屏障打交道太痛苦，而且每种 CPU 规则不同。于是编程语言引入了一层抽象：<span class="term">happens-before 关系</span>（Java 内存模型 JMM、C++11 内存模型、Go memory model 都基于它）。</p>
+
+<p><strong>精确定义</strong>：如果操作 A <span class="term">happens-before</span> 操作 B，那么 <span class="key">A 的所有内存效果对 B 一定可见，且 A 在 B 之前发生</span>。注意这不是「时间上先发生」——它是一个<span class="key">偏序关系</span>，只在有明确规则连接的操作之间成立。</p>
+
+<p><strong>数学类比</strong>：happens-before 就是并发世界的<span class="key">偏序（partial order）</span>，甚至可以类比狭义相对论里的<span class="key">因果序</span>——两个事件如果没有因果链连接（类空间隔），谁先谁后是没有绝对答案的，不同观察者（不同 CPU 核）可以看到不同顺序。而 happens-before 关系就是那条「光锥内的因果链」。这个类比对数学背景的人往往比任何工程解释都好用。</p>
+
+<p>各语言模型里公认的几条 happens-before 规则：</p>
+
+<ul>
+  <li><strong>程序顺序规则</strong>：<span class="key">同一个线程内</span>，前面的语句 happens-before 后面的语句。（单线程内你永远看不到重排。）</li>
+  <li><strong>锁规则</strong>：对同一把锁，<code>unlock</code> happens-before 后续的 <code>lock</code>。</li>
+  <li><strong>volatile / 原子变量规则</strong>：对一个原子变量的写 happens-before 后续对它的读。</li>
+  <li><strong>线程启动规则</strong>：<code>thread.start()</code> happens-before 新线程里的第一条语句。</li>
+  <li><strong>线程终止规则</strong>：线程内的所有操作 happens-before 其他线程的 <code>join()</code> 返回。</li>
+  <li><strong>传递性</strong>：A hb B 且 B hb C ⟹ A hb C。<span class="key">这条是全部推理的引擎</span>。</li>
+</ul>
+
+<p>用一个具体例子体会传递性的威力（这是「安全发布」的标准模式）：</p>
+
+<pre><code>// 共享状态
+Config config = null;          // 普通变量
+volatile boolean ready = false; // 原子/volatile 变量
+
+// 线程 A（生产者）
+config = new Config(...);   // (1) 普通写
+ready = true;               // (2) volatile 写
+
+// 线程 B（消费者）
+if (ready) {                // (3) volatile 读
+    config.use();           // (4) 普通读——安全吗？
+}</code></pre>
+
+<p>推理链条：(1) hb (2)（程序顺序）；(2) hb (3)（volatile 规则）；(3) hb (4)（程序顺序）。由传递性得 <span class="key">(1) hb (4)</span>——所以线程 B 在 (4) 处一定能看到完整构造好的 config。<span class="key">如果把 volatile 去掉，这条链就断了</span>，B 可能看到 <code>ready == true</code> 但 <code>config</code> 仍是 null 或半初始化状态。这正是下一节 DCL 陷阱的核心。</p>
+
+<h2 id="s7">7 · x86 (TSO) vs ARM（弱序）内存模型</h2>
+
+<p>不同 CPU 架构对「允许多少重排」的选择不同，形成一条从强到弱的谱系：</p>
+
+<table>
+<tr><th>模型</th><th>代表架构</th><th>允许的重排</th><th>移植风险</th></tr>
+<tr><td>顺序一致 SC</td><td>理论模型（无真实实现）</td><td>无</td><td>—</td></tr>
+<tr><td><span class="term">TSO</span>（Total Store Order）</td><td>x86 / x86-64、SPARC</td><td>仅 StoreLoad</td><td>低</td></tr>
+<tr><td><span class="term">弱序（Weak / Relaxed）</span></td><td>ARM、POWER、RISC-V</td><td>四种全部</td><td><span class="key">高</span></td></tr>
+</table>
+
+<p><span class="term">TSO</span> 的意思是：所有核看到的<span class="key">写操作全局顺序是一致的</span>，唯一的松动是「自己的写可以晚于自己后面的读被别人看到」（因为 store buffer）。所以 x86 上写并发代码，即使漏了屏障，多数时候也「碰巧能跑对」。</p>
+
+<p><span class="key">这是一个巨大的陷阱</span>：一份在 Intel 服务器上跑了三年没出问题的并发代码，迁到 ARM 服务器（AWS Graviton、Apple Silicon、鲲鹏、Ampere）上可能立刻出现诡异的偶发 bug——不是新引入的 bug，而是<span class="key">原本就存在的 bug 被弱内存模型暴露了</span>。这类问题极难复现和定位：日志一加就不复现（加日志改变了时序），单步调试就正常。</p>
+
+<pre><code># 判断你在哪种架构上
+uname -m            # x86_64 / aarch64 / arm64
+lscpu | head -20
+
+# ARM 上验证内存模型的经典工具（litmus tests）
+# herd7 / litmus7（来自 diy 工具集），能自动跑出上一节 r1==0 && r2==0 的概率
+# 这类实验在 x86 上几乎观察不到，在 ARM 上几百次迭代就能撞见</code></pre>
+
+<p><strong>实践建议</strong>（今天最有操作价值的一条）：</p>
+<ul>
+  <li><span class="key">永远按最弱的内存模型写代码</span>。不要依赖「x86 上能跑」，把所有共享可变状态都用锁或原子类型保护。</li>
+  <li>用语言的标准原语，不要手写屏障。<code>std::atomic</code> 的默认 <code>memory_order_seq_cst</code> 在 x86 上几乎零成本，在 ARM 上会自动插正确的 <code>dmb</code>。</li>
+  <li>CI 里加一条 ARM 架构的测试（GitHub Actions 已有 arm64 runner，或用 QEMU）。这是发现这类 bug 最经济的手段。</li>
+  <li>用 <span class="term">ThreadSanitizer</span>（<code>-fsanitize=thread</code>，Go 用 <code>go test -race</code>）跑，它能在 x86 上就报出 data race，不必等 ARM 上炸。</li>
+</ul>
+
+<h2 id="s8">8 · DCL 双重检查锁定陷阱</h2>
+
+<p>最后用一个真实的历史事故收尾——它把今天所有概念串成一条线。</p>
+
+<p>场景：单例模式的懒加载。第一版最朴素的写法是整个方法加锁，但这样每次调用都要抢锁，性能差。于是有人想出了「聪明」的优化——<span class="term">双重检查锁定（Double-Checked Locking, DCL）</span>：先不加锁检查一次，只有为 null 时才加锁，加锁后再检查一次。</p>
+
+<pre><code>// ❌ 错误的 DCL（Java 1.4 之前 / C++ 无 atomic 时的经典写法）
+class Singleton {
+    private static Singleton instance;          // 注意：没有 volatile
+    public static Singleton getInstance() {
+        if (instance == null) {                 // 第一次检查（无锁，快路径）
+            synchronized (Singleton.class) {
+                if (instance == null) {         // 第二次检查（有锁）
+                    instance = new Singleton(); // ← 问题就在这一行
+                }
+            }
+        }
+        return instance;
+    }
+}</code></pre>
+
+<p>看起来无懈可击：加锁保证了只创建一次，快路径又免了锁开销。<span class="key">但它是错的，而且错得非常隐蔽——1990 年代末这段代码被写进无数教科书，直到 2000 年前后才被系统性地证明有问题</span>。</p>
+
+<p><strong>问题在于 <code>instance = new Singleton()</code> 不是一个原子操作</strong>。它在机器层面分三步：</p>
+
+<div class="ascii">
+  step 1: 分配内存           memory = allocate()
+  step 2: 调用构造函数初始化   ctorSingleton(memory)
+  step 3: 把地址赋给 instance instance = memory
+
+  ↑ 编译器/CPU 完全可以把 step 2 和 step 3 重排成 1 → 3 → 2！
+    （StoreStore 重排；这不违反单线程语义，所以是合法优化）
+
+  重排后的时间线：
+    线程 A：step1 → step3（instance 已非 null，但对象还没初始化！）
+    线程 B：走快路径，第一次检查 instance != null → 直接 return
+            → 拿到一个【半初始化的对象】→ 字段全是零值 → 诡异崩溃
+    线程 A：step2（这才把对象构造完，为时已晚）
+</div>
+
+<p>注意线程 B <span class="key">根本没进 synchronized 块</span>，所以锁的屏障效果对它不起作用。这个 bug 的表现是：极低概率、只在高并发下出现、几乎无法复现、看堆栈完全看不出所以然。</p>
+
+<p><strong>正确的修法</strong>，全都是今天概念的直接应用：</p>
+
+<pre><code>// ✅ 修法 1：加 volatile（Java 5+ 的 JMM 才保证有效）
+private static volatile Singleton instance;
+// volatile 写禁止了 step2 与 step3 的重排（插入 StoreStore 屏障），
+// 且 volatile 写 hb volatile 读，建立了 §6 的那条 happens-before 链
+
+// ✅ 修法 2：C++11 起，用 std::atomic + 显式内存序
+std::atomic&lt;Singleton*&gt; instance{nullptr};
+Singleton* p = instance.load(std::memory_order_acquire);
+if (!p) { std::lock_guard&lt;std::mutex&gt; lk(m);
+          p = instance.load(std::memory_order_relaxed);
+          if (!p) { p = new Singleton(); instance.store(p, std::memory_order_release); } }
+
+// ✅ 修法 3（最推荐）：把问题交给语言/运行时
+// C++11：函数内 static 局部变量的初始化，标准保证线程安全（magic static）
+static Singleton& getInstance() { static Singleton inst; return inst; }
+// Java：静态内部类持有者模式，用类加载机制天然保证一次性
+// Python：模块本身就是单例；或用 functools.lru_cache / threading.Lock</code></pre>
+
+<p><span class="key">DCL 的真正教训不是「记住要加 volatile」，而是：在多线程环境里，靠「读代码想一遍」来判断正确性是不可靠的</span>。因为你想的是源码顺序，而机器执行的是重排后的顺序。唯一可靠的方法是——用语言标准提供的同步原语，让 happens-before 关系显式成立。</p>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1 · SIMD 是量化加速的硬件根因（Day 52 的地基）。</strong> 大家都知道 INT8 量化能让推理变快，但「为什么快」常常说不清楚。今天给了一半答案：同一个 512 位向量寄存器，装 float32 是 16 路并行，装 int8 就是 64 路——<span class="key">纯粹靠数据变窄换来 4 倍吞吐</span>，一条指令没多加。另一半答案是内存带宽（Day 38）。理解这两条，你在评估「某个量化方案到底能带来多少加速」时就不会只看厂商 PPT，而能自己算出理论上限。GPU 上的 Tensor Core 本质是同一思想的极端化：把 SIMD 从「向量」推到「矩阵」粒度。</p>
+
+<p><strong>2 · NUMA 错配是推理服务里最常见的「隐形税」。</strong> 一台 8 卡机器通常有 2 个 NUMA 节点，GPU 分挂两侧。如果你的推理进程、DataLoader worker、网络中断处理都没做绑核，数据会在 UPI 上来回搬，端到端延迟无声无息地多出 20%～40%——监控上看 GPU 利用率不高，但你查不出瓶颈在哪。<code>numactl</code>、<code>lstopo</code>、<code>nvidia-smi topo -m</code>（Day 46）是这类问题的标准诊断三件套。这是「懂硬件的算法工程师」和「只会调框架的人」之间最直观的差距之一。</p>
+
+<p><strong>3 · 内存模型漏洞 = 真实的安全漏洞，不只是性能问题。</strong> 竞态条件（race condition）是 CWE-362，在权限检查场景里就是经典的 <span class="term">TOCTOU（Time-of-Check to Time-of-Use）</span>：线程 A 检查完「这个请求有权限」，还没使用，线程 B 就把权限状态改了。今天学的重排让这个窗口比你以为的更宽——甚至可能出现「检查用的是旧值、执行用的是新值」。做 Agent 安全时，鉴权缓存、会话状态、工具白名单这些共享可变状态，如果没有正确的同步，攻击者可以用高并发请求刻意放大这个窗口来绕过检查。写这类代码务必用不可变数据结构或显式加锁，并用 ThreadSanitizer 扫一遍。</p>
+
+<p><strong>4 · MESI 和 store buffer 是 Spectre/Meltdown 的舞台（后天 Day 34）。</strong> 后天讲侧信道时你会看到，推测执行泄密的最后一步是「把秘密编码进缓存状态」。而多核环境下，攻击者能通过观察 cache line 的一致性状态迁移（比如自己的某行被别人 RFO 打成 Invalid）推断出<span class="key">另一个核刚才写了哪个地址</span>——这类跨核侧信道在多租户 GPU/CPU 环境（Day 48 的 MIG/MPS 隔离）里是真实威胁。今天的 MESI 状态机就是那些攻击的信息论信道模型。</p>
+
+<p><strong>5 · Agent 并发编排里的 happens-before。</strong> 多 Agent 系统（Day 158）里，多个 Agent 并发读写共享记忆（memory）、共享工具状态、共享向量库。这本质上就是今天的分布式版本——只是「核」换成了「进程/服务」，「cache line」换成了「缓存条目」。你会发现 Day 141-144 的分布式一致性（线性一致性 linearizability、因果一致性 causal consistency）和今天的内存模型是<span class="key">同一套理论在不同尺度上的展开</span>：linearizability 对应顺序一致性 SC，causal consistency 对应 happens-before。今天把单机这层吃透，三个月后那部分会轻松得多。</p>
+</div>
+
+<h2 id="ex">今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手 · 测出 SIMD 的加速比。</strong> 跑 §2 的 NumPy 三段代码，记下 float32 与 float64 的耗时比（预期接近 2:1）。然后用 <code>lscpu</code> 确认你的机器最宽支持到哪一级（SSE / AVX2 / AVX-512 / NEON），据此算出「理论 float32 并行度」，再和实测加速比对照——差距来自哪里？（提示：内存带宽可能已经成了新瓶颈，这正是 Day 36 Roofline 模型要回答的问题。）进阶：装 <code>pip install numexpr</code>，对比 <code>numexpr.evaluate("a*b+c")</code> 和纯 NumPy，看融合运算减少中间数组后的提升。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察 · 画出你机器的多核拓扑。</strong> 依次运行 <code>lscpu</code>、<code>numactl --hardware</code>（没有就 <code>sudo apt install numactl</code>）、<code>lstopo-no-graphics</code>（<code>hwloc</code> 包）。回答三个问题：你的机器有几个 NUMA 节点？节点间距离矩阵里，跨节点访问的相对代价是多少（通常本地记为 10，跨节点 21 意味着约 2.1 倍）？哪些 CPU 核属于哪个节点？如果是 macOS/Apple Silicon（统一内存架构、无传统 NUMA），改用 <code>sysctl hw.perflevel0.logicalcpu hw.perflevel1.logicalcpu</code> 看性能核/能效核的划分，并思考：<span class="key">异构核心（P-core / E-core）给调度带来的问题，和 NUMA 有什么共同点？</span></p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考 · 为什么 Python 程序员「几乎从不」遇到内存重排问题？</strong> 用今天和 Day 03 的知识写 300 字回答，至少覆盖三点：(a) GIL 如何充当了一道隐式的全局屏障；(b) CPython 的哪些操作是原子的、哪些不是（想想 <code>d[k] += 1</code> 到底是几步）；(c) 一旦你换到 multiprocessing + 共享内存、或写 C 扩展释放 GIL、或迁移到 free-threaded Python（PEP 703，3.13+ 的无 GIL 模式），今天讲的东西为什么会立刻变成必修课。最后一步：如果你要在无 GIL 的 Python 里实现一个线程安全的单例，你会怎么写，为什么不用 DCL？</p>
+</div>
+
+<div class="next">
+<strong>明日预告</strong>：Day 33 是本周的 🔧 <strong>动手 LAB：CPU 性能实测</strong>。我们把 Week 05 前四天的所有理论——流水线、分支预测、缓存层级、SIMD、多核——全部落到命令行上：用 <code>perf top</code> 看热点、<code>perf stat</code> 读出 cache-misses / branch-misses / IPC 这些硬件性能计数器、亲手跑行优先 vs 列优先的矩阵遍历对比、验证 NumPy 的 SIMD 加速、用 <code>cpuinfo</code> 和 <code>dmidecode</code> 把你这台机器的硬件规格摸清楚。今天讲的 <code>numactl</code>、<code>lstopo</code> 也会再用一遍。带着今天的三道练习结果来，明天全部能对上号。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
