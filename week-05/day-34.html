@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 34 · 🔐 侧信道攻击：Spectre / Meltdown / Rowhammer</title>
+<style>
+  :root {
+    --bg: #fff7ed;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #fef3e2;
+    --sec-border: #fdba74;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header { background: var(--card); border: 1px solid var(--sec-border); border-left: 6px solid var(--accent); border-radius: 6px; padding: 20px 24px; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .header .sec-tag { display: inline-block; background: var(--accent); color: white; padding: 2px 10px; border-radius: 3px; font-size: 11px; margin-bottom: 8px; letter-spacing: 1px; }
+  .toc { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin { background: var(--card); border-left: 3px solid var(--accent-soft); padding: 14px 18px; border-radius: 4px; margin: 0 0 24px; font-size: 15px; }
+  .authbox { background: var(--danger-bg); border: 1px solid var(--danger); border-radius: 6px; padding: 14px 18px; margin: 0 0 32px; font-size: 14px; }
+  .authbox strong { color: var(--danger); }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; border: 1px solid var(--sec-border); }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; border: 1px solid var(--sec-border); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--sec-border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note { background: var(--card); border-left: 4px solid var(--accent-soft); padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .detect { background: #ecfdf5; border-left: 4px solid #059669; padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .detect strong { color: #047857; }
+  .connect { background: var(--card); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 18px 22px; margin: 16px 0; }
+  .exercise-num { display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; font-size: 12px; line-height: 22px; margin-right: 8px; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent-soft); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="sec-tag">🔐 SECURITY · 周六安全主线</div>
+  <h1>侧信道攻击：当 CPU 的「小动作」出卖了秘密</h1>
+  <div class="meta">Day 34 · Week 05 · 2026-08-06 · 微架构攻防原理 + 云上防御 · 预计 4h（2.5h 阅读 + 1.5h 授权环境实操）</div>
+</div>
+
+<div class="authbox">
+  <strong>⚠️ 授权与合规声明（务必先读）</strong><br>
+  本文是 Agent 安全工程师的<b>防御性教育材料</b>。侧信道（Spectre/Meltdown/Rowhammer）是过去十年最重要的系统安全事件之一——不理解它，你既写不出正确的多租户隔离方案，也判断不了「我们的推理服务和别家共卡到底有没有泄密风险」。<br>
+  本文所有 PoC <b>只允许在你自己拥有的机器</b>（本机、你自己的 VM）里运行，且都是<b>同进程/进程间的隐蔽信道演示</b>，不涉及攻击真实系统。<br>
+  <b>禁止</b>在公司生产、共享集群、云厂商多租户环境里运行任何跨租户探测代码——这可能违反服务条款、触犯法律并违反公司安全规范。今天每个攻击原理都配套<b>「防御方怎么办」</b>，这才是你要带走的核心。
+</div>
+
+<div class="leadin">
+  昨天（Day 33）你用 <code>perf</code> 测 cache miss，把它当成一把调优的尺子——量化程序快慢。今天我们把这把尺子<b>反过来当武器</b>：既然「命中 cache」和「未命中 cache」的耗时差异肉眼可辨（几纳秒 vs 上百纳秒），那么<b>时间本身就成了一条泄密通道</b>。一个进程明明没权限读你的密钥，却能通过「观察某块内存被访问后变快了没有」，一个比特一个比特地把秘密抠出来。这就是<span class="key">侧信道（side channel）</span>。今天我们会：先讲清侧信道的哲学（为什么隔离良好的系统也会漏），再拆 Flush+Reload / Prime+Probe 两大缓存计时手法，然后完整推演震动整个行业的 <b>Meltdown</b> 和 <b>Spectre</b>——它们直接建立在你 Day 30 学的<b>乱序执行、推测执行、分支预测</b>之上；再看纯物理层的 <b>Rowhammer</b> 比特翻转；接着算清缓解措施 <b>KPTI / retpoline</b> 到底付了多少性能代价；最后落到你的本职——<b>云上 GPU 多租户的侧信道风险</b>，并亲手跑一个 Flush+Reload 隐蔽信道 PoC。读完你会明白：安全边界不只在代码逻辑里，还在硅片的物理行为里。
+</div>
+
+<div class="toc">
+  <strong>今日目录</strong>
+  <ol>
+    <li><a href="#s1">什么是侧信道：从功耗到时间的泄密</a></li>
+    <li><a href="#s2">缓存计时家族：Flush+Reload / Prime+Probe / Evict+Time</a></li>
+    <li><a href="#s3">Meltdown：乱序执行让越权读「先斩后奏」</a></li>
+    <li><a href="#s4">Spectre：训练分支预测器去「自愿」泄密</a></li>
+    <li><a href="#s5">Rowhammer：一个纯物理层的比特翻转攻击</a></li>
+    <li><a href="#s6">缓解措施：KPTI / retpoline 和它们的代价</a></li>
+    <li><a href="#s7">云上 GPU 多租户侧信道：你的本职战场</a></li>
+    <li><a href="#s8">🔧 实战：手写一个 Flush+Reload 隐蔽信道</a></li>
+    <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+    <li><a href="#ex">今日小练习</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">1 · 什么是侧信道：从功耗到时间的泄密</h2>
+
+<p><span class="term">侧信道攻击（side-channel attack）</span>指的是：攻击者不去破解算法本身、也不利用代码逻辑漏洞，而是通过<b>系统运行时无意泄露的物理/微架构信息</b>来推断秘密。这里的「侧」是相对「正门」而言的——正门是接口、协议、密码学，而侧门是<b>时间、功耗、电磁辐射、声音、缓存状态、温度</b>这些「本不该携带信息、却确实携带了信息」的物理副产品。</p>
+
+<p><b>类比</b>：想象一个装了防盗门的保险箱，密码你不知道（这是「正门」——需要暴力破解或知道密码）。但你注意到，主人转对一位数字时锁芯会发出一声极轻微的「咔哒」。你不需要知道密码，只要<b>听声音</b>，就能一位位试出来。声音就是「侧信道」——它不是设计用来传递密码的，却泄露了密码。经典密码学里，通过测量 RSA 解密的<b>耗时</b>就能推出私钥的位（Kocher, 1996），道理完全一样。</p>
+
+<p>为什么侧信道在现代 CPU 上如此致命？因为 CPU 为了快，共享了大量资源：<span class="term">L1/L2/L3 缓存、分支预测器、TLB、执行端口、内存控制器</span>——这些资源在不同进程、不同安全域之间是<b>共享</b>的。共享意味着「你的行为会改变我看到的状态」。哪怕操作系统把地址空间隔离得再干净（进程 A 读不到进程 B 的一个字节），只要 A 能<b>观测 B 用了哪一块 cache</b>，信息就漏了。这就是过去十年微架构攻击的总纲。</p>
+
+<div class="note">
+<strong>关键区分：隐蔽信道 vs 侧信道。</strong> <span class="term">侧信道</span>是「受害者无意泄露，攻击者被动/主动观测」；<span class="term">隐蔽信道（covert channel）</span>是「两个本不该通信的进程，故意用共享资源偷偷传数据」（比如沙箱里的恶意代码把数据编码成 cache 状态传给外面的同谋）。技术手法（如 Flush+Reload）两者共用——今天 LAB 我们先做更容易复现的隐蔽信道，它是理解侧信道的最短路径。
+</div>
+
+<p><b>侧信道分类速览：</b></p>
+<ul>
+  <li><span class="term">时间侧信道（timing）</span>：测操作耗时。缓存计时、分支计时、除法指令计时都属此类——今天的主角。</li>
+  <li><span class="term">功耗/电磁（power/EM）</span>：物理探针测芯片功耗曲线，常用于攻击智能卡、硬件密钥。需要物理接触。</li>
+  <li><span class="term">微架构状态（μarch state）</span>：cache、TLB、分支预测器、行填充缓冲（Line Fill Buffer）等的占用状态。Meltdown/Spectre/MDS 全在此。</li>
+  <li><span class="term">故障注入（fault）</span>：Rowhammer、电压毛刺（voltage glitching）——主动让硬件出错来绕过检查。</li>
+</ul>
+
+<h2 id="s2">2 · 缓存计时家族：Flush+Reload / Prime+Probe / Evict+Time</h2>
+
+<p>所有微架构攻击的「读出」环节，几乎都靠<b>缓存计时</b>来把微架构状态转成攻击者能读的数字。回忆 Day 31：访问一个数据，如果它在 L1（命中），大约几个周期（~1ns）；如果要去主存拿（miss），要上百个周期（~100ns）。<span class="key">这个 ~100 倍的差距，用 <code>rdtsc</code> 指令（读 CPU 时间戳计数器）就能清晰测出来</span>。于是「某地址此刻在不在 cache 里」这一个比特的信息，就能被可靠读取。</p>
+
+<h3>2.1 Flush+Reload（最精确，需共享内存）</h3>
+<p>前提：攻击者和受害者<b>共享同一物理内存页</b>（很常见——共享库如 libcrypto、去重后的相同内存页、mmap 的同一文件）。步骤：</p>
+<ol>
+  <li><span class="term">Flush</span>：用 <code>clflush</code> 指令把目标地址从<b>所有层级缓存</b>中赶出去（因为是共享物理页，赶出去对受害者也生效）。</li>
+  <li><span class="term">Wait</span>：让受害者运行一小段。如果受害者<b>访问了</b>这个地址，它会被重新加载进 cache。</li>
+  <li><span class="term">Reload</span>：攻击者自己访问该地址并计时。<b>快</b>→受害者刚才访问过（命中）；<b>慢</b>→受害者没访问（miss）。</li>
+</ol>
+<p>这样攻击者就知道了「受害者刚才有没有碰这块内存」。若受害者的代码是 <code>if (secret_bit) access(table[1]) else access(table[0])</code>，攻击者监视 <code>table[0]</code> 和 <code>table[1]</code> 哪个被加载，就读出了 <code>secret_bit</code>。</p>
+
+<h3>2.2 Prime+Probe（不需共享内存，更通用）</h3>
+<p>当没有共享内存时（跨 VM、跨容器常见），用 Prime+Probe。它攻击的是 cache 的<b>组相联结构</b>（Day 31 的 set-associative）：</p>
+<ol>
+  <li><span class="term">Prime</span>：攻击者用自己的数据<b>填满</b>某个 cache set（把整个 way 占满）。</li>
+  <li><span class="term">Wait</span>：受害者运行。如果它访问的地址<b>映射到同一个 set</b>，就会把攻击者的某条数据挤出去。</li>
+  <li><span class="term">Probe</span>：攻击者重新访问自己 Prime 时放的数据并计时。如果变慢了（有 miss），说明「受害者动过这个 set」。</li>
+</ol>
+<p>Prime+Probe 分辨率低于 Flush+Reload（只知道「哪个 set 被动了」而非精确地址），但<b>不依赖共享内存</b>，因此是<b>跨租户、跨 VM 攻击的主力</b>——这正是云安全最关心的场景。</p>
+
+<div class="ascii">  Flush+Reload                          Prime+Probe
+  ┌──────────────┐                     ┌──────────────┐
+  │ 需共享物理页  │                     │ 无需共享内存  │
+  │ clflush 赶出  │  ←精度高(地址级)    │ 填满 cache set│  ←精度低(set级)
+  │ 时间差 ~100x  │                     │ 看谁被挤出    │  ←跨 VM 可用
+  └──────────────┘                     └──────────────┘
+       ↑ Meltdown/Spectre 的"读出"多用它      ↑ 云上跨租户攻击多用它</div>
+
+<p>还有 <span class="term">Evict+Time</span>（先测受害者正常耗时，再驱逐某地址后重测，看变慢多少来判断它是否用了该地址）和 <span class="term">Flush+Flush</span>（利用 <code>clflush</code> 自身耗时随缓存状态变化，几乎不产生 cache miss，更隐蔽）。它们是同一思想的变体。</p>
+
+<div class="detect">
+<strong>🛡 防御方视角：</strong>缓存计时攻击的共性弱点是<b>需要高精度计时</b>和<b>大量重复探测</b>。检测/缓解手段：① 降低计时精度（浏览器把 <code>performance.now()</code> 精度砍到 100μs、加抖动，正是为了防 JS 侧信道）；② 监控异常高频的 <code>clflush</code> / cache miss（可用性能计数器）；③ 关键路径用<b>常数时间（constant-time）</b>实现——不让分支和内存访问依赖秘密（现代密码库如 BoringSSL 的核心都是 constant-time 的）。
+</div>
+
+<h2 id="s3">3 · Meltdown：乱序执行让越权读「先斩后奏」</h2>
+
+<p>2018 年初公开的 <span class="term">Meltdown（CVE-2017-5754）</span>让全世界的运维连夜打补丁。它的杀伤力在于：<b>一个普通用户态程序，能读取整个内核地址空间（乃至整台机器的物理内存）</b>。它把 Day 30 学的<b>乱序执行</b>变成了武器。</p>
+
+<h3>3.1 问题的根子：乱序执行 + 延迟的权限检查</h3>
+<p>回忆 Day 30：现代 CPU 为了不空等，会<b>乱序（out-of-order）</b>提前执行后面的指令，结果先算好放在缓冲区，等轮到它「退休（retire）」时才真正写回、对外可见。关键在于——当一条 load 指令访问了<b>你无权访问的内核地址</b>时，CPU 会产生异常，但异常是在指令<b>退休那一刻</b>才抛出的。在退休之前的「推测窗口」里，CPU 已经<b>用那个非法读到的值</b>去执行了后面几条指令！这些后续指令的结果最终会被丢弃（架构状态回滚，仿佛没发生），<b>但它们对 cache 的影响留下来了</b>——这就是泄密的缝隙。</p>
+
+<div class="ascii">Meltdown 核心 5 行（概念）：
+   char *kernel_ptr = 0xffff...;        // 越权地址(无权读)
+   char secret = *kernel_ptr;           // ①推测执行:值已被读出(异常尚未抛)
+   char dummy  = probe_array[secret*4096];// ②用secret做下标去访问一块探测数组
+   // ...此时异常抛出,①②的架构结果被回滚(secret/dummy清零)
+   // 但 probe_array[secret*4096] 那一页已经被载入 cache 了!
+   for(i=0;i<256;i++) time_access(probe_array[i*4096]); // ③Flush+Reload扫256页
+   // 哪一页命中(最快),它的下标 i 就是 secret 的值</div>
+
+<p>第 ② 行是精髓：用<b>秘密值</b>作为数组下标去访问一块攻击者自己的 <code>probe_array</code>（每个候选值间隔 4096 字节 = 一页，避免预取干扰）。虽然秘密值最终被回滚清零，但「<code>secret</code> 对应的那一页被载入了 cache」这件事<b>不会回滚</b>。第 ③ 行用 Flush+Reload 扫 256 个候选页，哪个最快命中，下标就是 <code>secret</code>。<span class="key">一次能读一个字节，循环起来就能把内核内存整片抠出来，速度可达每秒几 KB。</span></p>
+
+<p>Meltdown 之所以能读内核，是因为当年为了性能，Linux 把<b>整个内核地址空间也映射在每个进程的页表里</b>（只是标记为「仅内核态可访问」）。乱序执行绕过了这个「仅内核态」的检查窗口。修法就是把内核页表从用户态页表里<b>拆出去</b>——这就是下面要讲的 KPTI。Meltdown 主要影响 Intel 和部分 ARM，AMD 基本免疫（其权限检查发生得更早）。</p>
+
+<h2 id="s4">4 · Spectre：训练分支预测器去「自愿」泄密</h2>
+
+<p><span class="term">Spectre（CVE-2017-5753 / 5715）</span>比 Meltdown 更根本、更难修，因为它不依赖某个厂商的实现瑕疵，而是利用了<b>所有高性能 CPU 都有的推测执行</b>本身。Meltdown 是「越权读自己不该读的」，Spectre 是「<b>骗受害者自己把秘密泄出来</b>」。</p>
+
+<h3>4.1 Variant 1：绕过边界检查（Bounds Check Bypass）</h3>
+<p>考虑一段看似安全的代码（比如内核里的系统调用处理，或 JS 引擎里的数组访问）：</p>
+<pre><code>if (x &lt; array1_size) {          // 边界检查
+    y = array2[array1[x] * 4096];// 只有 x 合法才会执行
+}</code></pre>
+<p>攻击者反复用<b>合法的 x</b> 调用它，把 Day 30 讲的<span class="term">分支预测器（BTB）</span>训练成「这个 if 总是成立」。然后突然传入一个<b>越界的 x</b>。CPU 相信历史，<b>推测性地</b>先执行了 if 内部——用越界的 <code>array1[x]</code>（可能是任意内存里的秘密）作下标访问 <code>array2</code>，把对应页载入 cache。虽然边界检查最终发现 x 越界、回滚了架构结果，但 cache 痕迹又一次留了下来。攻击者再用 Flush+Reload 读出秘密。<b>整个过程受害者的代码是"合法"的，漏洞在硬件的推测行为里。</b></p>
+
+<h3>4.2 Variant 2：分支目标注入（Branch Target Injection）</h3>
+<p>更狠：攻击者在自己的进程里训练 BTB，让某个间接跳转（<code>jmp [rax]</code>）的预测目标<b>指向受害者进程里的一段"小工具（gadget)"代码</b>。当受害者执行到那个间接跳转时，CPU 推测性地跳到攻击者选定的 gadget 去执行，泄露数据。这就是为什么修复它需要 <b>retpoline</b>（下节）——把间接跳转替换成不可被 BTB 预测的形式。</p>
+
+<div class="note">
+<strong>为什么 Spectre 是"永久的"？</strong>因为推测执行是现代 CPU 性能的<b>命根子</b>——去掉它性能倒退二十年。所以 Spectre 类漏洞无法靠"关掉某个特性"根治，只能一处一处地在软件里插"投机屏障"（如 <code>lfence</code>）、用 retpoline、以及在编译器/内核里做大量针对性加固。直到今天（2026），新的 Spectre 变种（如 BHI、Retbleed、Inception/BTC）仍在不断被发现——这是一场持久战。
+</div>
+
+<h2 id="s5">5 · Rowhammer：一个纯物理层的比特翻转攻击</h2>
+
+<p>前面都是"读"——不改数据只偷看。<span class="term">Rowhammer</span>则是"写"：它能<b>在你没有写权限的内存位置翻转比特（0↔1）</b>，纯靠 DRAM 的物理缺陷。</p>
+
+<p><b>原理</b>：DRAM 把每个比特存在一个微小电容里，电容会漏电，需要定期刷新。现代 DRAM 密度极高，相邻内存行（row）挨得太近。当你<b>疯狂地、反复地读写某一行</b>（"锤击" hammer），会产生电磁干扰，让<b>相邻行</b>的电容加速漏电——如果在刷新周期到来前电荷跌破阈值，那一位就<b>翻转</b>了。攻击者不能选行读，但能选行"锤"。</p>
+
+<pre><code>// Rowhammer 的核心循环(概念):双面锤击
+loop:
+    mov (X), %eax     // 读锤击行 X (受害行的上邻)
+    mov (Y), %ebx     // 读锤击行 Y (受害行的下邻)
+    clflush (X)       // 必须刷出 cache,否则第二次读命中 cache 就不碰 DRAM
+    clflush (Y)
+    jmp loop          // 每秒数十万次,持续几十毫秒~几秒</code></pre>
+
+<p><b>为什么可怕</b>：如果被翻转的比特恰好在<b>页表项（PTE）</b>里，攻击者可能把一个指向自己内存的指针"翻"成指向内核内存的指针，从而获得对物理内存的读写——普通用户直接提权到 root。Google Project Zero 2015 年首次演示了这个从"内存偶发错误"到"完整提权"的链条。后续变种 <b>ECCploit</b>（打穿 ECC 内存）、<b>RAMBleed</b>（用 Rowhammer 反过来读数据）、<b>Half-Double</b>（跨越更远的行）说明这个物理问题极其顽固。</p>
+
+<div class="detect">
+<strong>🛡 防御方视角：</strong>① <b>ECC 内存</b>能纠正单比特错误、检测双比特错误，抬高门槛但非万能；② <b>TRR（Target Row Refresh）</b>：内存控制器检测到某行被高频访问就主动刷新邻行——DDR4/DDR5 标配，但 TRRespass 等研究已证明可被绕过；③ 提高刷新频率（性能/功耗代价）；④ 云上给不同租户的内存做<b>物理隔离/保护带（guard rows）</b>。作为工程师，选服务器/云实例时优先带 ECC 且明确说明 Rowhammer 缓解的机型。
+</div>
+
+<h2 id="s6">6 · 缓解措施：KPTI / retpoline 和它们的代价</h2>
+
+<p>你作为要对性能负责的工程师，最该记住的不是攻击细节，而是<b>缓解要花多少钱（性能）</b>——因为这直接影响你的推理服务吞吐。</p>
+
+<h3>6.1 KPTI（Kernel Page Table Isolation）——治 Meltdown</h3>
+<p>思路：既然 Meltdown 靠"内核页表映射在用户态页表里"，那就<b>彻底拆开</b>。用户态运行时页表里只留极少必要的内核入口，其余内核地址根本不映射——非法地址在推测阶段就没有有效翻译，读不出来。代价：<b>每次系统调用/中断都要切换页表 → 刷 TLB</b>（Day 08 讲过 TLB miss 很贵）。</p>
+<ul>
+  <li>对 <b>syscall 密集</b>型负载（数据库、网络服务、文件 IO 密集）：开销可达 <b>5%–30%</b>。</li>
+  <li>对 <b>计算密集</b>型负载（纯 GPU 推理、大矩阵运算，很少进内核）：开销通常 <b>&lt;1%</b>。</li>
+  <li>PCID（进程上下文标识）能减少 TLB 全刷，缓解一部分代价——所以较新 CPU 影响更小。</li>
+</ul>
+
+<h3>6.2 retpoline——治 Spectre v2</h3>
+<p><span class="term">retpoline</span> = "return" + "trampoline"。把容易被 BTB 注入的<b>间接跳转/调用</b>替换成一段用 <code>ret</code> 指令构造的"蹦床"，让 CPU 的推测被引导到一个无害的死循环（<code>pause; lfence; jmp</code>）里空转，从而无法投机跳到攻击者的 gadget。代价：间接调用变慢，虚函数多/间接跳转多的代码受影响。后来 Intel 用硬件特性 <b>eIBRS/IBPB</b> 部分替代 retpoline。</p>
+
+<table>
+<tr><th>缓解</th><th>针对</th><th>机制</th><th>典型性能代价</th></tr>
+<tr><td>KPTI / PTI</td><td>Meltdown</td><td>拆分内核/用户页表</td><td>syscall 密集 5–30%，计算密集 &lt;1%</td></tr>
+<tr><td>retpoline</td><td>Spectre v2</td><td>间接跳转换蹦床</td><td>间接调用密集时明显</td></tr>
+<tr><td>lfence/屏障</td><td>Spectre v1</td><td>关键分支后插投机屏障</td><td>局部,取决于插入点</td></tr>
+<tr><td>MDS 缓解</td><td>ZombieLoad 等</td><td>切换时清空 CPU 缓冲区</td><td>叠加 HT 关闭代价可观</td></tr>
+<tr><td>关超线程(HT)</td><td>同核跨线程侧信道</td><td>物理核不共享给两租户</td><td>吞吐最多降 ~30%</td></tr>
+</table>
+
+<div class="note">
+<strong>工程决策提示：</strong>这些缓解在内核里可用启动参数调（如 <code>mitigations=off</code> 一键全关）。<b>不要</b>在生产/多租户环境关它们图快。但如果是<b>单租户、物理隔离、只跑自己可信代码</b>的专用推理节点，关闭部分缓解换取吞吐是一个<b>需要安全团队签字</b>的、有明确前提的权衡。查看当前状态：<code>grep . /sys/devices/system/cpu/vulnerabilities/*</code>。
+</div>
+
+<h2 id="s7">7 · 云上 GPU 多租户侧信道：你的本职战场</h2>
+
+<p>前面讲的都是 CPU。但你做 Agent 安全，真正贴身的是 <b>GPU 上的侧信道</b>——因为 LLM 推理服务经常在共享 GPU 上跑多个租户/多个模型。这块比 CPU 侧信道年轻，但风险真实。</p>
+
+<h3>7.1 GPU 为什么也漏</h3>
+<p>回忆 Week 07 会讲的 GPU 架构：多个 kernel 可能<b>并发跑在同一块 GPU</b> 上（MPS 多进程服务、时间片共享、甚至 MIG 分区之间）。它们共享 <b>L2 cache、显存带宽、SM 调度器</b>。已有研究表明：</p>
+<ul>
+  <li><span class="term">显存残留（memory remanence）</span>：租户 A 用完的显存没被清零就分给租户 B，B 直接 <code>cudaMalloc</code> 后读，可能读到 A 的<b>模型权重、KV cache、甚至输入 prompt</b>。这是最实际、最常见的风险。</li>
+  <li><span class="term">GPU cache 计时侧信道</span>：通过测 L2 命中/带宽争用，可推断同卡另一租户的<b>访存模式</b>——进而指纹识别对方在跑哪个模型、甚至部分推断输入特征。</li>
+  <li><span class="term">功耗/频率侧信道</span>：GPU 会根据负载动态调频（DVFS），观察自己 kernel 的执行时间波动，能推断同卡邻居的负载节奏。</li>
+</ul>
+
+<h3>7.2 隔离手段与它们的强度</h3>
+<div class="ascii">隔离强度:  弱 ────────────────────────────────▶ 强
+  时间片共享 &lt; MPS &lt; MIG &lt; 整卡独占 &lt; 物理机独占
+  (context切换   (并发,弱隔离) (硬件分区,   (无邻居)   (无共享总线)
+   可能残留)                   显存/L2隔离)</div>
+<ul>
+  <li><span class="term">MIG（Multi-Instance GPU）</span>（A100/H100）：把一块卡硬件切成多个实例，各有独立的显存、L2 切片、SM——是目前 GPU 上<b>最强的租户隔离</b>。但仍非绝对，且切分粒度有限。</li>
+  <li><span class="term">MPS</span>：为吞吐而生的并发共享，<b>隔离很弱</b>，只适合"同一信任域内"多进程，<b>不要</b>用于跨租户。</li>
+  <li>无论哪种，<b>释放显存前必须清零（<code>cudaMemset</code>）</b>——这是防显存残留最基本、你自己能立刻落地的一条。</li>
+</ul>
+
+<div class="detect">
+<strong>🛡 作为 Agent 安全工程师你能做的：</strong>① 跨租户/跨客户的推理<b>默认整卡独占或 MIG 隔离</b>，绝不用 MPS 混租户；② 显存回收时强制清零，模型卸载后校验；③ 在多租户网关层做<b>时序归一化</b>（统一 padding 到固定长度、固定 batch 窗口），削弱通过响应时间推断 token 数/内容的侧信道；④ 把"GPU 共享策略"写进威胁模型，明确哪些数据(权重/prompt/KV)在哪种共享下有暴露面。这正是 Day 48 会深入的主题。
+</div>
+
+<h2 id="s8">8 · 🔧 实战：手写一个 Flush+Reload 隐蔽信道</h2>
+
+<p>我们做一个<b>同机、同进程内</b>的隐蔽信道演示，安全无害：用缓存状态在"发送方"和"接收方"逻辑之间传一个字节。它把今天所有概念（clflush、rdtsc 计时、cache 命中/未命中判定）连成一条能跑的链路。</p>
+
+<div class="authbox" style="margin-top:20px">
+  <strong>只在你自己的机器上编译运行。</strong>这段代码<b>不攻击任何其他进程</b>，只演示"cache 状态可以编码信息"。Apple Silicon（M 系列）无 <code>clflush</code>/<code>rdtsc</code> 且缓存行为不同，建议在 <b>x86_64 Linux</b>（本机或 VM）上跑。
+</div>
+
+<h3>8.1 覆盖信道核心代码 <code>fr.c</code></h3>
+<pre><code>#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;x86intrin.h&gt;   // _mm_clflush, __rdtsc
+
+#define PAGE 4096
+uint8_t probe[256 * PAGE];   // 256 个候选,每个隔一页避免预取
+
+// 测量访问某地址的耗时(周期数)
+static inline uint64_t timed_load(void *addr){
+    unsigned junk;
+    uint64_t t0 = __rdtscp(&junk);
+    (void)*(volatile uint8_t *)addr;   // 触发一次 load
+    uint64_t t1 = __rdtscp(&junk);
+    return t1 - t0;
+}
+
+int main(){
+    // 先把整个 probe 数组从 cache 刷掉(Flush)
+    for (int i = 0; i &lt; 256; i++) _mm_clflush(&amp;probe[i*PAGE]);
+
+    // === 发送方:想传的秘密字节 ===
+    uint8_t secret = 'K';               // 试试改成别的字符
+    // "发送":用秘密值做下标访问 probe → 把那一页载入 cache
+    volatile uint8_t sink = probe[secret * PAGE];
+    (void)sink;
+
+    // === 接收方:扫 256 个候选页,找命中的那个(Reload) ===
+    int best = -1; uint64_t best_t = ~0ULL;
+    for (int i = 0; i &lt; 256; i++){
+        uint64_t t = timed_load(&amp;probe[i*PAGE]);
+        if (t &lt; best_t){ best_t = t; best = i; }
+    }
+    printf("recovered byte = %d ('%c'), reload cycles = %llu\n",
+           best, (best&gt;=32&&best&lt;127)?best:'?', (unsigned long long)best_t);
+    return 0;
+}</code></pre>
+
+<pre><code># 编译运行(x86_64 Linux)
+gcc -O0 -o fr fr.c
+./fr
+# 期望: recovered byte = 75 ('K'), reload cycles = 40~80  (远低于 miss 的 ~250+)
+# 多跑几次 / 试着把 secret 改成 'A' 'z' '7',看是否都能恢复</code></pre>
+
+<p>看懂了这段，你就理解了 Meltdown/Spectre 的"读出"环节——它们唯一的区别是：那个 <code>probe[secret*PAGE]</code> 里的 <code>secret</code>，不是你自己定义的字符，而是<b>推测执行期间越权读到、随后被回滚</b>的一个字节。回滚清掉了架构状态，却清不掉这行代码给 cache 留下的痕迹。</p>
+
+<h3>8.2 观察你机器的漏洞与缓解状态</h3>
+<pre><code># 一屏看全:你的 CPU 对各类微架构攻击是否脆弱、当前缓解是什么
+grep . /sys/devices/system/cpu/vulnerabilities/*
+# 典型输出示例:
+#   .../meltdown:Mitigation: PTI
+#   .../spectre_v1:Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+#   .../spectre_v2:Mitigation: Retpolines, IBPB, ...
+#   .../mds:Mitigation: Clear CPU buffers; SMT vulnerable
+# "SMT vulnerable" 提示:开着超线程时同核跨线程仍有暴露面
+
+lscpu | grep -i -E "vulnerab|flags" | head   # 也能看到 CPU 特性
+# GPU 侧(如有 NVIDIA):看是否支持/开启 MIG
+nvidia-smi -q | grep -i "MIG"                 # Day 46-48 会深入</code></pre>
+
+<div class="detect">
+<strong>🛡 把 LAB 变成产出：</strong>在你们的推理节点上跑一遍 <code>grep . /sys/devices/system/cpu/vulnerabilities/*</code>，把每台机器的缓解状态记下来，形成一张<b>「资产 × 微架构缓解」清单</b>。这是很多安全基线检查（如 CIS Benchmark）会查的一项，也是你判断"这台机能不能放多租户负载"的硬证据。
+</div>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 共享 GPU 推理的模型/数据泄露。</strong>这是最直接的连结。当你把多个客户的推理放在同一块 GPU（时间片或 MPS）上，显存残留可能让后一个租户读到前一个的<b>模型权重、系统 prompt、甚至用户输入</b>。Flush+Reload 的思想同样适用于 GPU L2：邻居能通过计时推断你在跑哪个模型。防御：跨租户默认整卡/MIG 隔离、显存清零、把 GPU 共享策略写进威胁模型。</p>
+
+<p><strong>2. 响应时序侧信道泄露 prompt/输出信息。</strong>LLM 服务的<b>响应耗时</b>本身就是侧信道：TTFT（首 token 时间）随 prompt 长度变化、总时长随输出 token 数变化、命中 KV cache（prefix caching）时明显更快。攻击者反复探测可推断:你的系统 prompt 有多长、某个前缀是否被别的用户请求过(跨用户 cache 命中 → 泄露"别人问过类似问题")。防御:对时序做归一化、prefix cache 按用户/租户分区、对敏感响应加固定延迟。</p>
+
+<p><strong>3. Spectre 思想 = prompt injection 的硬件版隐喻。</strong>Spectre 的本质是"让系统在<b>推测/信任</b>状态下执行了本不该执行的路径，事后回滚却留下副作用"。这和 <b>indirect prompt injection</b> 惊人地同构:Agent 在"信任检索内容"的前提下执行了注入的指令,即使事后过滤,副作用(已调用的工具、已发出的请求)可能无法回滚。理解 Spectre 会加深你对"信任边界 + 投机执行 + 不可回滚副作用"这一攻击范式的直觉——这正是 Day 132/160 的核心。</p>
+
+<p><strong>4. 沙箱里的隐蔽信道:code interpreter 的隐患。</strong>你给 Agent 配了代码执行沙箱(Day 157 会讲),即使网络全断、文件系统隔离,沙箱内的恶意代码仍可能用<b>缓存/时序隐蔽信道</b>把数据编码后传给同机的同谋进程,绕过你所有的"数据出口管控"。这说明:<b>逻辑隔离不等于物理隔离</b>。高敏感场景的沙箱需要考虑到微架构侧信道,可能需要独占物理核、关超线程。</p>
+
+<p><strong>5. 缓解措施 = 你的容量规划变量。</strong>KPTI/retpoline/关 HT 这些缓解会实打实吃掉吞吐(syscall 密集可达两位数百分比)。当你为 Agent 服务做容量估算(Day 151/162 的系统设计)时,必须把"我们为了多租户安全开了哪些缓解、因此损失了多少吞吐"算进成本模型。安全和性能在这里是可量化的权衡,而不是口号。</p>
+</div>
+
+<h2 id="ex">今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手：</strong>在你自己的 x86_64 Linux(本机或 VM)上编译运行 8.1 的 <code>fr.c</code>。把 <code>secret</code> 依次改成 <code>'A'</code>、<code>'z'</code>、<code>'7'</code>、<code>200</code>,确认每次都能恢复。然后把 <code>-O0</code> 换成 <code>-O2</code> 重编,观察是否还能稳定恢复——想想编译器优化(可能把 <code>sink</code> 优化掉)如何影响侧信道,以及这对"写 constant-time 代码为何这么难"的启示。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察：</strong>运行 <code>grep . /sys/devices/system/cpu/vulnerabilities/*</code> 和 <code>lscpu | grep -i mitig</code>,记录你这台机器对 meltdown / spectre_v1 / spectre_v2 / mds 的缓解状态。特别注意有没有出现 <code>SMT vulnerable</code> 字样。如果有 NVIDIA GPU,再跑 <code>nvidia-smi -q | grep -i mig</code> 看是否支持 MIG。把结果整理成一张三列小表(漏洞 / 状态 / 缓解手段)。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考：</strong>你们要上线一个多租户 LLM 推理服务,预算有限,只能在"① 每租户整卡独占(贵、利用率低)"和"② 用 MIG 把 H100 切成多份分给不同租户(省钱、利用率高)"之间选。请从<b>侧信道风险</b>角度写出:MIG 相比整卡独占,还残留哪些暴露面(提示:L2 切片、显存清零、共享内存控制器、DVFS)?你会追加哪 3 条补偿性控制措施,才敢把方案二推给安全评审?</p>
+</div>
+
+<div class="next">
+<strong>明日预告</strong>：Day 35(周日综合)我们收束整个 Week 05——<strong>CPU 与 LLM 推理的关系</strong>。这周从冯诺依曼、流水线、分支预测、缓存,一路走到今天的侧信道,你已经建立了完整的 CPU 微架构心智模型。明天把它<b>接回你的本行</b>:在一次 LLM 推理里,CPU 到底扮演什么角色?为什么说很多推理瓶颈其实卡在 CPU 侧(tokenize、采样、调度、Python 开销)而非 GPU?异构计算里 CPU 和 GPU 如何协调?我们还会给 Week 05 做一次全景复盘,并预告 Week 06——<strong>内存层级与 NUMA</strong>,以及那个你天天听到却未必讲得清的问题:<span class="key">为什么 LLM 推理是 memory-bound 的</span>。今天的 <code>fr.c</code> 别删,它证明了"时间即信息"——这个直觉下周还要用。</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
