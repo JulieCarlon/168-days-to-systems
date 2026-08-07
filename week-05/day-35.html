@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 35 · CPU 与 LLM 推理关系 + 周复盘</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+  .recap {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 20px 12px;
+    margin: 16px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 35 · CPU 与 LLM 推理关系 + 周复盘</h1>
+  <div class="meta">Week 05 · 周日 🌐 · 2026-08-07 · 综合：CPU 视角看 LLM + 本周回顾 + 下周预告 · 预计 4h</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：这一周我们把 CPU 从里到外拆了个遍——冯诺依曼结构、流水线、分支预测、乱序执行、缓存层级、SIMD、多核一致性，最后还看了侧信道攻击。今天是周日综合日，我们做两件事。第一件，<span class="key">把这一周散落的知识点缝成一张完整的图</span>：一条指令是怎么在这些机制的协作下跑完的。第二件，回答一个你每天工作都会碰到、却很少有人讲清楚的问题——<span class="key">在跑大模型推理（LLM inference）时，CPU 到底在干什么？为什么明明有了昂贵的 GPU，CPU 还是可能成为瓶颈？「异构计算」这几个字背后又是怎么协调的？</span>如果今天结束时你能画出一张「一个 token 生成时 CPU 与 GPU 的分工时间线」，并解释「为什么 decode 阶段是 memory-bound」，这周就没白学。</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">本周复盘：CPU 的七块拼图缝成一张图</a></li>
+  <li><a href="#s2">LLM 推理里 CPU 到底扮演什么角色</a></li>
+  <li><a href="#s3">推理瓶颈分析：compute-bound vs memory-bound 与 Roofline</a></li>
+  <li><a href="#s4">异构计算协调：CPU 与 GPU 如何配合（与踩坑）</a></li>
+  <li><a href="#s5">把本周的微架构知识用在推理性能上</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+  <li><a href="#next">下周预告</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 本周复盘：CPU 的七块拼图缝成一张图</h2>
+
+<p>先把 Day 29–34 的主干快速过一遍。别把这当成流水账——每一条都请你在心里对应一个「它解决了什么问题」。</p>
+
+<div class="recap">
+<h3>Day 29 · CPU 工作原理</h3>
+<p><span class="term">冯诺依曼结构</span>把「指令」和「数据」放在同一片内存里，用同一条总线读——这带来了统一编程模型，也埋下了「内存墙」的隐患（指令和数据抢带宽）。<span class="term">哈佛结构</span>把两者分开，现代 CPU 在 L1 层面其实是「改良哈佛」：<code>L1i</code>（指令缓存）与 <code>L1d</code>（数据缓存）分开，往下到 L2/L3 又合并。核心的性能公式请刻进脑子：</p>
+<div class="ascii">执行时间 = 指令数(IC) × 每条指令周期数(CPI) × 时钟周期(1/频率)
+
+三个因子分别被谁影响：
+  IC   ← 编译器 / 算法 / 指令集（CISC 一条顶多条 vs RISC）
+  CPI  ← 微架构：流水线、缓存命中、分支预测（本周主角）
+  频率  ← 制程 / 功耗墙（已多年停在 ~5GHz 附近）</div>
+<p>关键洞见：<span class="key">频率早就撞墙了，这十几年性能提升几乎全靠降低 CPI（微架构魔法）和增加并行度（多核 + SIMD）</span>。这也是为什么本周花了大力气讲流水线和缓存——它们就是 CPI 的战场。</p>
+</div>
+
+<div class="recap">
+<h3>Day 30 · 流水线、分支预测、乱序</h3>
+<p><span class="term">流水线（pipeline）</span>把一条指令拆成取指/译码/执行/访存/写回几级，让多条指令像工厂流水线一样重叠执行。代价是三种<span class="term">冒险（hazard）</span>：结构冒险（资源冲突）、数据冒险（后一条要用前一条的结果，用 forwarding 转发缓解）、控制冒险（遇到分支不知道下一条在哪）。</p>
+<p>为了不让分支把流水线清空，CPU 用<span class="term">分支预测（BTB + 历史表）</span>猜下一条走哪；猜错要清空并回滚，代价十几个周期。<span class="term">超标量 + 乱序执行（OoO）</span>让 CPU 在等一条慢指令（比如 cache miss）时先跑后面不依赖的指令。<span class="term">推测执行（speculative execution）</span>甚至会先把猜测路径的指令执行了——这正是 Day 34 Spectre 的病根：数据回滚了，但缓存状态没回滚，泄露了秘密。</p>
+</div>
+
+<div class="recap">
+<h3>Day 31 · 缓存层级</h3>
+<p>内存比 CPU 慢两个数量级，缓存就是中间的缓冲垫。记住这张「延迟阶梯」——它是本周乃至整个系统课的锚点：</p>
+<div class="ascii">操作                    延迟(约)      类比(把1个周期当1秒)
+─────────────────────────────────────────────────────
+L1 命中                 ~1 ns         1 秒
+L2 命中                 ~4 ns         4 秒
+L3 命中                 ~15 ns        15 秒
+主存(DRAM)              ~100 ns       ~2 分钟
+NVMe SSD 随机读         ~100 μs       ~1 天
+机械硬盘寻道            ~10 ms        ~4 个月
+同城网络往返            ~0.5 ms       ~6 天</div>
+<p><span class="term">cache line</span>（通常 64 字节）是缓存的最小搬运单位——你读 1 个字节，硬件搬 64 个。这解释了为什么「顺序访问快、随机访问慢」，也解释了 <span class="term">false sharing</span>（两个核各改一个变量，但它俩在同一 cache line 上，导致缓存行在核间反复弹跳）。</p>
+</div>
+
+<div class="recap">
+<h3>Day 32 · SIMD + 多核 + 内存一致性</h3>
+<p><span class="term">SIMD</span>（单指令多数据，SSE/AVX-512）一条指令同时算 8 个或 16 个浮点数——这是 CPU 上做矩阵运算、numpy、以及 llama.cpp 在 CPU 上跑推理的核心加速手段。<span class="term">NUMA</span>（非统一内存访问）：多路服务器里每颗 CPU 有自己的本地内存，访问别的 CPU 的内存要走 QPI/UPI 互联，慢一截（下周整周的主题）。<span class="term">MESI 协议</span>让多核的缓存保持一致；<span class="term">内存屏障（memory barrier）</span>和 <span class="term">happens-before</span> 是并发正确性的地基。x86 是强内存模型（TSO），ARM 是弱内存模型——同一份无锁代码在 Mac M 芯片上可能暴露出在 x86 上藏着的 bug。</p>
+</div>
+
+<div class="recap">
+<h3>Day 33 🔧 · CPU 性能动手 & Day 34 🔐 · 侧信道</h3>
+<p>周五我们用 <code>perf stat</code> 看了 cache miss 率、用不同矩阵遍历顺序演示了缓存友好性、用 numpy 感受了 SIMD 加速。周六的侧信道把「性能优化机制」翻过来当「攻击面」看：<span class="key">Spectre/Meltdown 的本质是——推测执行 + 缓存留下的时序痕迹，让本该隔离的秘密可以被间接测出来</span>。Rowhammer 则是反复敲同一行 DRAM，让相邻行的比特翻转。这两类攻击的共同教训：<span class="key">凡是"为了快"而共享的东西（缓存、预测器、DRAM 物理行），都是潜在的信息泄露通道</span>。这个思维在 GPU 多租户（下下周）和 Agent 沙箱里会一再出现。</p>
+</div>
+
+<p>现在把七块拼成一张图——<span class="key">一条 <code>load</code> 指令的完整命运</span>，把本周所有机制串起来：</p>
+
+<div class="ascii">          ┌─────────────── 一条 load rax, [rbx] 的旅程 ───────────────┐
+取指(IF) → 译码(ID) → 分支预测器猜好了后续路径 (Day30)
+   ↓
+乱序引擎把它塞进保留站，发现它不依赖谁 → 提前发射 (Day30)
+   ↓
+地址计算 → 查 L1d 缓存 (Day31)
+   ├─ L1 命中 → ~1ns 拿到数据，写回寄存器
+   └─ L1 未命中 → 查 L2 → L3 → 主存 (~100ns，OoO 期间 CPU
+                    继续跑别的不依赖指令，把这100ns"藏"起来)
+   ↓
+若这是多核共享数据 → MESI 协议确保拿到的是最新值 (Day32)
+   ↓
+若地址被推测执行"偷跑"访问过 → 缓存状态已改变
+                    → 这就是 Spectre 的泄露点 (Day34)</div>
+
+<div class="note">这张图就是本周的「一句话总纲」：<strong>现代 CPU 的全部复杂度，都是为了在"内存比 CPU 慢 100 倍"这个残酷现实下，尽量不让 CPU 空等。</strong>流水线、乱序、缓存、预测——全是「藏延迟」的手段。记住这一点，下面看 LLM 推理就顺了。</div>
+
+<h2 id="s2">2. LLM 推理里 CPU 到底扮演什么角色</h2>
+
+<p>很多人有个直觉误区：「大模型推理是 GPU 的事，CPU 就是个打杂的。」这话对了一半——重活确实在 GPU，但 <span class="key">CPU 承担了整条流水线里所有"胶水"和"调度"工作，一旦这些环节慢了，昂贵的 GPU 就会饿肚子（starvation），利用率掉到 40%</span>。作为做 Agent 安全和推理服务的人，你必须知道 CPU 在推理里具体干哪些活。</p>
+
+<h3>2.1 一次推理请求里，CPU 的活清单</h3>
+
+<table>
+<tr><th>阶段</th><th>CPU 在做什么</th><th>为什么可能成瓶颈</th></tr>
+<tr><td>请求接入</td><td>HTTP/gRPC 解析、鉴权、限流、路由（vLLM 的 API server 是 Python）</td><td>Python GIL、序列化开销；高 QPS 下单核打满</td></tr>
+<tr><td>Tokenization</td><td>把文本切成 token id（BPE/SentencePiece，纯 CPU 算法）</td><td>长 prompt + 高并发时，tokenize 本身能占毫秒级</td></tr>
+<tr><td>调度</td><td>continuous batching：决定哪些请求这一步拼进 batch、KV cache 块分配（PagedAttention 的 block table 在 CPU 侧管理）</td><td>调度器是 Python 单线程，batch 大时调度开销挤占 GPU 空档</td></tr>
+<tr><td>Kernel launch</td><td>CPU 向 GPU 提交 CUDA kernel、准备参数、下发拷贝命令</td><td>每步 decode 要 launch 几百个 kernel，launch 开销可能超过 kernel 本身执行时间</td></tr>
+<tr><td>采样(sampling)</td><td>logits 的 top-k / top-p / temperature 处理、penalty——部分实现在 CPU</td><td>vocab 5万~15万维，采样若落到 CPU 会拖慢每个 token</td></tr>
+<tr><td>De-tokenization + 流式返回</td><td>token id → 文本、SSE 逐块推给客户端</td><td>流式场景每个 token 都要走一遍，累积可观</td></tr>
+</table>
+
+<p>看到没？<span class="key">GPU 只负责「矩阵乘」那一小段，前后左右全是 CPU 的活</span>。这也是为什么 vLLM、SGLang 这些引擎近年拼命做的事就是「把 CPU 的开销从关键路径上挪走」——比如把调度和 GPU 计算重叠（overlap）、用 CUDA Graph 把「几百次 kernel launch」压缩成「一次 graph replay」。</p>
+
+<h3>2.2 CUDA Graph：直接对应本周的「kernel launch 开销」</h3>
+
+<p>Day 29 讲过 CPI 和指令开销。放到异构世界，「CPU 发起一次 GPU kernel launch」本身要走驱动、拷贝参数、系统调用，大约 <span class="term">5–20 微秒</span>。一步 decode 若要 launch 300 个 kernel，光 launch 就 1.5~6 毫秒——而每个 kernel 在 H100 上可能只跑几微秒。<span class="key">CPU 成了 GPU 的"发令官"，但发令太慢，GPU 站着等口令。</span></p>
+
+<pre><code># 感受 kernel launch 开销：同样的小算子，开/关 CUDA Graph
+import torch, time
+
+x = torch.randn(1024, 1024, device='cuda')
+
+def many_small_ops(x):
+    for _ in range(200):        # 模拟 decode 一步里的大量小 kernel
+        x = x * 1.0001 + 0.0001
+    return x
+
+# 不用 graph：每次 CPU 都要 launch 200 个 kernel
+torch.cuda.synchronize(); t0 = time.time()
+for _ in range(100):
+    many_small_ops(x)
+torch.cuda.synchronize()
+print(f"eager: {(time.time()-t0)*1000:.1f} ms")
+
+# 用 CUDA Graph：一次录制，之后 replay，CPU 几乎不参与
+g = torch.cuda.CUDAGraph()
+static_x = x.clone()
+torch.cuda.synchronize()
+with torch.cuda.graph(g):
+    static_out = many_small_ops(static_x)
+torch.cuda.synchronize(); t0 = time.time()
+for _ in range(100):
+    g.replay()
+torch.cuda.synchronize()
+print(f"cuda graph: {(time.time()-t0)*1000:.1f} ms")
+# 典型结果：graph 版快 2~5 倍，快的那部分几乎全是省下的 CPU launch 开销</code></pre>
+
+<div class="note">这个实验能让你亲手感受「CPU 是 GPU 的瓶颈」。在真实 LLM 里，batch size 越小（比如单个用户的 decode），CPU launch 开销占比越高——因为 GPU 那点计算量根本喂不饱它，反而在等 CPU 发令。</div>
+
+<h2 id="s3">3. 推理瓶颈分析：compute-bound vs memory-bound 与 Roofline</h2>
+
+<p>这是本周最该带走的一个分析框架，也是下周（内存层级）的桥。判断一个计算「卡在算力还是卡在内存带宽」，用 <span class="term">算术强度（Arithmetic Intensity, AI）</span>：</p>
+
+<div class="ascii">算术强度 = 浮点运算次数(FLOPs) / 内存访问字节数(Bytes)
+           单位：FLOPs per Byte
+
+Roofline 模型（性能上限）：
+  达到的性能 = min( 峰值算力,  算术强度 × 内存带宽 )
+                        ↑ compute-bound     ↑ memory-bound
+
+  ┌─ 性能(FLOP/s)
+  │           ╱───────────  ← 峰值算力天花板 (compute-bound 区)
+  │         ╱
+  │       ╱  ← 斜线 = 带宽×算术强度 (memory-bound 区)
+  │     ╱
+  │   ╱
+  └─────────────────────────→ 算术强度(FLOP/Byte)
+        ↑ 拐点：算术强度 = 峰值算力 / 带宽</div>
+
+<h3>3.1 为什么 LLM 的 prefill 和 decode 是两种截然不同的负载</h3>
+
+<p>这是理解一切推理性能的分水岭，务必吃透：</p>
+
+<table>
+<tr><th></th><th>Prefill（处理 prompt）</th><th>Decode（逐个生成 token）</th></tr>
+<tr><td>一次处理多少 token</td><td>整个 prompt（几百~几千个）一起</td><td>一次只算 1 个新 token</td></tr>
+<tr><td>矩阵形状</td><td>大矩阵 × 大矩阵（GEMM）</td><td>细长向量 × 大权重矩阵（GEMV）</td></tr>
+<tr><td>权重复用度</td><td>高：一份权重服务很多 token</td><td>极低：一份权重只服务 1 个 token</td></tr>
+<tr><td>算术强度</td><td>高 → <span class="term">compute-bound</span></td><td>低 → <span class="term">memory-bound</span></td></tr>
+<tr><td>瓶颈</td><td>GPU 算力（Tensor Core 吃满）</td><td>把权重从显存搬到 SM 的带宽</td></tr>
+</table>
+
+<p>直觉解释 decode 为什么是 memory-bound：<span class="key">生成第 N 个 token 时，你要把模型全部权重（7B 模型 fp16 是 14GB）从显存读一遍，只为了算 1 个 token 的输出</span>。计算量极小，但搬运量巨大。这跟 Day 31 的教训一模一样——<span class="key">瓶颈不是算得慢，是数据搬得慢</span>，只不过 Day 31 是「主存→CPU 缓存」，这里是「GPU 显存(HBM)→GPU 计算核心」。同一个道理，换个尺度。</p>
+
+<p>这也直接解释了几件你天天听到的事：</p>
+<ul>
+<li><span class="term">为什么要 batching</span>：把多个用户的 decode 拼一起，一次读权重服务多个 token，把算术强度拉高，从 memory-bound 往 compute-bound 推，GPU 利用率上去。</li>
+<li><span class="term">为什么量化（INT8/INT4）能加速 decode</span>：权重从 16-bit 压到 4-bit，搬运量减 4 倍，memory-bound 的 decode 直接快近 4 倍——加速来自「少搬数据」，不是「算得快」。</li>
+<li><span class="term">为什么 KV cache 这么关键又这么占内存</span>：不缓存的话，每生成一个 token 都要重算前面所有 token 的 attention，退化成每步都做 prefill。缓存了，代价是显存被 KV cache 大量吃掉（下下周 PagedAttention 主题）。</li>
+</ul>
+
+<div class="note"><strong>一句话记忆：</strong>prefill 是「算力饱和」的活（像跑分），decode 是「带宽饥饿」的活（像搬砖）。你部署时看到 GPU 利用率高但吞吐低，多半是卡在 decode 的 memory-bound 上——加大 batch 或上量化，而不是换更强算力的卡。</div>
+
+<h2 id="s4">4. 异构计算协调：CPU 与 GPU 如何配合（与踩坑）</h2>
+
+<p><span class="term">异构计算（heterogeneous computing）</span>：一个系统里有多种架构的处理器（CPU 擅长复杂控制流和低延迟单任务，GPU 擅长大规模数据并行），让它们各干各擅长的活。协调的核心难点是三条：<span class="key">数据在哪、谁等谁、怎么重叠</span>。</p>
+
+<h3>4.1 数据在哪：PCIe 是隐形的税</h3>
+
+<p>CPU 内存（DRAM）和 GPU 显存（HBM）是两片独立的地址空间，中间靠 <span class="term">PCIe 总线</span>连接。PCIe Gen4 x16 大约 <span class="term">32 GB/s</span>——听起来快，但对比 H100 的 HBM3 带宽 <span class="term">~3.35 TB/s</span>，PCIe 慢了 100 倍。<span class="key">每一次 CPU↔GPU 的数据拷贝，都是走这条窄路</span>。这就是为什么：</p>
+<ul>
+<li>你要尽量让数据「常驻」GPU，避免来回拷贝（权重加载一次就留在显存）。</li>
+<li>用 <span class="term">pinned memory（锁页内存）</span>——Day 33 的兄弟概念 <code>mlock</code>——让 DMA 引擎直接搬，不经过可分页内存的中转，拷贝更快。</li>
+<li>推理框架拼命把 tokenize、采样等「小数据」操作留在能就近处理的地方，避免为了几个 token id 触发一次 PCIe 往返。</li>
+</ul>
+
+<pre><code># 观察 pinned memory 对 H2D(host→device) 拷贝的影响
+import torch, time
+
+N = 256 * 1024 * 1024  # 256M float = 1GB
+pageable = torch.randn(N)                    # 普通可分页内存
+pinned   = torch.randn(N).pin_memory()       # 锁页内存
+
+def bench(src, tag):
+    torch.cuda.synchronize(); t0 = time.time()
+    for _ in range(10):
+        dst = src.to('cuda', non_blocking=True)
+    torch.cuda.synchronize()
+    gb = N*4*10/1e9
+    print(f"{tag}: {gb/(time.time()-t0):.1f} GB/s")
+
+bench(pageable, "pageable ")   # 受限于额外的一次内存拷贝
+bench(pinned,   "pinned   ")   # 通常明显更高，接近 PCIe 峰值</code></pre>
+
+<h3>4.2 谁等谁：同步与异步</h3>
+
+<p>GPU 操作默认是<span class="term">异步</span>的：CPU 发出 <code>kernel launch</code> 或 <code>copy</code> 后立刻返回去干别的，命令排进 GPU 的 <span class="term">stream（流）</span>队列。只有当 CPU 真的需要 GPU 的结果（比如把 logits 拿回来采样，或 <code>.item()</code>、<code>print(tensor)</code>）时，才会 <code>synchronize</code> 阻塞等待。</p>
+
+<div class="note"><strong>新手最常踩的坑：</strong>在训练/推理循环里频繁 <code>print(loss.item())</code> 或 <code>tensor.cpu()</code>。每一次都强制 CPU-GPU 同步，把本可重叠的流水线打断，GPU 被迫停下来等 CPU。<span class="key">这跟 Day 30 分支预测失败清空流水线是同一种"气泡"（bubble）</span>——好不容易并行起来，一个同步点全打回原形。诊断方法：用 Nsight Systems（Day 47 会学）看时间线上那些 CPU 忙、GPU 空的缝隙。</div>
+
+<h3>4.3 怎么重叠：让 CPU 和 GPU 都别闲着</h3>
+
+<p>理想的推理流水线，是让 CPU 处理请求 N+1 的调度/tokenize，同时 GPU 在算请求 N 的 forward，同时另一个 stream 在做 KV cache 的拷贝。这叫 <span class="term">overlap（重叠）</span>，本质和 Day 30 的「流水线并行」思想完全一致，只是把「级」换成了「设备」：</p>
+
+<div class="ascii">        时间 ──────────────────────────────────────→
+CPU:   [调度step1][tokenize][调度step2][采样step1][调度step3] ...
+GPU:            [====forward step1====][===forward step2===] ...
+拷贝:      [H2D][.....][D2H step1][H2D step2] ...
+              ↑ 三条通道尽量填满，谁都别站着等口令
+
+对比"没重叠"的糟糕情况：
+CPU:   [调度][      等GPU      ][采样][      等GPU      ] ...
+GPU:        [==forward==]           [==forward==]
+       ← 到处是气泡，GPU 利用率上不去</div>
+
+<p>这就是「异构计算协调」这几个字的全部内涵：<span class="key">识别谁擅长什么、把数据放在离它近的地方、用异步 + 多 stream 让所有设备都别停下来等</span>。你之后调 vLLM 参数（比如 <code>--num-scheduler-steps</code>、开不开 CUDA Graph、chunked prefill）本质都是在调这三件事的平衡。</p>
+
+<h2 id="s5">5. 把本周的微架构知识用在推理性能上</h2>
+
+<p>最后，把本周 CPU 的具体机制和推理服务的实际调优对应起来，做一张「学以致用」表，帮你把抽象概念钉在工作场景上：</p>
+
+<table>
+<tr><th>本周概念</th><th>在 LLM 推理服务里的对应</th><th>实操建议</th></tr>
+<tr><td>缓存友好 / cache line (Day31)</td><td>tokenizer、采样、调度这些 CPU 热点代码的数据局部性</td><td>热路径避免 Python 大对象随机访问；性能敏感处用 Rust/C++ 扩展</td></tr>
+<tr><td>false sharing (Day31)</td><td>多线程 API server 里计数器/统计量在同一 cache line</td><td>高频计数器做 padding 对齐或每线程独立累加再汇总</td></tr>
+<tr><td>SIMD / AVX (Day32)</td><td>CPU 上跑量化模型（llama.cpp）、embedding 计算、前后处理</td><td>确认 numpy/torch 用了 AVX2/AVX-512 版本；CPU 推理选支持的指令集</td></tr>
+<tr><td>NUMA (Day32，下周主题)</td><td>多路服务器上 GPU 挂在某个 NUMA 节点，CPU 进程若跑在另一节点，PCIe 拷贝要多绕一段</td><td>用 <code>numactl</code> 把推理进程绑到 GPU 所在的 NUMA 节点</td></tr>
+<tr><td>分支预测 / OoO (Day30)</td><td>解释 CPU 侧代码为何有时慢得莫名——数据依赖、分支密集</td><td>用 <code>perf stat</code> 看 CPU 侧是否 branch-miss 或 cache-miss 高</td></tr>
+<tr><td>GIL（Week01 Day03）</td><td>vLLM 的调度器和 API 是 Python，单核受 GIL 限制</td><td>多进程（多 replica）而非多线程扩展 CPU 侧吞吐</td></tr>
+</table>
+
+<p>快速自测——把 GPU 进程绑到正确的 NUMA 节点（下周会深入，这里先建立肌肉记忆）：</p>
+
+<pre><code># 看每张 GPU 挂在哪个 NUMA 节点、和其他 GPU 的互联拓扑
+nvidia-smi topo -m
+
+# 看系统的 NUMA 拓扑（几个节点、各多少核和内存）
+numactl --hardware        # 或 lscpu | grep -i numa
+
+# 把推理进程绑到 GPU0 所在的 NUMA 节点(假设是 node 0)执行
+numactl --cpunodebind=0 --membind=0 python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Llama-2-7b-hf
+
+# 事后验证进程实际用了哪些核
+ps -o pid,psr,comm -p $(pgrep -f vllm) | head</code></pre>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 时序侧信道 → 推理服务的信息泄露。</strong>Day 34 的 cache-timing 攻击核心是「用时间差反推秘密」。在 LLM 服务上这不是理论：<span class="key">prompt 长度、KV cache 是否命中 prefix、batch 里其他请求的负载，都会以毫秒级的响应时间差表现出来</span>。攻击者可以通过测量 TTFT（首 token 延迟）推断「我的 prompt 是否与另一个租户共享了缓存前缀」，甚至探测系统 prompt 的长度。防御思路和 CPU 侧信道一致：对延迟敏感的路径做时间归一化（padding 到固定延迟），或对跨租户的 prefix caching 做严格隔离。</p>
+
+<p><strong>2. 异构调度是拒绝服务的放大器。</strong>本节讲了 decode 是 memory-bound、CPU launch 是瓶颈。攻击者若构造大量「短 prompt + 超长 max_tokens」的请求，会把服务钉死在低效的 decode 阶段，用极小的输入代价耗尽 GPU 的有效吞吐——这是针对推理经济学的 DoS。防御要在网关层限制 <code>max_tokens</code>、按「预估计算量」而非「请求数」做限流，把 Week04 学的限流算法用到推理特性上。</p>
+
+<p><strong>3. GPU 显存残留 = 跨请求的数据泄露。</strong>PCIe 两侧是独立地址空间，KV cache、中间激活值都留在显存里。若多租户共享一张卡而显存不清零，前一个用户的 prompt/输出可能被后一个用户的进程读到（Day 48 GPU 多租户会深入）。异构系统里「数据在哪」不仅是性能问题，更是隔离边界问题。</p>
+
+<p><strong>4. Kernel launch 路径是可信计算基（TCB）的一部分。</strong>CPU 是「发令官」，它下发给 GPU 的 kernel、参数、拷贝命令，若被篡改（比如恶意的自定义 CUDA 算子、被投毒的推理框架依赖），就能悄悄改变模型行为或窃取权重。Agent 系统里如果允许用户提供自定义算子/插件，这条 CPU→GPU 的命令链必须被当作攻击面严格审计，对应 Week01 讲的信任边界。</p>
+
+<p><strong>5. 性能可观测性 = 安全可观测性。</strong>本周学的 <code>perf</code>、以及即将学的 Nsight，既是调优工具也是检测工具。异常的 cache-miss 模式、突然飙升的 kernel launch 频率、非预期的 PCIe 拷贝量，都可能是侧信道攻击或数据外泄的信号。把性能剖析器接进监控（Week12 可观测性主题），让「GPU 利用率异常」和「延迟分布异常」成为安全告警的输入。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手：亲手看见 CPU 成为瓶颈。</strong>如果你有 GPU 环境，跑本文 §2.2 的 CUDA Graph 对比脚本，记录 eager vs graph 的耗时比。然后把脚本里 <code>many_small_ops</code> 的循环次数从 200 改成 10，再跑一次——观察 graph 的相对优势是变大还是变小，并用「CPU launch 开销占比」解释你看到的现象。（没有 GPU 的话，改跑 §4.1 的 pinned memory 脚本，或用纯 CPU 做同样的"很多小操作 vs 一个大操作"对比。）</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察：给你的机器画一张延迟/带宽阶梯。</strong>在你的机器上运行 <code>lscpu</code>（看缓存大小和 NUMA）、<code>numactl --hardware</code>（若有）、以及 <code>nvidia-smi topo -m</code>（若有 GPU）。把 L1/L2/L3 大小、内存带宽、PCIe 代数、HBM 带宽（查你 GPU 的规格）填进 §3 的 Roofline 心智模型里，算一算：对一个 7B fp16 模型，decode 一步要搬 14GB 权重，在你的 GPU 带宽下理论上单步至少要多少毫秒？这就是你这张卡上单请求 decode 的物理下限。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考：为什么"换更贵的卡"常常不解决 decode 慢？</strong>假设你把 A100（算力 312 TFLOPS，带宽 2 TB/s）换成算力翻倍但带宽只涨 30% 的新卡，单用户单请求的 decode 速度大约会提升多少？请用「decode 是 memory-bound」的结论推理，并说明在什么条件下（提示：batch size）算力提升才真正开始起作用。把你的答案和「加大 batch」「上量化」两种方案对比一下成本收益。</p>
+</div>
+
+<div class="next" id="next">
+<strong>下周预告 · Week 06 内存层级 + NUMA。</strong>这周我们反复撞见同一堵墙——<span class="key">内存墙</span>：CPU 快，内存慢；decode 慢，因为搬权重慢。下周我们就正面拆这堵墙。Day 36 建立内存系统全貌（DDR4/DDR5/HBM、内存控制器、以及今天用到的 Roofline 和算术强度会被讲透）；Day 37 深入 NUMA——多路服务器为什么访问「别人的内存」更慢，以及它怎么影响多卡训练和 GPU-CPU 拓扑；Day 38 是重头戏，<strong>从内存视角严格推导「为什么 LLM 推理是 memory-bound」</strong>，把今天的直觉变成 KV cache 内存公式和 batching 的定量分析；周末的安全专题会讲内存安全攻防（栈溢出、ROP、UAF）和 vLLM 的 PagedAttention 内存管理思想。今天你已经握住了那把钥匙——<strong>「瓶颈往往不是算得慢，是数据搬得慢」</strong>——下周我们把这把钥匙插进内存这把锁里。</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
