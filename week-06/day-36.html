@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 36 · 内存系统全貌：延迟、带宽与 Roofline</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 36 · 内存系统全貌：延迟、带宽与 Roofline</h1>
+  <div class="meta">Week 06 · 周一 · 2026-08-10 · 主线：硬件 / 内存层级 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：上周我们把 CPU 拆开看了它怎么算——流水线、缓存、SIMD、多核。但你有没有想过一个反直觉的事实：<span class="key">现代 CPU / GPU 绝大部分时间不是在算，而是在等数据从内存搬过来</span>。一颗 H100 的算力足以每秒做 10^15 次浮点运算，但它的显存带宽只够每秒喂进 3.35 TB 数据——数字对不上，算力经常在饿肚子。今天我们建立整个内存系统的物理直觉：内存到底有多慢（延迟）、有多粗（带宽）、DDR4/DDR5/HBM 差在哪、内存控制器在中间干什么，最后用一个只有一根折线的神图——<span class="key">Roofline 模型</span>——教你一眼判断「我这段代码到底是被算力卡住，还是被内存卡住」。学完今天，「LLM 推理是 memory-bound」这句话你会真正懂它为什么成立（周三我们会用它推 KV cache）。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">为什么内存是整个系统的瓶颈：一张数量级表</a></li>
+  <li><a href="#s2">延迟 vs 带宽：两个必须分清的维度</a></li>
+  <li><a href="#s3">DRAM 是怎么工作的：从电容到时序</a></li>
+  <li><a href="#s4">DDR4 / DDR5 / HBM：三代内存的分野</a></li>
+  <li><a href="#s5">内存控制器：被忽视的幕后调度官</a></li>
+  <li><a href="#s6">算术强度（Arithmetic Intensity）：一个决定命运的比值</a></li>
+  <li><a href="#s7">Roofline 模型：一张图看穿性能天花板</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 为什么内存是整个系统的瓶颈：一张数量级表</h2>
+
+<p>先建立一个贯穿全天的核心认知：<span class="key">CPU 快得离谱，内存慢得离谱，两者之间差了大约两个数量级，而且这个差距过去 30 年一直在扩大</span>。这个现象有个专门的名字——<span class="term">「内存墙」（Memory Wall）</span>，1994 年由 Wulf 和 McKee 提出，如今它比当年更严峻。</p>
+
+<p>要有直觉，最好的办法是把 CPU 的一个时钟周期当成「1 秒」，把所有延迟按这个比例放大到人类能感受的尺度。假设 CPU 主频 3 GHz，一个周期约 0.33 纳秒 ≈ 「1 秒」：</p>
+
+<table>
+<tr><th>操作</th><th>真实延迟</th><th>放大成「人类时间」</th></tr>
+<tr><td>1 个 CPU 时钟周期</td><td>~0.3 ns</td><td>1 秒</td></tr>
+<tr><td>访问 L1 缓存</td><td>~1 ns（3~4 周期）</td><td>3 秒</td></tr>
+<tr><td>访问 L2 缓存</td><td>~4 ns（~12 周期）</td><td>12 秒</td></tr>
+<tr><td>访问 L3 缓存</td><td>~15 ns（~40 周期）</td><td>40 秒</td></tr>
+<tr><td><span class="key">访问主内存 DRAM</span></td><td><span class="key">~80~100 ns（~300 周期）</span></td><td><span class="key">约 5 分钟</span></td></tr>
+<tr><td>跨 NUMA 节点访问远端内存</td><td>~140 ns</td><td>约 8 分钟</td></tr>
+<tr><td>读一次 NVMe SSD 随机 4KB</td><td>~100 µs</td><td>约 4 天</td></tr>
+<tr><td>读一次机械硬盘随机块</td><td>~5 ms</td><td>约 半年</td></tr>
+<tr><td>一个网络包北京→美西往返</td><td>~150 ms</td><td>约 15 年</td></tr>
+</table>
+
+<p>盯着这张表看三十秒。你会发现一件事：<strong>如果 CPU 需要的数据不在缓存里、必须去主内存拿，它要"干等 5 分钟"</strong>。在这 300 个周期里，CPU 如果没有别的活干，就是纯粹地空转。这就是为什么上周讲的缓存、预取、乱序执行全都存在——它们的唯一目的就是<span class="key">尽量不去碰那个"要等 5 分钟"的主内存</span>。</p>
+
+<div class="note">
+<strong>数学家视角的类比</strong>：这就像你在做一个大矩阵计算，但数据存在一本需要跑去隔壁楼借阅的书里。你的笔算速度（CPU）再快也没用，真正决定你多久算完的，是你跑去借书的次数和每次借书的时间。算法优化里"降低复杂度"是减少运算次数，而系统优化里更常见的是"减少访存次数"——两者是正交的两把刀。
+</p>
+</div>
+
+<h2 id="s2">2. 延迟 vs 带宽：两个必须分清的维度</h2>
+
+<p>初学者最容易犯的错误，是把内存性能笼统说成"快"或"慢"。实际上内存有两个完全独立的性能维度，优化手段也完全不同：</p>
+
+<ul>
+  <li><span class="term">延迟（Latency）</span>：从"我要这个地址的数据"到"数据到手"要等多久。单位是纳秒。衡量的是<strong>单次请求的响应速度</strong>。</li>
+  <li><span class="term">带宽（Bandwidth）</span>：单位时间内内存总共能吐出多少字节。单位是 GB/s。衡量的是<strong>批量搬运的吞吐能力</strong>。</li>
+</ul>
+
+<p><strong>类比</strong>：把内存想成一条从水库到你家的水管。<span class="key">延迟 = 你拧开水龙头到第一滴水流出来的时间</span>（取决于管道多长）；<span class="key">带宽 = 水龙头全开时每秒流出多少升水</span>（取决于管道多粗）。一根又长又粗的管子：延迟高、带宽大。一根又短又细的管子：延迟低、带宽小。两者互不决定。</p>
+
+<p>为什么必须分清？因为一个残酷的物理事实：<strong>过去二十年，内存带宽增长了几十倍，但延迟几乎没怎么降</strong>。DDR 从第一代到第五代，带宽翻了十几番，但 DRAM 单元的访问延迟一直卡在 50~90 ns 附近——因为延迟受限于电容充放电这种物理过程，而带宽可以靠"更宽的总线 + 更高的频率 + 更多通道"暴力堆上去。</p>
+
+<div class="ascii">          延迟 (Latency)                带宽 (Bandwidth)
+          ─────────────                ────────────────
+   定义    单次访问要等多久               每秒能搬多少字节
+   单位    纳秒 ns                       GB/s
+   决定因素 物理距离、电容充放电            总线宽度 × 频率 × 通道数
+   近 20 年 几乎没降（~80ns 卡死）         暴涨几十倍
+   怎么藏   缓存 / 预取 / 乱序执行 / 超线程   加通道 / 换 HBM / 提频率
+   谁在乎   指针追逐、随机小访问            大矩阵、批量流式读写、LLM 推理</div>
+
+<p>这个区分直接决定你怎么优化。如果你的程序是<strong>延迟受限</strong>（比如遍历链表、指针追逐，每一步都要等上一步的地址），加内存通道没用，你得改数据结构让访问变得可预测（缓存友好）。如果你的程序是<strong>带宽受限</strong>（比如把两个巨大数组相加），那多线程一起跑也快不了多少——因为大家在抢同一根水管，得换更粗的管子（HBM）或减少搬运量（算子融合、量化）。</p>
+
+<div class="note">
+<strong>关键事实</strong>：<span class="key">LLM 推理的 decode 阶段是典型的带宽受限</span>——每生成一个 token，都要把整个模型的几十上百 GB 权重从显存流过一遍，但每个权重只参与很少的几次乘加。算力严重过剩，带宽被榨干。这就是周三"为什么 LLM 推理是 memory-bound"整节课的物理根源，也是为什么 H100 换 H200（带宽从 3.35 TB/s 提到 4.8 TB/s）能直接提升推理吞吐。
+</div>
+
+<h2 id="s3">3. DRAM 是怎么工作的：从电容到时序</h2>
+
+<p>要理解为什么内存延迟降不下来，得看一眼 DRAM 的物理本质。<span class="term">DRAM（Dynamic Random Access Memory，动态随机存取存储器）</span>存储 1 个 bit 的方式极其朴素：<strong>一个电容 + 一个晶体管</strong>。电容有电荷 = 1，没电荷 = 0。</p>
+
+<p>"Dynamic"（动态）这个词就来自它的缺陷：<strong>电容会漏电</strong>。存进去的电荷几十毫秒就漏光了，所以 DRAM 必须每隔几毫秒把每一行读出来再写回去一次——这叫 <span class="term">刷新（refresh）</span>。刷新期间那块内存不能访问，这也是延迟的来源之一。（对比一下 CPU 缓存用的是 <span class="term">SRAM</span>，一个 bit 要 6 个晶体管，不漏电、更快，但贵得多、密度低,所以只能做小小的缓存。）</p>
+
+<p>DRAM 内部是一个二维阵列，按<span class="term">行（row）</span>和<span class="term">列（column）</span>组织。访问一个地址的过程分几步，每一步都要花时间——这些时间就是你在内存条参数里看到的那串 <code>CL-tRCD-tRP</code> 数字：</p>
+
+<div class="ascii">要读地址 (行 R, 列 C) 的数据：
+
+ ① 发行地址 → 激活整行 R，把这一行搬进「行缓冲区」   耗时 tRCD (~14 ns)
+ ② 发列地址 → 从行缓冲区取出列 C 的数据             耗时 CL / CAS (~14 ns)
+ ③ 数据通过总线返回
+ ④ 换一行前，要先把当前行写回、关闭            耗时 tRP (~14 ns)
+
+ 若下次访问同一行(row hit)：跳过①，只要②，快！
+ 若下次访问不同行(row miss)：①②④全走一遍，慢！</div>
+
+<p>这里藏着一个对性能极其重要的现象：<span class="key">访问刚打开的那一行（row hit）很快，换行（row miss）很慢</span>。这从硬件层面解释了为什么"顺序访问内存比随机访问快得多"——顺序访问大概率命中同一行的行缓冲区，随机访问则不断触发换行。上周讲缓存局部性时你从缓存角度理解过一次，今天从 DRAM 物理角度又验证了一遍：<strong>局部性不是软件的偏好，是硬件的物理刚需</strong>。</p>
+
+<p>你在电商页面看到内存条写着 "DDR5-6000 CL30"，含义是：数据率 6000 MT/s，CAS 延迟 30 个时钟周期。注意延迟是按<strong>周期数</strong>标的——频率越高，每个周期越短，所以 CL 数字变大不代表更慢，要换算成纳秒才能比：延迟(ns) = CL × 2000 / 数据率(MT/s)。DDR5-6000 CL30 = 30 × 2000 / 6000 = 10 ns（这里指 CAS 那一段）。</p>
+
+<h2 id="s4">4. DDR4 / DDR5 / HBM：三代内存的分野</h2>
+
+<p>现在把市面上你会遇到的三类内存放在一起对比。它们不是简单的"新旧替代"关系，而是<strong>面向不同场景的不同物理设计</strong>。</p>
+
+<table>
+<tr><th>维度</th><th>DDR4</th><th>DDR5</th><th>HBM3 / HBM3e</th></tr>
+<tr><td>典型数据率</td><td>2400~3200 MT/s</td><td>4800~6400+ MT/s</td><td>每引脚 ~6.4 Gbps</td></tr>
+<tr><td>单条/单堆带宽</td><td>~25 GB/s</td><td>~48 GB/s</td><td>~800 GB/s ~ 1.2 TB/s</td></tr>
+<tr><td>总线宽度</td><td>64 bit / 条</td><td>2×32 bit / 条</td><td><span class="key">1024 bit / 堆</span></td></tr>
+<tr><td>物理形态</td><td>主板插槽长条</td><td>主板插槽长条</td><td>3D 堆叠，硅中介层贴着 GPU 芯片</td></tr>
+<tr><td>典型场景</td><td>老服务器 / 桌面</td><td>新服务器 / 桌面 / CPU 推理</td><td>GPU / AI 加速器 (A100/H100/H200)</td></tr>
+<tr><td>成本</td><td>低</td><td>中</td><td>极高</td></tr>
+</table>
+
+<p><strong>DDR4 → DDR5 的进化</strong>：核心是"更高频率 + 把一条内存拆成两个独立的 32-bit 子通道"，让并行度翻倍。DDR5 还把电源管理（PMIC）从主板挪到了内存条上，供电更稳所以能冲更高频。但注意——<span class="key">DDR5 的延迟其实比 DDR4 还略高一点点</span>（因为频率高了但 CL 周期数涨得更多），它买的是带宽，不是延迟。这再次印证了第 2 节的规律。</p>
+
+<p><strong>HBM 才是 AI 时代的主角</strong>。<span class="term">HBM（High Bandwidth Memory，高带宽内存）</span>的思路和 DDR 完全不同：既然一根根平铺在主板上的内存条离 CPU 太远、总线拉不宽，那就<strong>把内存芯片像叠罗汉一样竖着堆起来（3D stacking），再用一块"硅中介层"（interposer）把这堆内存直接贴到 GPU 芯片旁边</strong>。距离近了，就能开出 1024 位这种夸张的超宽总线（DDR5 才 64 位）。这就是为什么 H100 的 HBM3 能达到 3.35 TB/s、H200 的 HBM3e 能到 4.8 TB/s——是普通 DDR5 服务器整机内存带宽的几十倍。</p>
+
+<div class="ascii">DDR 思路（横向平铺，总线窄，离得远）：
+   [CPU] ══64bit══ [内存条1] [内存条2] [内存条3] [内存条4]
+                    ↑ 插在主板插槽上，信号要跑很远
+
+HBM 思路（纵向堆叠，总线超宽，贴脸）：
+   ┌──────────────────────────────┐
+   │  [DRAM]  [DRAM]  [DRAM]  [DRAM] │ ← 每堆是多层 DRAM 叠起来
+   │  [DRAM]  [DRAM]  [DRAM]  [DRAM] │
+   │   ║1024bit║      [ GPU 芯片 ]   │ ← 硅中介层把内存和 GPU 焊在一起
+   └──────────────────────────────┘
+                   贴脸放，总线巨宽 → 带宽爆炸</div>
+
+<p>代价是：HBM 制造工艺复杂（要 3D 堆叠 + 中介层封装）、良率低、容量相对小、贵得离谱。这也是为什么一张 H100 卖到几万美元、显存容量却"只有" 80GB——HBM 又贵又难堆大。<span class="key">大模型放不下显存，本质上就是被 HBM 的容量和成本卡住了</span>，这直接催生了量化、offload、PagedAttention 这些省显存技术（本周和第 8 周会反复讲）。</p>
+
+<h2 id="s5">5. 内存控制器：被忽视的幕后调度官</h2>
+
+<p>CPU 核心和 DRAM 之间不是直连的，中间有个关键角色：<span class="term">内存控制器（Memory Controller，MC）</span>。现代 CPU/GPU 把它<strong>集成在芯片内部</strong>（叫 IMC，Integrated Memory Controller）。它的职责，用一句话说：<span class="key">把 CPU 发来的一堆杂乱的访存请求，翻译成 DRAM 时序信号，并重新排序以榨干带宽</span>。</p>
+
+<p>它做的事比你想的复杂得多：</p>
+
+<ul>
+  <li><strong>地址翻译</strong>：把物理地址拆解成（通道 channel、rank、bank、行 row、列 column），决定这次访问落到哪个 DRAM 芯片的哪一行。</li>
+  <li><strong>请求重排序</strong>：CPU 乱序发来 10 个请求，MC 会把访问同一行（row hit）的请求凑到一起连续做，减少昂贵的换行。这叫 <span class="term">FR-FCFS 调度</span>（First-Ready, First-Come-First-Serve）。<strong>注意——这意味着访存的实际顺序不等于你代码写的顺序</strong>。</li>
+  <li><strong>多通道并行</strong>：服务器 CPU 常有 8~12 个内存通道。MC 把地址"打散"（interleaving）到各通道，让多条内存条同时吐数据，带宽叠加。这就是为什么服务器要"插满内存条、对称插"——插一条只能用一个通道，带宽腰斩。</li>
+  <li><strong>刷新管理</strong>：安排 DRAM 的定期刷新，尽量插在空闲时段。</li>
+</ul>
+
+<div class="note">
+<strong>一个很实用的运维知识</strong>：给服务器加内存时，插槽的插法直接决定带宽。如果一台双路服务器每路 8 通道，你只插了 4 条，就只激活了 4 个通道，内存带宽直接损失一半——而这在跑 CPU 推理或数据预处理时会变成实打实的性能瓶颈。<span class="key">"内存容量够了"和"内存带宽够了"是两码事</span>，这又是第 2 节延迟/带宽之分的现实回响。
+</div>
+
+<p>内存控制器还是<span class="term">NUMA（非统一内存访问）</span>的物理根源——这是明天 Day 37 的主题，今天先埋个引子：一台多路服务器上，每颗 CPU 有自己的内存控制器和"本地内存"。CPU 访问自己的本地内存快，访问另一颗 CPU 挂的"远端内存"要跨过 CPU 间的互联总线，慢一截（回看第 1 节表里那行"跨 NUMA ~140 ns"）。这个不对称性会让"多线程程序线程和内存不在同一个 NUMA 节点"变成隐形性能杀手。</p>
+
+<h2 id="s6">6. 算术强度（Arithmetic Intensity）：一个决定命运的比值</h2>
+
+<p>现在我们要引入今天最重要、也是你后续所有性能分析都要用的一个概念。它是一个简单的比值，却能预言一段代码的性能命运。</p>
+
+<p style="background: var(--callout-bg); padding: 16px; border-radius: 6px; border-left: 4px solid var(--accent);">
+<strong>算术强度 AI = 浮点运算次数 (FLOPs) ÷ 内存访问字节数 (Bytes)</strong><br>
+单位：FLOP/Byte。含义：<span class="key">每从内存搬一个字节，能顺带做多少次计算</span>。
+</p>
+
+<p><strong>类比</strong>：想象你在厨房做菜。"运算"是切菜炒菜（CPU 干活），"访存"是从冰箱取食材（搬数据）。算术强度就是<span class="key">"每跑一趟冰箱，你能做多少道菜"</span>。如果每取一根葱只切一刀就又要跑冰箱，你大部分时间在跑腿（访存受限）；如果一趟取一堆菜能忙活半天，你大部分时间在真正做菜（算力受限）。</p>
+
+<p>我们算两个具体例子，用 FP32（每个数 4 字节）：</p>
+
+<h3>例 1：向量加法 <code>c[i] = a[i] + b[i]</code></h3>
+<p>每个元素：读 a、读 b、写 c = 3 次内存访问 × 4 字节 = 12 字节；做 1 次加法 = 1 FLOP。</p>
+<pre><code>算术强度 = 1 FLOP / 12 Byte ≈ 0.083 FLOP/Byte   ← 极低！妥妥的访存受限</code></pre>
+<p>这类操作（BLAS Level 1，向量对向量）算术强度天生极低。你的 CPU/GPU 拿到数据几乎立刻算完，然后又在干等下一批数据。加再多核心也没用——瓶颈是水管，不是算力。</p>
+
+<h3>例 2：矩阵乘法 <code>C = A × B</code>（N×N 矩阵）</h3>
+<p>总运算量约 2N³ FLOPs（每个输出元素要 N 次乘加）。数据量：读 A、B，写 C，约 3N² 个元素 × 4 字节。</p>
+<pre><code>算术强度 ≈ 2N³ / (12N²) = N/6 FLOP/Byte   ← 随 N 增大而线性升高！</code></pre>
+<p>N 越大，每个搬进来的数据被复用的次数越多，算术强度越高。<span class="key">这就是为什么矩阵乘法是"算力友好"的操作，也是为什么深度学习钟爱把一切变成大矩阵乘法（GEMM）——它能把昂贵的硬件算力真正喂饱</span>。（前提是实现得当、有分块复用缓存，否则还是会退化成访存受限。）</p>
+
+<p>算术强度是一段代码<strong>内在的、和硬件无关的属性</strong>。它告诉你这段代码"渴望计算"还是"渴望带宽"。而硬件能提供多少计算、多少带宽，是硬件的属性。把这两者放到一张图上一比——就是下一节的 Roofline。</p>
+
+<h2 id="s7">7. Roofline 模型：一张图看穿性能天花板</h2>
+
+<p><span class="term">Roofline 模型</span>（2009 年由 Williams 等人在 UC Berkeley 提出）是性能分析领域最优雅的工具之一。它用一张二维图，把"硬件能力"和"代码特性"画在一起，让你<strong>一眼看出一段代码的性能上限，以及它现在是被算力卡住还是被带宽卡住</strong>。</p>
+
+<p>图的两根轴：</p>
+<ul>
+  <li>横轴：算术强度（FLOP/Byte），对数刻度。</li>
+  <li>纵轴：可达到的性能（FLOP/s，即 GFLOPS 或 TFLOPS），对数刻度。</li>
+</ul>
+
+<p>图上的"屋顶"由两段线组成：</p>
+
+<div class="ascii">性能 (FLOP/s, log)
+  ▲
+  │                     ┌─────────────────── 峰值算力天花板 (水平屋顶)
+  │                    ╱   ← 这一段：算力受限 (compute-bound)
+  │                   ╱        再高算术强度也顶到峰值算力
+  │        带宽 ╱   ╱
+  │      屋顶 ╱   ╱
+  │  斜线  ╱   ╱
+  │ (斜率=╱   ╱   ← 这一段：带宽受限 (memory-bound)
+  │  带宽)╱ ╱         性能 = 算术强度 × 内存带宽
+  │    ╱ ╱
+  │  ╱ ╱  ● 向量加(AI≈0.08)     ● 大矩阵乘(AI 很高)
+  │ ╱╱      落在斜坡上=带宽受限    落在平顶下=算力受限
+  └──────────────┼───────────────────────────▶ 算术强度 (FLOP/Byte, log)
+              「脊点」ridge point：斜线撞上平顶的转折点</div>
+
+<p>怎么读这张图：</p>
+<ol>
+  <li><strong>斜坡段（左侧）</strong>：性能 = 算术强度 × 内存带宽。这里你的代码<span class="key">被带宽卡死</span>——性能完全由内存带宽这条斜线决定，算术强度每翻倍，性能翻倍。向量加法就落在这里。</li>
+  <li><strong>平顶段（右侧）</strong>：性能 = 硬件峰值算力，一个水平线。这里你的代码<span class="key">被算力卡死</span>——再怎么提高算术强度也没用，你已经把 CPU/GPU 的乘加单元榨干了。</li>
+  <li><strong>脊点（ridge point）</strong>：斜坡撞上平顶的拐点，横坐标 = 峰值算力 ÷ 内存带宽。<strong>这是判断的分水岭</strong>：你的算术强度在脊点左边 → 带宽受限，该优化访存；在右边 → 算力受限，该优化计算。</li>
+</ol>
+
+<p>拿 H100 举例：峰值算力约 989 TFLOPS（FP16 Tensor Core），HBM3 带宽约 3.35 TB/s。脊点 = 989e12 / 3.35e12 ≈ <strong>295 FLOP/Byte</strong>。意思是：<span class="key">一段代码的算术强度必须超过约 295，才能把 H100 的算力吃满；否则就是被带宽拖累</span>。而 LLM decode 阶段的算术强度只有个位数——远远落在脊点左边深处的斜坡上。所以周三我们会说"LLM 推理是 memory-bound"，用 Roofline 的语言就是：<strong>它的算术强度远低于脊点，性能被 HBM 带宽这根斜线死死摁住，几百 TFLOPS 的算力大部分在闲置</strong>。</p>
+
+<div class="note">
+<strong>Roofline 给你的三条行动指南</strong>：<br>
+① 想知道优化天花板在哪 → 算出算术强度，在图上定位，斜坡上限就是你的上限。<br>
+② 代码在斜坡上（带宽受限）→ 优化方向是<span class="key">减少访存</span>：算子融合、量化（把 FP16 换成 INT8 直接让每字节的信息翻倍）、提高数据复用（分块 tiling）。加算力毫无意义。<br>
+③ 代码在平顶下（算力受限）→ 优化方向是<span class="key">用更强的计算单元</span>：上 Tensor Core、用 SIMD、换更高算力的卡。加带宽毫无意义。
+</div>
+
+<p>Roofline 之所以强大，是因为它把"我该往哪个方向优化"这个经常靠拍脑袋的决定，变成了一个能算、能画、能一眼看清的工程判断。这也是本周 Day 40 lab 里我们要动手测量、把你自己代码的点画上 Roofline 图的原因。</p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 「LLM 推理 memory-bound」是资源耗尽攻击的物理杠杆</strong>。既然 decode 阶段瓶颈在 HBM 带宽而非算力，攻击者就能用"诱导超长输出 / 超大 batch"的方式，让服务在算力远未打满时就被带宽和显存双双榨干，形成低成本的 DoS。理解 Roofline 让你知道：防御这类攻击不能只盯 GPU 利用率（它可能看起来不高），要盯显存占用和带宽饱和度——这是你设计推理服务限流和熔断阈值时的底层依据。</p>
+
+<p><strong>2. 显存是跨租户信息泄露的高危物理介质</strong>。HBM 容量金贵，多租户共享 GPU（MIG、时间片）时，显存不主动清零就会留下上一个租户的权重、KV cache、甚至 prompt 明文残留。今天理解的"显存又贵又小所以要拼命复用"正是这种残留风险的来源——省显存的技术（复用 buffer、PagedAttention 的 block 回收）如果不配显存清零，就是数据泄露通道。这是第 8 周"GPU 多租户安全"的物理前提。</p>
+
+<p><strong>3. 内存带宽是可测量的侧信道</strong>。访存模式（row hit/miss、通道争用、带宽占用曲线）会因数据内容和控制流不同而变化。共享内存控制器的攻击者可以通过监测带宽争用、访存延迟抖动来推断受害进程的行为——这是 Day 34 讲的 cache-timing 侧信道的内存层延伸。今天的内存控制器"请求重排序/多通道"知识，正是理解这类侧信道为什么存在的基础。</p>
+
+<p><strong>4. 量化的安全双刃剑</strong>。量化（FP16→INT8/INT4）本质是通过降低每字节数据量来提高算术强度、缓解带宽墙——这是纯粹的性能收益。但量化会改变模型数值行为，可能被攻击者利用来构造"在全精度下安全、量化后越狱"的输入，或让安全对齐在低精度下失效。理解量化为什么被广泛采用（Roofline 逼的），才能预判它带来的新攻击面。</p>
+
+<p><strong>5. 诊断"推理为什么变慢"的系统化思路</strong>。当你的 Agent 推理服务突然变慢，Roofline 给你一套排查框架：先判断瓶颈在算力还是带宽（看 GPU compute util vs memory bandwidth util）；若带宽饱和，检查是不是 batch/context 被恶意撑大、KV cache 爆了显存触发 offload（把慢几十倍的 CPU 内存甚至 SSD 拉进访存路径）。把性能异常和攻击行为关联,是安全工程师区别于普通调优工程师的地方。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：测量你机器的内存延迟与带宽感知</strong></p>
+<p>在你的 mac 终端跑下面的 Python，直观感受"随机访问 vs 顺序访问"的巨大差距（这背后就是今天讲的 DRAM row hit/miss + 缓存局部性）：</p>
+<pre><code>import time, numpy as np
+N = 50_000_000
+a = np.arange(N, dtype=np.int64)
+
+# 顺序读求和（缓存/行缓冲区友好）
+t = time.perf_counter()
+s1 = a.sum()
+print("顺序 sum: %.3f s" % (time.perf_counter() - t))
+
+# 随机索引求和（不断 row miss + cache miss）
+idx = np.random.permutation(N)
+t = time.perf_counter()
+s2 = a[idx].sum()
+print("随机 gather+sum: %.3f s" % (time.perf_counter() - t))</code></pre>
+<p>问题：随机访问慢了几倍？用今天第 3 节的 DRAM row hit/miss 和第 2 节的延迟概念，解释这个差距为什么存在。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：看你机器的内存硬件信息</strong></p>
+<p>在 mac 上运行（Apple Silicon 用的是统一内存 LPDDR，参数看法略不同，但一样能观察）：</p>
+<pre><code># mac：看内存类型、大小、速度
+system_profiler SPMemoryDataType
+
+# 看内存压力和带宽相关统计
+vm_stat
+# 若在 Linux 服务器上，可用：
+# sudo dmidecode -t memory | grep -E "Type:|Speed|Size"</code></pre>
+<p>问题：找出你的内存代际（DDR4/DDR5/LPDDR5）和数据率（MT/s）。用第 3 节的公式，估算它的单通道理论带宽（数据率 × 8 字节）。再想想：如果这是 DDR5-6400，理论带宽约多少 GB/s？和一张 H100 的 3350 GB/s 差几倍？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>10 分钟 · 思考：用 Roofline 判断优化方向</strong></p>
+<p>假设你在一张 H100 上（峰值 989 TFLOPS FP16，带宽 3.35 TB/s，脊点 ≈ 295 FLOP/Byte）跑两个 kernel：</p>
+<ol type="A">
+  <li>一个 element-wise 的 GELU 激活函数，算术强度约 2 FLOP/Byte。</li>
+  <li>一个精心分块的大矩阵乘法，算术强度约 400 FLOP/Byte。</li>
+</ol>
+<p>问题：<br>
+(1) 这两个 kernel 各自是算力受限还是带宽受限？在 Roofline 图上分别落在斜坡还是平顶？<br>
+(2) 对 A，你把它和前后算子融合（算子融合减少中间结果的读写）能提速吗？为什么？<br>
+(3) 对 B，你把 GPU 从 H100 换成算力更高但带宽不变的卡，能提速吗？换成带宽更高的 H200 呢？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 37 · NUMA 架构</strong>。今天我们说到内存控制器集成在每颗 CPU 里、每颗 CPU 有自己的"本地内存"——明天就把这个引子展开成完整的 NUMA（非统一内存访问）架构。我们会讲 NUMA 的起源、本地 vs 远程访问的代价差、如何用 <code>numactl</code> 和 <code>lstopo</code> 看清和控制内存分配策略，以及为什么"多卡训练时线程和显存不在同一个 NUMA 节点"会成为隐形性能杀手——这对你调优多卡 LLM 训练/推理至关重要。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
