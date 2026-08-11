@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 37 · NUMA 架构</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 37 · NUMA 架构</h1>
+  <div class="meta">Week 06 · 周二 · 2026-08-11 · 主线：内存层级与 NUMA · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们建立了「内存系统全貌」的大图——延迟、带宽、Roofline。今天要回答一个更扎心的问题：<span class="key">当你的服务器有两颗 CPU、每颗接着自己的一堆内存条时，「内存」这个词就不再是一整块了</span>。一段内存对某个核是「近的」、对另一个核是「远的」，访问代价差 1.5～2 倍。这就是 NUMA（非一致内存访问）。如果你不知道它的存在，你的 vLLM、你的多卡训练、你的 Redis 都可能在「跨节点乱访问」的隐性税里损失 20～40% 性能，而 <code>htop</code> 上什么都看不出来。今天我们从零讲清楚 NUMA 是怎么来的、代价有多大、怎么用 <code>numactl</code>/<code>lstopo</code> 看见它、四种分配策略怎么选、以及它如何直接决定你多 GPU 训练的通信效率。学完你能回答：「为什么我把进程绑到 node 0、显卡插在 node 1，反而更慢？」
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">NUMA 的起源：SMP 为什么撞了墙</a></li>
+  <li><a href="#s2">NUMA 架构长什么样：node、local、remote</a></li>
+  <li><a href="#s3">本地 vs 远程访问的代价：具体数字</a></li>
+  <li><a href="#s4">看见拓扑：numactl 与 lstopo</a></li>
+  <li><a href="#s5">四种内存分配策略与 first-touch 陷阱</a></li>
+  <li><a href="#s6">NUMA 对多卡训练/推理的影响</a></li>
+  <li><a href="#s7">GPU-CPU NUMA 拓扑：nvidia-smi topo</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. NUMA 的起源：SMP 为什么撞了墙</h2>
+
+<p>要理解 NUMA，先要理解它取代的东西：<span class="term">SMP（Symmetric Multi-Processing，对称多处理）</span>。</p>
+
+<p>在早期的多核/多路服务器里，所有 CPU 通过一条<span class="key">共享总线</span>连到同一块内存控制器，再连到所有内存条。「对称」的意思是：任何一个 CPU 访问任何一个内存地址，代价都完全一样。程序员根本不用操心「内存在哪」，因为哪儿都一样远。</p>
+
+<div class="ascii">          SMP（共享总线，对称）
+   CPU0   CPU1   CPU2   CPU3
+    │      │      │      │
+    └──────┴───┬──┴──────┘
+               │  ← 一条共享总线（瓶颈！）
+        ┌──────┴──────┐
+        │  内存控制器   │
+        └──────┬──────┘
+          [ 全部内存条 ]</div>
+
+<p>这个设计很优雅，但有一个致命问题：<span class="key">那条总线是所有 CPU 抢的独木桥</span>。2 颗核还好，8 颗、16 颗核同时想读内存，总线带宽就成了硬瓶颈。就像一栋楼只有一部电梯，人少时没事，上班高峰所有人挤在一部电梯前，加再多楼层（核）也没用——你被电梯（总线）卡死了。这叫<span class="term">总线争用（bus contention）</span>。</p>
+
+<p>硬件工程师的解法很直接：<strong>既然一个内存控制器喂不饱那么多核，那就给每组核配一个自己的内存控制器和一堆自己的内存条</strong>。于是服务器被切成若干「区」，每个区 = 一组核 + 一个内存控制器 + 一堆内存。这个区就叫 <span class="term">NUMA node（NUMA 节点）</span>。</p>
+
+<p>代价是：一个核访问「自己区」的内存很快，访问「别的区」的内存要先穿过 node 之间的互联（Intel 叫 <span class="term">QPI/UPI</span>，AMD 叫 <span class="term">Infinity Fabric</span>），慢一截。于是「访问哪块内存代价一样」的对称性被打破了——这就是 <span class="key">Non-Uniform Memory Access，非一致内存访问</span>。NUMA 不是一个「新功能」，它是「为了扩展核数不得不付出的代价」。</p>
+
+<div class="note">
+<strong>一句话记住</strong>：SMP 是「所有核共享一块内存，公平但堵车」；NUMA 是「每组核分到一块近内存，快但不对称」。今天几乎所有双路/多路服务器（你租的 GPU 机器 99% 是双路）都是 NUMA。单颗桌面 CPU 通常是单 node，但也有例外（见 §2）。
+</div>
+
+<h2 id="s2">2. NUMA 架构长什么样：node、local、remote</h2>
+
+<p>一台典型的双路服务器（比如 2× Intel Xeon 或 2× AMD EPYC）长这样：</p>
+
+<div class="ascii">        NUMA node 0                    NUMA node 1
+ ┌────────────────────┐        ┌────────────────────┐
+ │  CPU socket 0       │        │  CPU socket 1       │
+ │  core 0..31         │◄──────►│  core 32..63        │
+ │  L1/L2/L3 cache     │  UPI/  │  L1/L2/L3 cache     │
+ │  内存控制器          │ Fabric │  内存控制器          │
+ └─────────┬──────────┘  互联   └─────────┬──────────┘
+     [ 本地内存 256GB ]            [ 本地内存 256GB ]
+         (local)                       (对 node0 是 remote)</div>
+
+<p>关键术语：</p>
+<ul>
+  <li><span class="term">Local access（本地访问）</span>：core 0 读它同一个 node 上的内存。只走本 node 的内存控制器，最快。</li>
+  <li><span class="term">Remote access（远程访问）</span>：core 0 读 node 1 上的内存。要先穿过 UPI/Fabric 互联，到对方的内存控制器取数据再传回来。多一跳，慢。</li>
+  <li><span class="term">NUMA distance（距离）</span>：内核用一个矩阵描述 node 之间的相对代价，本地记为 10，远程一跳常见是 21（约 2.1 倍）。这不是纳秒，是<strong>相对比值</strong>。</li>
+</ul>
+
+<p><strong>类比</strong>：把公司想成两层楼，每层有自己的茶水间。你在 3 楼，去 3 楼茶水间倒水（local）走两步就到；去 4 楼茶水间（remote）要爬楼梯。水都是同样的水，但「取水的时间」取决于你在哪层、水在哪层。NUMA 就是逼你开始关心「数据放在哪个楼层」。</p>
+
+<p>现代 CPU 让情况更复杂了。AMD EPYC 内部由多个 <span class="term">chiplet（小芯片，CCD）</span> 拼成，可以配置成「一颗物理 CPU 里就有多个 NUMA node」（BIOS 里叫 <code>NPS=Nodes Per Socket</code>，可设 1/2/4）。所以「node 数」不一定等于「CPU 插槽数」。一台双路 EPYC 开 NPS=4 就有 8 个 NUMA node。别假设「一颗 CPU = 一个 node」——一切以 <code>numactl -H</code> 实测为准。</p>
+
+<h2 id="s3">3. 本地 vs 远程访问的代价：具体数字</h2>
+
+<p>抽象的「慢一截」不够，我们要量化。以一台典型双路服务器为参考（数量级，不同代际有差异）：</p>
+
+<table>
+<thead><tr><th>访问类型</th><th>典型延迟</th><th>相对本地</th><th>带宽影响</th></tr></thead>
+<tbody>
+<tr><td>L1 cache 命中</td><td>~1 ns</td><td>—</td><td>—</td></tr>
+<tr><td>L3 cache 命中</td><td>~15 ns</td><td>—</td><td>—</td></tr>
+<tr><td><strong>本地 DRAM</strong></td><td>~80–100 ns</td><td>1.0×</td><td>满带宽（如单 node ~150 GB/s）</td></tr>
+<tr><td><strong>远程 DRAM（一跳）</strong></td><td>~130–200 ns</td><td>1.5–2.0×</td><td>受 UPI/Fabric 限制，常掉到 60–70%</td></tr>
+</tbody>
+</table>
+
+<p>两条独立的税，都要交：</p>
+<ol>
+  <li><span class="key">延迟税</span>：远程访问每次多 50–100 ns。对延迟敏感、指针追逐型（pointer-chasing）的负载（图遍历、哈希表、链表、KV cache 元数据）打击巨大。</li>
+  <li><span class="key">带宽税</span>：node 间互联（UPI/Fabric）的带宽远小于本地内存带宽。当大批量数据跨 node 流动，互联链路会先饱和，成为新瓶颈——这对 LLM 推理这种 memory-bound 负载（昨天讲过）尤其致命。</li>
+</ol>
+
+<p>更隐蔽的是<span class="term">争用放大</span>：如果 node 0 上跑的 8 个进程全去访问 node 1 的内存，它们不仅各自慢，还会一起把 UPI 链路挤爆，形成「远程访问 → 互联拥塞 → 更慢 → 队列更长」的恶性循环。这就是为什么一台机器 CPU 利用率没满、内存也没满，吞吐却上不去——瓶颈藏在你看不见的互联上。</p>
+
+<p>我们可以用一个极简实验感受它。下面这段用 <code>numactl</code> 强制「在 node 0 上跑、但只用 node 1 的内存」，和「node 0 上跑、用 node 0 内存」对比：</p>
+
+<pre><code># 需要先装 numactl：  sudo apt install numactl
+# 本地：CPU 和内存都在 node 0
+numactl --cpunodebind=0 --membind=0 \
+  python3 -c "import numpy as np,time; a=np.ones(2_000_000_000//8); t=time.time(); \
+  [a.sum() for _ in range(5)]; print('local ', time.time()-t)"
+
+# 远程：CPU 在 node 0，但内存强制放 node 1
+numactl --cpunodebind=0 --membind=1 \
+  python3 -c "import numpy as np,time; a=np.ones(2_000_000_000//8); t=time.time(); \
+  [a.sum() for _ in range(5)]; print('remote', time.time()-t)"</code></pre>
+
+<p>在双路机器上，remote 那次通常比 local 慢 30–60%。这就是「隐性税」的真面目——同样的代码、同样的核、同样的数据量，只因为内存放错了 node。</p>
+
+<h2 id="s4">4. 看见拓扑：numactl 与 lstopo</h2>
+
+<p>你无法优化你看不见的东西。三件套：<code>numactl -H</code> 看逻辑拓扑，<code>lstopo</code> 看图形化全貌，<code>numastat</code> 看命中/失配统计。</p>
+
+<h3>numactl -H：node 清单与距离矩阵</h3>
+
+<pre><code>numactl -H     # -H = --hardware</code></pre>
+
+<p>典型输出（双路，2 node）：</p>
+
+<pre><code>available: 2 nodes (0-1)
+node 0 cpus: 0 1 2 ... 31          ← node0 拥有哪些逻辑核
+node 0 size: 257669 MB             ← node0 本地内存总量
+node 0 free: 251020 MB
+node 1 cpus: 32 33 ... 63
+node 1 size: 258011 MB
+node 1 free: 249800 MB
+node distances:
+node   0   1
+  0:  10  21     ← 0→0 本地=10, 0→1 远程=21（约 2.1 倍代价）
+  1:  21  10</code></pre>
+
+<p>这张 <span class="term">distance matrix（距离矩阵）</span>是内核调度器和内存分配器决策的依据。读它的方法：对角线永远是 10（本地基准），越偏离对角线数字越大代表越远。四路机器可能出现 <code>10 / 21 / 31</code> 这样的多档距离——有些 node 之间要跳两跳。</p>
+
+<h3>lstopo：一张图看懂整机</h3>
+
+<pre><code>sudo apt install hwloc          # lstopo 属于 hwloc 包
+lstopo --of png > topo.png      # 导出整机拓扑图
+lstopo --of console             # 纯文本版，SSH 里也能看</code></pre>
+
+<p><code>lstopo</code> 会画出每个 NUMA node、里面的 L3/L2/L1、每个物理核和超线程，以及——关键——<span class="key">PCIe 设备（GPU、网卡、NVMe）挂在哪个 node 下面</span>。这是把 GPU 绑到正确 CPU 的地图，第 7 节会用到。</p>
+
+<h3>numastat：本地命中率</h3>
+
+<pre><code>numastat            # 全局：numa_hit vs numa_miss vs numa_foreign
+numastat -p $(pgrep -f my_server)   # 看某进程的每 node 内存分布</code></pre>
+
+<p>关注两个数：<code>numa_hit</code>（成功在期望 node 上分到内存的次数）和 <code>numa_miss</code>（没分到、被迫用了别的 node）。<code>numa_miss</code> 持续增长 = 你的负载正在大量交远程税，该动手绑定了。</p>
+
+<h2 id="s5">5. 四种内存分配策略与 first-touch 陷阱</h2>
+
+<p>Linux 默认怎么决定「一块新申请的内存放哪个 node」？答案不是「申请时」决定的，而是——<span class="key">谁第一个写它，就放谁那边</span>。这叫 <span class="term">first-touch（首次触碰）策略</span>，是 NUMA 世界最重要、也最容易踩坑的规则。</p>
+
+<p>注意：<code>malloc()</code>/<code>np.empty()</code> 只是划出虚拟地址，还没有真正的物理页。物理页要等你<strong>第一次写入</strong>那个地址、触发缺页中断（还记得 Day 10 的 page fault 吗）时才分配——而内核这时会把它放在<span class="key">执行写入的那个核所在的 node</span>上。</p>
+
+<div class="note">
+<strong>first-touch 陷阱的经典翻车现场</strong>：主线程先 <code>np.zeros(huge)</code> 把整个数组初始化（在 node 0 上跑），于是所有物理页都落到 node 0。之后你开一个线程池，一半线程被调度到 node 1 的核上去处理这个数组——它们全程在交远程税，而你以为「数据已经初始化好了、很公平」。正确做法是<strong>让每个线程去初始化自己将要处理的那一段</strong>（并行 first-touch），这样物理页就自然分布到各自的 node。
+</div>
+
+<p>如果不想被 first-touch 牵着走，可以用 <code>numactl</code> 或 <code>libnuma</code> API 显式指定策略，共 4 种：</p>
+
+<table>
+<thead><tr><th>策略</th><th>numactl 参数</th><th>行为</th><th>适合</th></tr></thead>
+<tbody>
+<tr><td><span class="term">local / default</span></td><td>（不加）</td><td>first-touch，谁碰谁的 node</td><td>单进程、线程本地性好的负载</td></tr>
+<tr><td><span class="term">bind</span></td><td><code>--membind=0</code></td><td>只能用指定 node，用完宁可 OOM 也不去别的 node</td><td>严格隔离、延迟敏感服务</td></tr>
+<tr><td><span class="term">preferred</span></td><td><code>--preferred=0</code></td><td>优先 node 0，满了才溢出到别的 node（软约束）</td><td>希望本地但不想 OOM</td></tr>
+<tr><td><span class="term">interleave</span></td><td><code>--interleave=all</code></td><td>物理页轮流撒在各 node 上（round-robin）</td><td>大数组被所有核平均访问、带宽敏感</td></tr>
+</tbody>
+</table>
+
+<p>几个高频用法：</p>
+
+<pre><code># 把整个进程钉在 node 0（CPU 和内存都是）——延迟敏感服务的标准姿势
+numactl --cpunodebind=0 --membind=0 ./my_latency_service
+
+# 大内存分析任务，希望带宽最大化、内存均摊到两个 node
+numactl --interleave=all python3 big_matrix_job.py
+
+# 优先本地但允许溢出，避免因单 node 内存不够而 OOM
+numactl --cpunodebind=1 --preferred=1 ./worker</code></pre>
+
+<p><strong>bind 还是 interleave？</strong>取决于访问模式。如果每个进程只碰自己那一小块（比如 8 个独立 worker，各管各的数据），用 <code>--cpunodebind + --membind</code> 把每个 worker 钉死在一个 node，让它全程本地，最好。如果是一个大对象被所有核共同访问（比如一个共享的大 embedding 表），没有哪个 node 是「主人」，那 <code>--interleave</code> 把它摊开，避免所有核挤向同一个 node 的内存控制器造成热点。<span class="key">interleave 用「大家都稍微慢一点」换「没有人被远程访问 + 热点拖垮」</span>。</p>
+
+<p>另外，内核有个自动搬运机制叫 <span class="term">AutoNUMA / NUMA balancing</span>（<code>/proc/sys/kernel/numa_balancing</code>）：它周期性地检查页面被谁频繁访问，然后把页迁到那个 node。听起来智能，但迁移本身有开销、且对短生命周期负载常常帮倒忙。生产上对延迟敏感服务经常<strong>显式关掉它</strong>（<code>echo 0 &gt; /proc/sys/kernel/numa_balancing</code>），改用手动绑定，因为「可预测」比「平均可能更好但会抖动」更重要。</p>
+
+<h2 id="s6">6. NUMA 对多卡训练/推理的影响</h2>
+
+<p>现在把 NUMA 接回你的本职战场。一台 8 卡训练机通常是双路 CPU + 8 张 GPU，GPU 通过 PCIe/PLX switch 分挂在两个 CPU 下面：<span class="key">GPU 0–3 挂在 node 0，GPU 4–7 挂在 node 1</span>。这个物理事实制造了三个隐性性能陷阱：</p>
+
+<h3>陷阱一：数据加载路径跨 node</h3>
+<p>训练时 <code>DataLoader</code> 的 worker 进程从磁盘/内存读数据，做预处理，再 <code>host-to-device</code> 拷贝到 GPU。如果 worker 被调度到 node 1 的核，而它服务的 GPU 挂在 node 0，那么：数据先落到 node 1 内存 → 跨 UPI 搬到 node 0 → 再经 PCIe 上 GPU。<strong>每个 batch 都白白多一次跨 node 搬运</strong>。正确做法：把 rank<em>i</em> 的进程（含它的 DataLoader）绑到「它的 GPU 所在的那个 node」。</p>
+
+<h3>陷阱二：pinned memory 分配在错的 node</h3>
+<p>为了让 GPU DMA 更快，PyTorch 用 <span class="term">pinned（page-locked）memory</span> 做 host↔device 传输的中转缓冲。如果这块 pinned buffer 分配在 node 1、但 DMA 目标 GPU 在 node 0，PCIe 事务要跨 UPI，带宽直接打折。绑定 CPU node 后，pinned 内存会自然落在本地（因为 first-touch）。</p>
+
+<h3>陷阱三：集合通信（NCCL）拓扑不匹配</h3>
+<p>多卡 <code>AllReduce</code> 时，如果 GPU 间走的是 NVLink，NUMA 影响较小；但一旦有 GPU 通过 CPU/PCIe 中转（node 0 的 GPU 和 node 1 的 GPU 通信要过 UPI），跨 node 的那一跳会拖慢整个集合操作的木桶短板。这正是明天（GPU 互联）和后面 NCCL 章节的核心。</p>
+
+<p>标准的「NUMA 感知启动」长这样——每个 rank 绑到它 GPU 对应的 CPU node：</p>
+
+<pre><code># 先查 GPU 挂在哪个 node（见第 7 节）
+# 假设 GPU0 在 node0，用 numactl 把这个 rank 钉过去
+CUDA_VISIBLE_DEVICES=0 numactl --cpunodebind=0 --membind=0 \
+  python train.py --local_rank 0
+
+# 生产里一般用 torchrun + 一个 wrapper 脚本自动算 node
+# 也可用 nvidia 提供的绑定工具，或在 launch 脚本里读 nvidia-smi topo</code></pre>
+
+<p>效果有多大？在数据加载重、host-device 拷贝频繁的训练里，正确的 NUMA 绑定能把每步时间降低 <strong>10–30%</strong>；对 memory-bound 的 LLM 推理（vLLM 多实例部署，每个实例钉一个 node + 对应 GPU），端到端吞吐提升 15–25% 是常见的。这是<span class="key">「不改一行模型代码、纯靠摆对内存位置」拿到的免费加速</span>——也是资深工程师和调包侠的分水岭之一。</p>
+
+<h2 id="s7">7. GPU-CPU NUMA 拓扑：nvidia-smi topo</h2>
+
+<p>要做绑定，先得知道「哪张卡挂在哪个 node、哪两张卡之间怎么连」。这张地图由 <code>nvidia-smi topo -m</code> 给出：</p>
+
+<pre><code>nvidia-smi topo -m</code></pre>
+
+<p>典型输出（节选，4 卡）：</p>
+
+<pre><code>        GPU0    GPU1    GPU2    GPU3    CPU Affinity    NUMA Affinity
+GPU0     X      NV4     SYS     SYS     0-31            0
+GPU1    NV4      X      SYS     SYS     0-31            0
+GPU2    SYS     SYS      X      NV4     32-63           1
+GPU3    SYS     SYS     NV4      X      32-63           1</code></pre>
+
+<p>读这张表：</p>
+<ul>
+  <li><span class="term">NUMA Affinity</span> 列直接告诉你：GPU0/1 属于 node 0，GPU2/3 属于 node 1。这就是绑定依据。</li>
+  <li><span class="term">CPU Affinity</span> 列：GPU0 最该用核 0–31（node 0 的核）。<code>numactl --cpunodebind=0</code> 正好覆盖它。</li>
+  <li>矩阵里的连接类型，从快到慢：<code>NV#</code>（NVLink，# 是链路数，最快）&gt; <code>PIX</code>（同一 PCIe switch）&gt; <code>PXB</code>（跨多个 switch）&gt; <code>PHB</code>（经过 host bridge）&gt; <code>NODE</code>（同 NUMA node 内）&gt; <span class="key"><code>SYS</code>（跨 NUMA node，要过 UPI，最慢）</span>。</li>
+</ul>
+
+<p>上面的例子里，GPU0↔GPU1 是 <code>NV4</code>（4 条 NVLink，飞快），但 GPU0↔GPU2 是 <code>SYS</code>（跨 node，最慢）。这直接告诉你：如果做 2 卡数据并行，<strong>选 GPU0+GPU1 或 GPU2+GPU3，绝不要选 GPU0+GPU2</strong>——否则每次 AllReduce 都走最慢的 SYS 路径。很多人随手 <code>CUDA_VISIBLE_DEVICES=0,2</code> 就开跑，性能莫名其妙差一截，根因就在这张表里。</p>
+
+<p>完整的「查拓扑 → 绑定」工作流：</p>
+<pre><code># 1. 看每张卡的 NUMA 归属
+nvidia-smi topo -m
+
+# 2. 也可以直接读 sysfs（脚本里自动化用这个）
+cat /sys/bus/pci/devices/0000:17:00.0/numa_node   # 输出 0 或 1，-1 表示未知
+
+# 3. 确认 node 的核范围
+numactl -H
+
+# 4. 启动时对号入座：GPU0(node0) → 绑 node0
+CUDA_VISIBLE_DEVICES=0 numactl --cpunodebind=0 --membind=0 python serve.py</code></pre>
+
+<div class="note">
+<strong>一个反直觉但要记住的点</strong>：把进程绑到「GPU 所在的 node」几乎总是对的；但如果你手动绑错了 node（进程在 node0、GPU 在 node1），会<span class="key">比完全不绑还慢</span>——因为不绑时内核的 first-touch 至少有概率蒙对，而你绑错等于把每次 host-device 传输都强制走 UPI。所以绑定要么绑对，要么别乱绑。导读里那个问题的答案就在这。
+</div>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 多租户 GPU 隔离与「NUMA 侧信道」</strong>。你在做 Agent 安全，多租户推理平台是常见场景。当两个租户的容器被调度到同一个 NUMA node、共享同一条 UPI 链路和内存控制器时，一个租户的高强度远程访问会拖慢另一个租户——这既是性能干扰，也是一条<span class="key">时间侧信道</span>：攻击者可以通过测量自己内存访问延迟的抖动，推断同 node 邻居的负载模式（是否正在跑大 batch 推理、是否在做 KV cache 换页）。NUMA-aware 的调度隔离（把敏感租户钉到独占 node）是缓解手段之一。</p>
+
+<p><strong>2. 推理服务的可预测延迟与 SLA 攻击面</strong>。安全不只是防泄露，也包括可用性。如果你的 LLM 网关承诺 P99 &lt; 200ms，而底层因为没做 NUMA 绑定导致延迟随调度器心情在 100–300ms 抖动，攻击者只要制造跨 node 争用（比如故意提交能触发大量远程内存访问的请求）就能把 P99 顶穿，形成一种低成本的<span class="key">性能型 DoS</span>。把关键路径绑死在本地 node，是让延迟可预测、从而可防御的前提。</p>
+
+<p><strong>3. 沙箱资源核算的盲区</strong>。你给 Agent 的 code-interpreter 工具做沙箱时，通常用 cgroups 限制 CPU 份额和内存上限（下周容器章节会讲）。但 cgroups 默认<strong>不感知 NUMA 带宽</strong>：一个恶意/失控的沙箱进程即使 CPU 配额很低，也能通过疯狂的跨 node 内存访问把 UPI 链路打满，殃及同机所有其他工作负载。资源核算若只看 CPU% 和 RSS，会漏掉「互联带宽」这一维——这是设计 Agent 沙箱时容易忽略的攻击面。</p>
+
+<p><strong>4. 内存取证与残留数据</strong>。NUMA 让「物理内存布局」变得和逻辑地址高度相关。在做 GPU/内存多租户安全时，理解物理页落在哪个 node、pinned buffer 复用时是否清零，关系到<span class="key">跨租户显存/内存残留</span>是否可被下一个租户读到。绑定策略和分配器行为共同决定了残留数据的可预测性——这是 Day 48（GPU 多租户安全）会深入的伏笔。</p>
+
+<p><strong>5. 性能基线即异常检测基线</strong>。当你为推理集群建立行为基线（用于检测被投毒/被劫持的异常负载）时，NUMA 命中率（<code>numa_hit/numa_miss</code>）本身就是一个信号维度。一个平时本地命中率 95% 的服务突然 remote 访问飙升，可能意味着有非预期进程被塞进了这台机器、或调度被恶意扰动。把 <code>numastat</code> 纳入监控，等于给「谁在偷偷用我的内存带宽」装了一个探针。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手测远程内存税</strong></p>
+<p>在一台双路服务器（或云上的双 socket 实例）上装 <code>numactl</code>，跑第 3 节那两条命令（local vs remote），记录两次耗时并算出百分比差。如果你手上只有单 node 机器，<code>numactl -H</code> 会显示 <code>available: 1 nodes</code>——那就把这条结论写下来：为什么笔记本/单路桌面机通常测不出 NUMA 差异？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察你的机器拓扑</strong></p>
+<p>依次运行 <code>numactl -H</code>、<code>lstopo --of console</code>（若无则 <code>sudo apt install hwloc</code>），如果有 GPU 再加 <code>nvidia-smi topo -m</code>。回答：你的机器有几个 NUMA node？距离矩阵里远程距离是多少（21？还是更大）？如果有多张 GPU，哪两张之间是 NVLink、哪两张是 SYS？把「最不该一起用」的一对 GPU 编号写下来。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考题</strong></p>
+<p>你部署一个 vLLM 推理服务，模型权重占 40GB，机器是双路、每 node 256GB 内存、单 node 本地带宽 150GB/s、UPI 带宽约 40GB/s。你打算在这台机器上跑<strong>两个独立 vLLM 实例</strong>（各用一张 GPU）。请设计内存/CPU 绑定方案，并解释：为什么「两个实例各钉一个 node」通常优于「两个实例都用 <code>--interleave=all</code>」？在什么情况下 interleave 反而更好？</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 38 · 为什么 LLM 推理是 memory-bound</strong>。今天我们反复说 LLM 推理是「memory-bound」，明天就把这句话彻底讲透：从 prefill 和 decode 两个阶段的本质差异出发，亲手推导 decode 阶段的算术强度（arithmetic intensity）为什么低到可怜、KV cache 的内存占用公式怎么算、为什么 batching 能显著提升 GPU 利用率、量化又是从哪个环节抠出加速的。学完你能算出 Llama-2 7B/70B 在给定显存下的吞吐上限——这是所有推理优化的第一性原理。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
