@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 38 · 为什么 LLM 推理是 memory-bound</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 38 · 为什么 LLM 推理是 memory-bound</h1>
+  <div class="meta">Week 06 · 周三 · 2026-08-12 · 主线：内存层级与 NUMA · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：你一定听过一句行话——「LLM 推理是 memory-bound 的」。这句话被说了无数遍，但很少有人把它算给你看。今天我们把它彻底拆开：<span class="key">当你用 A100 跑 Llama-2 7B、batch=1 生成一个 token 时，这张标称 312 TFLOPS 的卡实际只发挥出了大约 2 TFLOPS，利用率不到 1%</span>。剩下 99% 的时间，GPU 的计算单元在干等——等 13GB 的权重从显存搬到片上。今天我们从 prefill 和 decode 两个阶段的本质差异出发，亲手推导 decode 阶段的算术强度为什么只有「batch size」这么大、KV cache 的内存公式怎么逐项算出来、为什么 batching 是唯一能救利用率的旋钮、量化到底是在哪个环节抠出的加速。学完你能在纸上算出「这张卡这个模型最多能跑多快、能塞多少并发」——这是所有推理优化（PagedAttention、continuous batching、投机解码）的第一性原理。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">先把话说准：什么叫 memory-bound</a></li>
+  <li><a href="#s2">一次推理的两副面孔：prefill 与 decode</a></li>
+  <li><a href="#s3">亲手推导：decode 的算术强度只有 B</a></li>
+  <li><a href="#s4">KV cache：第二个吃显存的大户</a></li>
+  <li><a href="#s5">Batching：唯一能把算术强度拉上去的旋钮</a></li>
+  <li><a href="#s6">量化：省的是「搬运费」，不是「计算费」</a></li>
+  <li><a href="#s7">实战：算出 Llama-2 7B / 70B 的吞吐上限</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 先把话说准：什么叫 memory-bound</h2>
+
+<p>Day 36 我们学了 <span class="term">Roofline 模型</span>，今天要真正用它。先把三个量重新定义清楚，因为后面每一步推导都靠它们。</p>
+
+<ul>
+  <li><span class="term">算术强度（arithmetic intensity, AI）</span>：一段计算「每从显存搬运 1 字节数据，能做多少次浮点运算」，单位 <code>FLOP/byte</code>。它是<strong>算法本身的属性</strong>，跟你用什么卡无关。</li>
+  <li><span class="term">机器平衡点 / ridge point</span>：一张卡的「峰值算力 ÷ 峰值显存带宽」，单位也是 <code>FLOP/byte</code>。它是<strong>硬件的属性</strong>，跟你跑什么无关。</li>
+  <li><span class="term">memory-bound（访存受限）</span>：当算法的算术强度 &lt; 硬件的 ridge point 时，瓶颈在搬数据，计算单元吃不饱。反之叫 <span class="term">compute-bound（计算受限）</span>。</li>
+</ul>
+
+<p>把当代几张卡的 ridge point 算出来，你会被这个数字吓一跳：</p>
+
+<table>
+<tr><th>GPU</th><th>BF16 峰值算力</th><th>HBM 带宽</th><th>ridge point</th></tr>
+<tr><td>V100 32GB</td><td>~125 TFLOPS</td><td>~0.9 TB/s</td><td>≈ 139 FLOP/byte</td></tr>
+<tr><td>A100 80GB</td><td>~312 TFLOPS</td><td>~2.0 TB/s</td><td>≈ 153 FLOP/byte</td></tr>
+<tr><td>H100 SXM</td><td>~989 TFLOPS</td><td>~3.35 TB/s</td><td>≈ 295 FLOP/byte</td></tr>
+<tr><td>H200</td><td>~989 TFLOPS</td><td>~4.8 TB/s</td><td>≈ 206 FLOP/byte</td></tr>
+</table>
+
+<p><strong>怎么读这张表</strong>：A100 的 ridge point 是 153，意思是<span class="key">「你每从显存读 1 个字节，必须至少做 153 次浮点运算，才配得上这张卡的算力」</span>。做不到 153，GPU 就在空转等数据。注意一个反直觉的趋势：<strong>从 A100 到 H100，算力涨了 3.2 倍，带宽只涨了 1.7 倍，ridge point 反而从 153 涨到了 295</strong>——新卡对「算得密」的要求更苛刻了。这就是为什么每出一代新卡，memory-bound 的问题只会更严重，不会缓解。</p>
+
+<p><strong>类比</strong>：把 GPU 想成一个超级厨房。计算单元是 1000 个厨师（算力），显存带宽是从仓库到厨房那条传送带的宽度。ridge point = 153 的意思是「传送带每送来 1 公斤原料，厨师们能做 153 道菜」才算平衡。如果你的菜谱是「每 1 公斤原料只做 1 道菜」（大部分原料只是过一遍手），那 999 个厨师就得干看着——<span class="key">买再多厨师也没用，瓶颈是传送带</span>。这就是 LLM decode 的处境。</p>
+
+<h2 id="s2">2. 一次推理的两副面孔：prefill 与 decode</h2>
+
+<p>自回归大模型生成文本时，做的事分成性质完全不同的两个阶段。这个划分是今天所有内容的地基。</p>
+
+<div class="ascii">用户输入: "请用一句话解释 NUMA"   (假设 8 个 token)
+模型输出: "NUMA 是..."           (假设 200 个 token)
+
+┌──────────────── PREFILL（预填充）────────────────┐
+│ 一次性把 8 个 token 全部喂进模型，并行前向一遍     │
+│ 产出: ① 第 1 个输出 token  ② 8 个 token 的 KV cache│
+│ 特点: 大矩阵 × 大矩阵 → 算得密 → compute-bound     │
+│ 耗时指标: TTFT (Time To First Token)              │
+└──────────────────────────────────────────────────┘
+                     ↓
+┌──────────────── DECODE（解码）───────────────────┐
+│ 循环 200 次，每次只喂 1 个 token（上一步的输出）   │
+│ 每次都要把整个模型的权重完整读一遍！               │
+│ 特点: 大矩阵 × 一根向量 → 算得稀 → memory-bound    │
+│ 耗时指标: TPOT (Time Per Output Token)            │
+└──────────────────────────────────────────────────┘</div>
+
+<p>两个阶段跑的是<strong>同一份权重、同一段代码</strong>，但性能特征天差地别。原因只有一个：<span class="key">送进去的「宽度」不同</span>。</p>
+
+<ul>
+  <li><span class="term">Prefill</span>：输入是一个 <code>[S, H]</code> 的矩阵（S=序列长度，比如 2048；H=隐藏维度，比如 4096）。它和权重矩阵 <code>[H, H]</code> 相乘，是标准的 <span class="term">GEMM（矩阵乘矩阵）</span>。权重读一次，被 S 行数据共享使用，摊销得很好。</li>
+  <li><span class="term">Decode</span>：输入是一个 <code>[1, H]</code> 的向量。它和同样的权重矩阵 <code>[H, H]</code> 相乘，退化成 <span class="term">GEMV（矩阵乘向量）</span>。权重同样要完整读一遍，但只服务了 1 行数据，<strong>完全没有摊销</strong>。</li>
+</ul>
+
+<div class="note">
+<strong>一句话记住</strong>：prefill 是「一次读权重，服务 S 个 token」；decode 是「一次读权重，服务 1 个 token」。同样的权重搬运成本，分母差了 S 倍——这就是整个 memory-bound 问题的根源。而一次对话里，decode 通常占了 90% 以上的墙钟时间。
+</div>
+
+<h2 id="s3">3. 亲手推导：decode 的算术强度只有 B</h2>
+
+<p>现在做今天最重要的一次推导。它只需要小学算术，但结论会改变你看推理系统的方式。</p>
+
+<h3>3.1 设定</h3>
+
+<p>考虑模型里任意一个线性层，权重矩阵 <code>W</code> 有 <code>N</code> 个元素，以 FP16 存储（每元素 2 字节）。batch size 记为 <code>B</code>（decode 阶段，B 就是同时在生成的序列条数，每条贡献 1 个 token）。</p>
+
+<h3>3.2 数分子：做了多少次浮点运算</h3>
+
+<p>矩阵乘法里，每个权重元素参与一次乘法和一次加法，即 <span class="key">2 FLOP</span>。B 个 token 各自都要和这份权重乘一遍：</p>
+
+<pre><code>FLOPs = 2 × N × B</code></pre>
+
+<h3>3.3 数分母：从显存搬了多少字节</h3>
+
+<p>关键洞察在这里：<strong>无论 B 是 1 还是 256，这份权重都只需要从 HBM 读进 SM 一次</strong>（读进来后放在片上寄存器/共享内存里，被所有 batch 复用）。所以：</p>
+
+<pre><code>Bytes = 2 × N        （FP16，每元素 2 字节）</code></pre>
+
+<h3>3.4 相除</h3>
+
+<pre><code>算术强度 = FLOPs / Bytes
+         = (2 × N × B) / (2 × N)
+         = B      FLOP/byte</code></pre>
+
+<p>结果干净得有点吓人：<span class="key">decode 阶段的算术强度，数值上就等于 batch size，跟模型多大、有多少层、隐藏维度多少，统统无关</span>。</p>
+
+<p>把它和 §1 的 ridge point 对照：</p>
+
+<table>
+<tr><th>场景</th><th>算术强度</th><th>A100 ridge=153</th><th>结论</th></tr>
+<tr><td>decode, B=1</td><td>1 FLOP/byte</td><td>1 ≪ 153</td><td>极度 memory-bound，算力用掉 ~0.7%</td></tr>
+<tr><td>decode, B=32</td><td>32 FLOP/byte</td><td>32 &lt; 153</td><td>仍 memory-bound，算力用掉 ~21%</td></tr>
+<tr><td>decode, B=160</td><td>160 FLOP/byte</td><td>160 ≈ 153</td><td>刚跨过平衡点</td></tr>
+<tr><td>prefill, S=2048</td><td>~2048 FLOP/byte</td><td>2048 ≫ 153</td><td>compute-bound，算力能用到 50%+</td></tr>
+</table>
+
+<p><strong>类比（数学系版本）</strong>：这就是一个摊销分析。权重搬运是固定成本 <code>C</code>，每个 token 的收益是 <code>r</code>。单位成本 = <code>C/B</code>。B=1 时你为 1 个 token 付了全部固定成本；B=128 时成本被 128 个 token 分摊。<span class="key">LLM decode 的全部性能工程，本质上就是「想尽办法增大这个分母」</span>——continuous batching 增大 B，投机解码让一次前向吐出多个 token（等效增大 B），MoE 则是减小分子 C。你后面会学到的所有推理优化技巧，都能塞进这个式子里理解。</p>
+
+<div class="note">
+<strong>一个必须澄清的点</strong>：算术强度 = B 这个结论只适用于<strong>权重相关的矩阵乘</strong>（QKV 投影、attention 输出投影、FFN 的两三个大矩阵），它们占了 FLOPs 的绝大部分。<strong>attention 计算本身（Q·K<sup>T</sup>、score·V）不在此列</strong>：它读的是 KV cache，而每条序列的 KV cache 是私有的、不能跨 batch 复用，所以它的算术强度<strong>不随 B 增长，永远接近 1</strong>。这意味着：上下文越长、KV cache 越大，attention 部分的访存占比越高，batching 的收益就越被稀释。这正是长上下文推理特别难优化的根本原因，也是 FlashAttention 和 PagedAttention 要解决的战场。
+</div>
+
+<h2 id="s4">4. KV cache：第二个吃显存的大户</h2>
+
+<h3>4.1 它为什么存在</h3>
+
+<p>decode 第 t 步时，新 token 的 Query 需要和<strong>前面所有 token</strong> 的 Key、Value 做注意力。如果每步都重算前面所有 token 的 K、V，复杂度是 O(t²)，慢到不可用。所以把算过的 K、V 存下来复用——这就是 <span class="term">KV cache</span>。它是一次典型的<strong>用空间换时间</strong>：把计算量从 O(t²) 降到 O(t)，代价是显存里多出一块随生成长度线性增长的缓存。</p>
+
+<h3>4.2 公式逐项拆解</h3>
+
+<pre><code>KV_bytes = 2 × L × H_kv × d_head × S × B × bytes_per_elem
+
+  2            ← K 和 V 两份
+  L            ← 层数（每层都有自己的 KV）
+  H_kv         ← KV 头数（MHA 时 = 注意力头数；GQA 时远小于它）
+  d_head       ← 每个头的维度（通常 128）
+  S            ← 序列长度（prompt + 已生成）
+  B            ← 并发序列数
+  bytes_per_elem ← FP16=2, FP8=1, INT4=0.5</code></pre>
+
+<p>先算<strong>单个 token 的单价</strong>（令 S=1, B=1），这个数最实用，建议记住：</p>
+
+<table>
+<tr><th>模型</th><th>L</th><th>H_kv × d_head</th><th>FP16 每 token 每序列</th></tr>
+<tr><td>Llama-2 7B（MHA）</td><td>32</td><td>32 × 128 = 4096</td><td>2×32×4096×2 B = <strong>512 KB</strong></td></tr>
+<tr><td>Llama-2 13B（MHA）</td><td>40</td><td>40 × 128 = 5120</td><td>2×40×5120×2 B = <strong>800 KB</strong></td></tr>
+<tr><td>Llama-2 70B（GQA, 8 KV 头）</td><td>80</td><td>8 × 128 = 1024</td><td>2×80×1024×2 B = <strong>320 KB</strong></td></tr>
+<tr><td>假想的 70B 若用 MHA（64 头）</td><td>80</td><td>64 × 128 = 8192</td><td>2×80×8192×2 B = <strong>2.5 MB</strong></td></tr>
+</table>
+
+<p>最后两行的对比值得盯住看：<span class="key">70B 的参数量是 7B 的 10 倍，但它的 KV cache 单价反而更便宜（320 KB vs 512 KB）</span>。原因是它用了 <span class="term">GQA（Grouped-Query Attention）</span>——64 个 Query 头共享 8 组 KV，KV 直接砍到 1/8。如果 70B 老老实实用 MHA，单价会是 2.5 MB/token，一条 4K 上下文的对话光 KV 就要 10GB，多租户服务根本没法做。<strong>GQA 表面上是个模型结构选择，实质上是一个纯粹的推理系统优化</strong>，它换来的不只是显存，还有 attention 部分的访存量。</p>
+
+<h3>4.3 直接能用的估算脚本</h3>
+
+<pre><code>python3 - &lt;&lt;'EOF'
+def kv_gb(L, h_kv, d_head, seq, batch, bytes_per=2):
+    return 2*L*h_kv*d_head*seq*batch*bytes_per / 1024**3
+
+# Llama-2 7B, 4K 上下文, 32 条并发
+print("7B  :", round(kv_gb(32, 32, 128, 4096, 32), 2), "GB")
+# Llama-2 70B (GQA), 4K 上下文, 32 条并发
+print("70B :", round(kv_gb(80,  8, 128, 4096, 32), 2), "GB")
+# 7B 但用 FP8 存 KV
+print("7B fp8:", round(kv_gb(32, 32, 128, 4096, 32, 1), 2), "GB")
+EOF</code></pre>
+
+<p>跑出来是 <code>7B: 64.0 GB</code>、<code>70B: 20.0 GB</code>、<code>7B fp8: 32.0 GB</code>。第一个数字尤其值得停下来想三秒：<span class="key">7B 模型权重只有 13GB，但 32 条 4K 并发的 KV cache 就要 64GB——KV 比模型本身大 5 倍</span>。一张 A100 80GB 根本塞不下。这就是为什么现代推理引擎里，「KV cache 的内存管理」是比「权重加载」重要得多的工程问题，也是 PagedAttention 这类技术存在的全部理由（明天和后天会展开）。</p>
+
+<h2 id="s5">5. Batching：唯一能把算术强度拉上去的旋钮</h2>
+
+<p>既然算术强度 = B，提升 GPU 利用率的路径就唯一确定了：<strong>把 B 做大</strong>。但这里有几个层次的细节。</p>
+
+<h3>5.1 为什么 batching 几乎「免费」</h3>
+
+<p>在 memory-bound 区间内，一次 decode 的耗时约等于「把全部权重读一遍所需的时间」，这个时间<strong>跟 B 无关</strong>。所以：</p>
+
+<div class="ascii">A100 跑 Llama-2 7B (FP16, 权重 13 GB, 带宽 2.0 TB/s)
+每步 decode 至少耗时 = 13 GB / 2000 GB/s ≈ 6.5 ms   ← 与 B 无关！
+
+  B=1   → 6.5ms 产出 1 个 token   → 154 tok/s   算力利用 ~0.7%
+  B=16  → ~6.6ms 产出 16 个 token → 2400 tok/s  算力利用 ~11%
+  B=64  → ~7.2ms 产出 64 个 token → 8900 tok/s  算力利用 ~40%
+  B=160 → 开始转为 compute-bound，再加 B 收益递减</div>
+
+<p>从 B=1 到 B=64，<strong>单个用户感受到的速度几乎没变（6.5ms → 7.2ms 每 token），但系统总吞吐涨了 57 倍</strong>。这是整个推理服务经济学的基石：<span class="key">在 memory-bound 区间，并发几乎是白送的</span>。你租一张 A100 每小时的成本是固定的，服务 1 个用户和服务 60 个用户花的钱一样多。</p>
+
+<h3>5.2 那为什么不无限加大 B</h3>
+
+<p>三堵墙依次挡住你：</p>
+
+<ol>
+  <li><strong>KV cache 显存墙</strong>（最常见）。由 §4 可知，B 每加 1，就要吃掉 <code>S × 单价</code> 的显存。7B 模型在 80GB 卡上，扣掉 13GB 权重和约 5GB 激活/框架开销，剩 ~62GB 给 KV，除以 4K 上下文的 2GB/条，<strong>最多只能并发 31 条</strong>。你想开 B=160 拉满算力？显存先崩。</li>
+  <li><strong>ridge point 墙</strong>。B 超过 ~153（A100）后转为 compute-bound，再加 B 吞吐不再线性增长，而延迟开始变差。</li>
+  <li><strong>延迟 SLO 墙</strong>。B 大了之后每步耗时会缓慢上升，且新请求要排队等待调度。如果你的产品承诺 TPOT &lt; 30ms，就不能一味追吞吐。</li>
+</ol>
+
+<p><span class="key">结论：绝大多数真实部署卡在第 1 堵墙上——不是算力不够，是 KV cache 装不下更多并发</span>。所以「省 KV cache」＝「提吞吐」，这条等式请刻在脑子里。GQA、KV 量化、PagedAttention、prefix sharing，全都是在拆这堵墙。</p>
+
+<h3>5.3 static vs continuous batching（明天的伏笔）</h3>
+
+<p>朴素做法是 <span class="term">static batching</span>：凑齐 B 条请求一起发，全部生成完才收。问题是一批里有的请求生成 20 个 token 就停了，有的要生成 2000 个——短的必须干等长的，GPU 大量空转。<span class="term">continuous batching</span>（也叫 iteration-level scheduling）改成每生成一步就检查一次：完成的请求立刻退出、腾出的槽位立刻塞进新请求。实测能把吞吐再提升 2~3 倍。这是 vLLM 相对早期框架最大的一处胜利，Day 53 会专门讲。</p>
+
+<h2 id="s6">6. 量化：省的是「搬运费」，不是「计算费」</h2>
+
+<p>现在你有了正确的框架，可以重新理解量化了。大多数人以为「量化 = 用低精度算得更快」。<span class="key">在 decode 阶段，这个理解基本是错的</span>。</p>
+
+<p>回到公式。把权重从 FP16（2 字节）换成 INT4（0.5 字节）：</p>
+
+<pre><code>Bytes = 0.5 × N        ← 降到 1/4
+FLOPs = 2 × N × B      ← 完全没变（还是要算这么多次乘加）
+
+算术强度 = (2×N×B) / (0.5×N) = 4B     ← 强度翻了 4 倍</code></pre>
+
+<p>注意发生了什么：<strong>量化没有减少一次浮点运算，它减少的是要搬运的字节数</strong>。在 memory-bound 区间，耗时 ≈ 字节数 / 带宽，所以字节数降到 1/4，decode 速度理论上就快 4 倍。实际上 INT4（AWQ/GPTQ）能拿到 2.5~3.5 倍，因为要额外做反量化（dequant）、且 KV cache 和激活并没有跟着变小。</p>
+
+<div class="ascii">量化的收益分布（decode 阶段）
+  ┌─────────────────────────────────────────┐
+  │ 权重搬运时间   ██████████████████  ← 砍到 1/4，大赚
+  │ 反量化开销     ▓                   ← 新增的小成本
+  │ KV cache 访存  ████                ← 不变（除非单独量化 KV）
+  │ 实际算力使用   ▏                   ← 本来就没用满，无所谓
+  └─────────────────────────────────────────┘</div>
+
+<p>由此推出几个不那么直观、但非常重要的结论：</p>
+
+<ul>
+  <li><span class="key">量化对 prefill 几乎没有帮助，甚至可能变慢</span>。prefill 是 compute-bound 的，瓶颈在算力不在带宽；而反量化是纯新增开销。所以「量化后 TTFT 没变、TPOT 大幅下降」是完全正常的现象，别以为是部署错了。</li>
+  <li><span class="key">B 很大时量化收益递减</span>。B=200 时系统已经 compute-bound，减少权重搬运不再是瓶颈。所以量化最适合的场景是「显存紧张 + 并发不高」（如单卡跑大模型、边缘部署），而不是高并发集群。</li>
+  <li><strong>权重量化和 KV cache 量化是两件不同的事</strong>。前者省的是每步固定的权重搬运，后者省的是随并发和上下文增长的 KV 占用（从而允许更大的 B）。高并发长上下文场景下，<strong>KV cache 量化（FP8/INT8）往往比权重量化更值钱</strong>。</li>
+  <li><strong>量化能让模型「装得下」，这个价值常常大于速度</strong>。70B FP16 需要 140GB（至少 2 张 A100），INT4 后只要 ~35GB，单张 A100 就能跑。从「要两台机器」到「要一张卡」，这是质变。</li>
+</ul>
+
+<h2 id="s7">7. 实战：算出 Llama-2 7B / 70B 的吞吐上限</h2>
+
+<p>把今天所有公式串成一套可以在白板上完成的估算流程。</p>
+
+<h3>7.1 四步估算法</h3>
+
+<pre><code>① 权重显存      = 参数量 × bytes_per_param
+② 单步 decode 下限 = 权重显存 / HBM带宽          （B=1 的 TPOT 下限）
+③ KV 可用空间   = 显存总量 - 权重 - 激活/框架开销(≈5~10GB)
+④ 最大并发 B    = KV可用空间 / (上下文长度 × KV单价)</code></pre>
+
+<h3>7.2 案例 A：Llama-2 7B FP16 @ 单张 A100 80GB</h3>
+
+<pre><code>① 权重      = 7e9 × 2 B          = 13 GB
+② TPOT下限  = 13 / 2000 (GB/s)   = 6.5 ms  → 单用户上限 ≈ 154 tok/s
+③ KV空间    = 80 - 13 - 5        = 62 GB
+④ 最大并发  = 62 GB / (4096 × 512 KB) = 62 / 2.0 ≈ 31 条 (4K 上下文)
+                                    62 / 0.5 ≈ 124 条 (1K 上下文)
+系统吞吐上限 ≈ 31 / 0.0065 s ≈ 4700 tok/s (4K 场景, 理想值)</code></pre>
+
+<p>实测中 vLLM 在 A100 上跑 7B，单请求约 90~130 tok/s（低于 154 是因为还有 attention 访存、kernel 启动、采样、Python 开销）。<span class="key">用「实测 ÷ 理论上限」得到的比值叫 MBU（Model Bandwidth Utilization，模型带宽利用率），是评价推理引擎好坏最诚实的单一指标</span>。MBU 60~80% 算优秀，低于 40% 说明配置或框架有明显问题。</p>
+
+<h3>7.3 案例 B：Llama-2 70B FP16 @ 2× A100 80GB（张量并行）</h3>
+
+<pre><code>① 权重      = 70e9 × 2 B = 140 GB  → 每卡 70 GB
+② TPOT下限  = 70 / 2000  = 35 ms   → 单用户上限 ≈ 29 tok/s
+   （TP 下两卡并行读各自的分片，所以用「每卡 70GB」而非 140GB；
+     但每层要做一次 all-reduce 通信，实际会再慢 10~30%）
+③ KV空间    = 160 - 140 - 10 = 10 GB  ← 只剩这么点！
+④ 最大并发  = 10 GB / (4096 × 320 KB) = 10 / 1.25 ≈ 8 条</code></pre>
+
+<p>这个结果很说明问题：<span class="key">2 张 A100 跑 70B 在数学上「装得下」，但只能服务 8 条 4K 并发，是一个经济上很难成立的部署</span>。这正是生产环境里 70B 普遍用 <strong>4×A100 / 8×A100</strong>（把 KV 空间从 10GB 拉到 170GB+，并发从 8 提到 130+），或者干脆用 <strong>INT4 量化</strong>（权重降到 35GB，两卡剩 115GB 给 KV，并发直接到 90+）的原因。<strong>加卡加的不是算力，是 KV cache 的容纳空间</strong>——这句话概括了整个 LLM 推理的部署经济学。</p>
+
+<h3>7.4 随手带走的 cheat sheet</h3>
+
+<table>
+<tr><th>你想知道</th><th>怎么算</th></tr>
+<tr><td>单用户速度天花板</td><td>HBM带宽 ÷ 权重字节数（tok/s）</td></tr>
+<tr><td>每 token 的计算量</td><td>≈ 2 × 参数量 FLOP（7B → 14 GFLOP）</td></tr>
+<tr><td>decode 算术强度</td><td>= batch size（FP16）；= 4 × batch size（INT4）</td></tr>
+<tr><td>KV 单价</td><td>2 × L × H_kv × d_head × bytes</td></tr>
+<tr><td>什么时候转 compute-bound</td><td>batch ≳ 150（A100）/ 300（H100）</td></tr>
+<tr><td>加卡先解决什么</td><td>KV 容量 &gt; 权重容量 &gt; 算力</td></tr>
+</table>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. TTFT 时间侧信道会泄露别人的 prompt。</strong> 现代推理引擎普遍开启 <span class="term">prefix caching</span>：如果新请求的前缀和缓存里某条已有前缀完全相同，就跳过这段的 prefill，直接复用 KV。由 §2 可知 prefill 耗时和 token 数近似成正比，所以<span class="key">「命中缓存」和「未命中」的 TTFT 差异是可测量的，常常差好几十毫秒</span>。攻击者只要在多租户服务上反复提交猜测的前缀、观察 TTFT，就能二分出别人的 system prompt 或敏感文档内容——这是标准的 cache-timing 攻击（Day 34 学过的思路）搬到 LLM 服务上。防御是按租户隔离 prefix cache 命名空间，或对 TTFT 加随机抖动。</p>
+
+<p><strong>2. KV cache 是最廉价的 DoS 靶子。</strong> §5.2 说过并发上限由 KV 显存决定，而 KV 占用 ∝ 上下文长度。这意味着攻击者的成本和防守方的成本极不对称：<span class="key">发送一条 128K 上下文的请求，输入 token 的费用可能只有几分钱，却会独占相当于 30 条普通请求的 KV 空间</span>。少量这样的请求就能把 KV 池吃干，触发引擎的 preemption（换出/重算），让所有正常用户的延迟雪崩。防护不能只做 QPS 限流，必须做 <strong>token 预算限流</strong>——按「上下文长度 × 并发时长」计费和限额，这才是真实资源的度量。</p>
+
+<p><strong>3. Agent 的多轮循环天生会撑爆 KV。</strong> 一个 ReAct 式 Agent 每轮都把工具返回结果追加进上下文，上下文单调增长。按 7B 的 512 KB/token 算，一个跑了 50 轮、累积 60K token 的 Agent 会话要占 30GB KV——<span class="key">一个失控的 Agent 循环就能吃掉半张 A100</span>。设计 Agent 服务时必须硬性设定单会话上下文上限、工具输出截断长度和最大轮数，并把这些当作安全控制（防资源耗尽）而不只是产品参数。</p>
+
+<p><strong>4. 量化会改变模型行为，安全对齐可能一起被量化掉。</strong> §6 说量化几乎不损失通用能力（perplexity 变化很小），但<span class="key">「几乎不损失」是在通用基准上测的，安全对齐是分布的长尾，恰恰最脆弱</span>。已有研究观察到 INT4 量化后模型的拒答率下降、越狱成功率上升。所以在 Agent 安全的工程规范里，量化必须被当作一次<strong>需要重新做安全评测的模型变更</strong>，而不是一次纯粹的部署优化——红队测试要在实际部署的那个量化版本上跑，不能拿 FP16 的结果代替。</p>
+
+<p><strong>5. continuous batching 让不同租户的数据同时在一个 kernel 里。</strong> 为了 §5 的吞吐收益，引擎会把来自不同用户的请求塞进同一批。这意味着 A 公司和 B 公司的 KV block 在同一块显存里、由同一张 block table 索引。<span class="key">一个 block 分配或引用计数的 bug，就是一次跨租户内容泄露</span>；prefix caching 若用内容哈希做键而不带租户 ID，哈希设计不当还可能被主动构造碰撞。做 LLM 平台安全审计时，PagedAttention 的 block 分配/回收/共享逻辑和 prefix cache 的键设计，应当被列为最高优先级的审计对象——它是这套系统里的「内存管理器」，而内存管理器出 bug 的历史后果你在 Day 41 会更深刻地体会到。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手：亲手测出 memory-bound</strong></p>
+<p>找一台有 GPU 的机器（云上按小时租一张也行），用 <code>nvidia-smi --query-gpu=name,memory.total --format=csv</code> 确认型号，然后跑下面这段——它用一个纯 GEMV vs GEMM 的对比复现今天的核心结论，不需要装 vLLM：</p>
+<pre><code>python3 - &lt;&lt;'EOF'
+import torch, time
+d = 8192
+W = torch.randn(d, d, device='cuda', dtype=torch.float16)
+def bench(B, iters=200):
+    x = torch.randn(B, d, device='cuda', dtype=torch.float16)
+    for _ in range(10): _ = x @ W
+    torch.cuda.synchronize(); t = time.time()
+    for _ in range(iters): _ = x @ W
+    torch.cuda.synchronize()
+    dt = (time.time()-t)/iters
+    tflops = 2*B*d*d/dt/1e12
+    print(f"B={B:4d}  {dt*1e6:8.1f} us  {tflops:7.1f} TFLOPS")
+for B in [1, 2, 8, 32, 128, 512, 2048]: bench(B)
+EOF</code></pre>
+<p>回答：从 B=1 到 B=32，耗时增长了几倍？（应该远小于 32 倍）达到的 TFLOPS 在哪个 B 开始不再线性增长？把这个拐点和你这张卡的 ridge point 对比，差多少？为什么会有差异？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察：为你手上的模型算一张容量表</strong></p>
+<p>拿 §4.3 的脚本，查一个你实际关心的模型的配置（<code>config.json</code> 里的 <code>num_hidden_layers</code>、<code>num_key_value_heads</code>、<code>hidden_size / num_attention_heads</code> = d_head），填进去。做一张三行表：上下文 2K / 8K / 32K 时，在一张 80GB 卡上分别最多能并发多少条。然后回答：<span class="key">如果产品要把上下文从 8K 提到 32K，在不加卡的前提下，你的最大并发会掉到原来的几分之一？</span>需要靠什么手段补回来（列 3 个）？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考题</strong></p>
+<p>有人向你推销一张新加速卡：算力是 A100 的 5 倍（1560 TFLOPS），显存带宽和 A100 一样（2.0 TB/s），显存 80GB，价格是 A100 的 3 倍。你的业务是 Llama-2 7B 在线对话服务，典型上下文 2K、并发 40。请用今天的公式论证：<strong>这张卡值不值得买？</strong>（提示：先算它的 ridge point，再算你当前工作负载的算术强度，判断你落在 roofline 的哪一段。）进一步：如果换成另一张「算力和 A100 相同、但带宽 4 TB/s、显存 160GB」的卡，同样贵 3 倍，你的答案会变吗？为什么？这道题的答案，就是你以后做 GPU 选型时最该问的第一个问题。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 39 · 内存优化技术</strong>。今天我们证明了「搬运字节数」才是 LLM 推理真正的成本单位。明天就系统地讲怎么在软件层把这个成本压下去：huge page 如何减少 TLB miss（回到 Day 08 的页表）、prefetch 怎么让数据提前到位、SIMD 为什么要求内存对齐、AoS 与 SoA 两种数据布局对缓存命中率的巨大差异、cache-oblivious 算法的思想、NUMA-aware 分配的实践，以及透明大页（THP）为什么在数据库和推理服务上经常需要被主动关掉。这些技术不只服务于 LLM——它们是所有高性能系统的通用武器库。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
