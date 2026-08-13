@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 39 · 内存优化技术</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 39 · 内存优化技术</h1>
+  <div class="meta">Week 06 · 周四 · 2026-08-13 · 主线：内存层级与 NUMA · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们证明了一件事——在现代硬件上，<span class="key">「搬运字节数」才是真正的成本，计算几乎是免费的</span>。今天顺理成章地问下一个问题：既然搬运这么贵，软件层能做点什么把它压下去？答案是一整套「内存优化技术」，它们全部围绕同一个目标——让 CPU/GPU 想要的数据，在它需要的那一刻，已经在离它最近的地方。今天我们学七件工具：大页（huge page）怎么把 TLB miss 砍掉几个数量级、预取（prefetch）怎么让数据提前上路、SIMD 为什么对内存对齐如此挑剔、AoS 与 SoA 两种数据摆放方式为什么能差出 5 倍性能、cache-oblivious 算法凭什么不知道缓存大小也能用满缓存、NUMA-aware 分配为什么在多路服务器上是生死线，以及透明大页（THP）这个「好心办坏事」的功能为什么在数据库和推理服务里经常要被亲手关掉。学完你会有一份「让程序变快」的通用武器库，它对 numpy、对 vLLM、对任何吃内存带宽的系统都成立。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">大页（huge page）：给 TLB 减负</a></li>
+  <li><a href="#s2">预取（prefetch）：让数据提前上路</a></li>
+  <li><a href="#s3">对齐与 SIMD：为什么向量化挑剔内存边界</a></li>
+  <li><a href="#s4">AoS vs SoA：同样的数据，不同的摆法</a></li>
+  <li><a href="#s5">cache-oblivious：不知道缓存大小也能用满缓存</a></li>
+  <li><a href="#s6">NUMA-aware：数据要待在属于它的那半边</a></li>
+  <li><a href="#s7">THP 抖动：好心办坏事的透明大页</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 大页（huge page）：给 TLB 减负</h2>
+
+<p>回到 Day 08 的知识：程序里用的是<span class="term">虚拟地址</span>，每次访问内存，CPU 都要把虚拟地址翻译成物理地址，翻译规则存在<span class="term">页表</span>里。为了不让每次翻译都去查内存（那太慢了），CPU 里有个小缓存叫 <span class="term">TLB（Translation Lookaside Buffer，地址翻译后备缓冲）</span>，专门缓存最近用过的「虚拟页→物理页」映射。</p>
+
+<p>问题在于：标准页是 <span class="key">4KB</span>。TLB 的条目数很有限（通常几十到一两千条）。假设一个 TLB 能装 1536 条 4KB 的映射，那它总共只能「覆盖」<code>1536 × 4KB ≈ 6MB</code> 的地址空间。你的 LLM 权重有 14GB，KV cache 又几个 GB——远远超过 6MB。于是程序一边扫内存，一边不停地 <span class="term">TLB miss</span>：找不到映射，就得去内存里走多级页表把地址翻出来（Day 08 讲过的 page table walk），这一次 miss 可能要几十到上百个时钟周期。</p>
+
+<p><span class="term">大页（huge page）</span>的思路极其简单：把页做大。x86-64 支持 <span class="key">2MB</span> 和 <span class="key">1GB</span> 的大页。同样 1536 条 TLB 条目，如果每条覆盖 2MB，覆盖范围就从 6MB 变成 <code>1536 × 2MB = 3GB</code>——一下扩大 512 倍。翻译大数组时 TLB 几乎不再 miss。</p>
+
+<p><strong>类比</strong>：TLB 是你办公桌上的一叠便利贴，每张写一个「书名→书架位置」。4KB 页 = 每张便利贴只对应图书馆一个格子，你很快贴满、找不到就得跑去总台查目录（page walk）。2MB 大页 = 一张便利贴对应一整排书架，同样多的便利贴，覆盖的书多了 512 倍，你跑总台的次数暴跌。</p>
+
+<pre><code># 看系统当前大页配置
+cat /proc/meminfo | grep -i huge
+# HugePages_Total / HugePages_Free / Hugepagesize: 2048 kB
+
+# 预留 512 个 2MB 大页（= 1GB）——需要 root
+sudo sysctl vm.nr_hugepages=512
+
+# 程序里用 mmap 显式申请大页内存（C 视角）
+# mmap(NULL, size, PROT_READ|PROT_WRITE,
+#      MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB, -1, 0);</code></pre>
+
+<div class="note">
+<strong>关键事实</strong>：
+<ul>
+<li>大页有两种：<strong>显式 HugeTLB</strong>（预留、锁定、不换出，性能确定）和<strong>透明大页 THP</strong>（内核自动合并，见第 7 节，有惊喜也有惊吓）。</li>
+<li>大页减少的是 <strong>TLB miss</strong> 和 <strong>页表层级</strong>，对<span class="key">顺序扫大数组、随机访问大哈希表</span>这类「地址范围大」的负载收益最明显。</li>
+<li>代价：大页不可换出、分配粒度粗，容易造成内存浪费和碎片；小程序用不着。</li>
+</ul>
+</div>
+
+<h2 id="s2">2. 预取（prefetch）：让数据提前上路</h2>
+
+<p>Day 31 讲过 CPU 会自动做<span class="term">硬件预取</span>：发现你在顺序扫内存，就提前把后面的 cache line 拉进缓存。但硬件预取只擅长「规律的访问」——顺序、固定步长。一旦访问模式不规律（比如遍历链表、跳着访问），硬件就猜不到下一个地址，预取失效，每次访问都要等一次完整的内存延迟（~100ns，相当于几百个时钟周期干等）。</p>
+
+<p>这时可以用<span class="term">软件预取</span>：你比 CPU 更懂自己的算法，提前告诉它「等下我要用这个地址，麻烦现在就开始搬」。在数据真正被用到之前，搬运和当前计算就重叠起来了，延迟被「藏」在计算背后。</p>
+
+<pre><code>// C：遍历一个索引数组，跳着访问 data[idx]（硬件预取搞不定）
+for (int i = 0; i &lt; n; i++) {
+    // 提前预取「未来第 8 个」要用的地址
+    __builtin_prefetch(&data[index[i + 8]], 0 /*读*/, 3 /*高时间局部性*/);
+    sum += data[index[i]];   // 用当前的
+}</code></pre>
+
+<p><strong>类比</strong>：做菜时，你不会等一道菜炒完了才去冰箱拿下一道的菜——你会趁着这锅还在炒，提前把下一样从冰箱拿出来解冻。预取就是「趁 CPU 忙着算这一批，让内存控制器先去把下一批搬到缓存」，用计算的时间掩盖搬运的时间。</p>
+
+<p>预取是把双刃剑：<span class="key">预取距离（提前几步）太近，数据还没到就用到了，白搭；太远，预取来的数据被别的东西挤出缓存了，还是要重取，甚至污染缓存</span>。所以工业界更提倡的是「让访问模式本身变规律」，把预取交给硬件——这就引出了下面两节的数据布局。</p>
+
+<h2 id="s3">3. 对齐与 SIMD：为什么向量化挑剔内存边界</h2>
+
+<p>Day 32 我们会细讲 SIMD（单指令多数据）：一条 AVX 指令能同时对 8 个 float 做加法。但 SIMD 从内存装载数据时，对地址有个要求——<span class="term">对齐（alignment）</span>。</p>
+
+<p><span class="term">内存对齐</span>指的是：一个 <code>N</code> 字节的数据，它的起始地址最好是 <code>N</code> 的整数倍。对 256 位（32 字节）的 AVX 向量，理想情况是从 32 字节对齐的地址开始装载。为什么？因为<span class="key">缓存是以 64 字节的 cache line 为单位搬运的</span>。如果你的 32 字节数据横跨了两条 cache line 的边界（比如从地址 48 开始，占 48~79，跨过了 64 这条线），CPU 就得读两条 cache line 才能凑齐这一个向量——搬运量翻倍，还可能触发额外的对齐处理。对齐好了，一个向量正好落在一条 cache line 里，一次搞定。</p>
+
+<pre><code># 用 numpy 观察对齐（numpy 默认已对齐分配，这里演示概念）
+import numpy as np
+a = np.zeros(1_000_000, dtype=np.float32)
+print(a.ctypes.data % 64)   # 起始地址对 64 取模，通常是 0 = 对齐
+
+# C 里显式申请对齐内存
+# posix_memalign(&ptr, 32, size);      // 32 字节对齐，给 AVX 用
+# 或 C11: aligned_alloc(64, size);      // 64 字节 = 一条 cache line</code></pre>
+
+<p><strong>类比</strong>：cache line 是搬家时的标准纸箱，一箱装 64 件。SIMD 一次要取「连续 32 件」。如果这 32 件正好装在一个箱子里，搬一箱就够；如果它们被拆在两个箱子的交界处（前箱塞了后 16 件、后箱装了前 16 件），你就得搬两个箱子才凑齐——对齐的本质，是让「你要的一批」不要骑在两个纸箱的缝上。</p>
+
+<div class="note">
+<strong>关键事实</strong>：
+<ul>
+<li>现代 CPU 对「非对齐装载」的惩罚比十年前小了很多，但<span class="key">跨 cache line</span> 和<span class="key">跨页</span>的惩罚依然真实存在，热点循环里仍要对齐。</li>
+<li>对齐还影响 <span class="term">false sharing</span>（Day 31）：把不同线程各自写的变量对齐到独立 cache line，能避免它们互相踢来踢去。</li>
+<li>numpy、PyTorch 的张量分配器默认已经做了对齐，你平时享受了免费午餐；写 C/CUDA kernel 时才要自己操心。</li>
+</ul>
+</div>
+
+<h2 id="s4">4. AoS vs SoA：同样的数据，不同的摆法</h2>
+
+<p>这是数据布局里最经典、收益最大、也最被忽视的一条。假设你有 100 万个粒子，每个粒子有位置 <code>x,y,z</code> 和速度 <code>vx,vy,vz</code>。有两种摆法：</p>
+
+<div class="ascii">AoS（Array of Structs，结构体数组）——「一个个粒子排队」
+  [x0 y0 z0 vx0 vy0 vz0][x1 y1 z1 vx1 vy1 vz1][x2 ...]...
+   ↑ 一个粒子的所有字段挤在一起
+
+SoA（Struct of Arrays，数组的结构体）——「同类字段各成一列」
+  x:  [x0 x1 x2 x3 ...]
+  y:  [y0 y1 y2 y3 ...]
+  vx: [vx0 vx1 vx2 ...]
+   ↑ 所有粒子的同一个字段连续排列</div>
+
+<p>现在你要做一件事：「把所有粒子的 x 坐标加起来」。看看两种布局下缓存发生了什么：</p>
+
+<ul>
+<li><strong>AoS</strong>：你只要 <code>x</code>，但每读一个 <code>x</code>，缓存都会把它周围 64 字节（也就是 <code>y z vx vy vz</code> 和下一个粒子的一部分）一起拉进来。<span class="key">你用的只有 1/6，剩下 5/6 的带宽全浪费了</span>。而且 SIMD 也没法一次装载 8 个连续的 x（它们中间隔着别的字段）。</li>
+<li><strong>SoA</strong>：所有 <code>x</code> 连续排列，一条 cache line 装的全是你要的 x，带宽 100% 有效，还能直接 SIMD 向量化。</li>
+</ul>
+
+<p>对「一次只碰一部分字段、且要批量处理」的负载，SoA 常常能带来 <span class="key">3~8 倍</span> 的加速——纯粹靠改摆法，一行计算逻辑都没动。</p>
+
+<pre><code># Python 里体会 AoS vs SoA（用 numpy 结构化数组对比列式）
+import numpy as np, time
+
+N = 10_000_000
+# AoS：结构化数组，每个元素含 6 个字段
+aos = np.zeros(N, dtype=[('x','f4'),('y','f4'),('z','f4'),
+                         ('vx','f4'),('vy','f4'),('vz','f4')])
+# SoA：x 单独一列，连续存储
+soa_x = np.zeros(N, dtype='f4')
+
+t=time.time(); s1=aos['x'].sum();  print("AoS sum x:", time.time()-t)
+t=time.time(); s2=soa_x.sum();     print("SoA sum x:", time.time()-t)
+# SoA 通常明显更快：连续内存 + 满带宽 + 可向量化</code></pre>
+
+<p><strong>类比</strong>：AoS 像一本「每人一页」的花名册，你要统计全班身高，得一页页翻，每页大部分信息（姓名、住址、爱好）都用不上。SoA 像 Excel 里「身高」单独一列，你一眼从上拉到底，全是有用的。数据科学家天天用的 DataFrame（列式存储）、Parquet 文件格式，本质都是 SoA 思想——这也是为什么它们做聚合分析这么快。</p>
+
+<h2 id="s5">5. cache-oblivious：不知道缓存大小也能用满缓存</h2>
+
+<p>前面的技术大多要「知道硬件参数」——cache line 多大、TLB 多少条、L2 多大。但硬件五花八门，写死参数不通用。<span class="term">cache-oblivious（缓存无关）算法</span>是一个漂亮的思想：<span class="key">设计一个不含任何缓存参数的算法，却能在任意缓存层级上都自动接近最优的缓存利用率</span>。</p>
+
+<p>核心手法是<span class="term">分治到底</span>：把问题递归地切成越来越小的子问题。切着切着，某一层的子问题必然会小到「正好能塞进 L1」，再往下的所有计算就都在缓存里完成了——而你根本不需要知道 L1 到底多大，递归自然会命中那个尺寸。因为它对 L1、L2、L3 每一层都同时成立，所以叫「缓存无关」。</p>
+
+<p>最经典的例子是<span class="term">分块矩阵乘法（tiled matmul）</span>的递归版，以及递归的矩阵转置。朴素的三重循环矩阵乘法，内层按行列跳着访问，cache miss 极多；而把矩阵递归四分、分块相乘，每个小块都能驻留缓存，miss 大幅下降。</p>
+
+<div class="ascii">朴素 matmul：C = A × B
+  for i: for j: for k: C[i][j] += A[i][k]*B[k][j]
+  → 访问 B[k][j] 时按列跳，步长 = 一整行，几乎每次都 miss
+
+分块 / 递归 matmul：
+  把 A、B、C 都切成 4 块，C 的每块 = 对应子块乘加
+  → 子块小到能进缓存后，块内计算全部命中，miss 骤降</div>
+
+<p><strong>类比</strong>：你要在一个巨大的仓库里把货配对。笨办法是每配一对都跑遍整个仓库。聪明办法是先把仓库分成 4 个区、每区再分 4 个小格……分到某个粒度，一个小格里的货正好能全摊在你面前的工作台上，配对时不用再跑动。你没量过工作台多大，但「一直分下去」保证了总有一层正好合适。numpy 的 <code>@</code>、BLAS 库（OpenBLAS/MKL）内部的高性能 matmul 就大量用了分块思想（虽然为极致性能它们其实是 cache-<em>aware</em> 手工调参，但 cache-oblivious 给了理论上的优雅保证）。</p>
+
+<h2 id="s6">6. NUMA-aware：数据要待在属于它的那半边</h2>
+
+<p>Day 37 我们学了 <span class="term">NUMA（非统一内存访问）</span>：多路服务器上，每颗 CPU 有「自己的」本地内存，访问本地内存快，访问「另一颗 CPU 挂的」远程内存要跨 CPU 互联走一趟，慢 1.5~2 倍还占用互联带宽。</p>
+
+<p><span class="term">NUMA-aware 分配</span>的原则一句话：<span class="key">让计算数据的那个线程，和它要用的内存，落在同一个 NUMA 节点上</span>。Linux 默认用 <span class="term">first-touch（首次触碰）</span>策略——一块内存物理上被分配到「第一个写它的线程」所在的节点。所以陷阱是：如果你在主线程里 <code>malloc</code> 并初始化一个大数组（全落在节点 0），再开一堆工作线程分散到节点 0/1 去处理它，那节点 1 的线程每次访问都是慢的远程访问。</p>
+
+<pre><code># 看机器的 NUMA 拓扑
+numactl --hardware        # 有几个 node、各自多少内存、node 间距离矩阵
+lscpu | grep -i numa      # 每个 node 挂哪些 CPU
+
+# 把程序绑到 node 0 的 CPU、且只用 node 0 的内存
+numactl --cpunodebind=0 --membind=0 ./my_program
+
+# 交错分配（大内存均摊到所有 node，适合带宽敏感型）
+numactl --interleave=all ./my_program</code></pre>
+
+<p><strong>类比</strong>：一栋楼两层，每层有自己的仓库。一楼的工人去一楼仓库拿料很快，跑去二楼仓库拿就得爬楼梯。NUMA-aware 就是「安排工人在自己楼层干活、料也放在自己楼层」。first-touch 的坑在于：料是「谁第一个签收就放到谁的楼层」，如果全由一楼前台统一签收，二楼工人就得一趟趟爬楼梯——正确做法是让每个工人自己签收自己那份料（在各自线程里初始化各自的数据）。</p>
+
+<div class="note">
+<strong>关键事实</strong>：跨 NUMA 访问在大模型多卡训练/推理里是真实的性能杀手——CPU 侧的数据加载、pin memory、以及 GPU 通过 PCIe 挂在哪个 NUMA 节点，都会影响 <code>H2D</code>（host→device）拷贝速度。生产部署时常用 <code>numactl</code> 或 <code>--cpuset</code> 把推理进程绑到「和它的 GPU 同节点」的 CPU 上。这点 Day 46（GPU 互联）会再深入。</p>
+</div>
+
+<h2 id="s7">7. THP 抖动：好心办坏事的透明大页</h2>
+
+<p>第 1 节说大页好。于是内核想：干脆我自动帮你用大页，程序不用改代码——这就是 <span class="term">透明大页（Transparent Huge Pages, THP）</span>。听起来很美，但它在生产系统里恶名远扬，经常被 DBA 和 SRE 亲手关掉。为什么？</p>
+
+<p>问题出在 THP 的「自动」上。内核有个后台线程 <span class="term">khugepaged</span>，会扫描内存、试图把连续的 4KB 小页「合并」成 2MB 大页。合并需要一整块连续的 2MB 物理内存。当系统跑久了、内存碎片化后，为了凑出这 2MB 连续空间，内核可能要<span class="key">同步地去压缩内存、换出别的页、甚至阻塞你的进程</span>——本来一次快速的内存分配，突然卡住几十毫秒。这种不可预测的延迟尖刺，就是臭名昭著的 <span class="term">THP 抖动 / 延迟毛刺（latency spike）</span>。</p>
+
+<p>对<span class="key">追求稳定低延迟</span>的系统（数据库如 MongoDB/Redis/Oracle、以及在线推理服务），一次几十毫秒的卡顿会直接体现在 P99 延迟上，比 THP 带来的那点吞吐收益糟糕得多。所以它们的官方文档几乎都建议：关掉 THP，改用「显式预留的 HugeTLB」——要大页可以，但我自己精确控制，不要你偷偷在运行时替我合并。</p>
+
+<pre><code># 查看当前 THP 策略
+cat /sys/kernel/mm/transparent_hugepage/enabled
+# [always] madvise never   ← 方括号是当前生效项
+
+# 关掉 THP（很多数据库/推理服务的推荐配置）
+echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
+
+# 折中：madvise —— 只对显式 madvise(MADV_HUGEPAGE) 的内存用大页
+echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled</code></pre>
+
+<p><strong>类比</strong>：THP 像一个「热心但擅自行动」的保洁。你在专心工作，他为了「让桌面更整洁」，趁你用着东西的时候突然把你桌上所有文件重新归档整理——归档时你被迫停下手等他弄完。平均下来桌面是整齐了（吞吐略升），但你时不时被打断几十秒（延迟毛刺）。对赶 deadline（低延迟 SLA）的人来说，宁可自己保持整洁（显式 HugeTLB），也不要这种随机打断。<span class="key">「平均更快」和「最坏情况可控」是两个目标，THP 优化前者、牺牲后者</span>——这是系统工程里反复出现的取舍。</p>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 推理服务的 P99 延迟与 THP。</strong> 你在生产里部署 vLLM / TGI 做在线推理，SLA 往往是「P99 首 token 延迟 &lt; 200ms」。如果宿主机开着 THP，khugepaged 在半夜内存碎片高时触发同步压缩，会给个别请求注入几十毫秒的毛刺——排查时你看模型、看 batching、看网络都正常，最后发现是操作系统层的 THP 在作祟。懂这一层，你才能把「玄学抖动」定位到根因，而不是无脑加机器。</p>
+
+<p><strong>2. KV cache 与大页 / 数据布局。</strong> 昨天算过 KV cache 是访存大户。vLLM 的 PagedAttention（明天 Day 42 细讲）本质就是给 KV cache 做「分页管理」，而底层显存的 TLB 效率、块的对齐与连续性，直接决定 attention kernel 能不能跑满带宽。理解 AoS/SoA 和对齐，你才能读懂为什么 KV cache 要按 <code>[num_heads, head_dim]</code> 这样的特定布局摆放，以及某些「改一下 layout 就快 20%」的 PR 到底改了什么。</p>
+
+<p><strong>3. 数据布局是侧信道的温床。</strong> Day 34（侧信道）会讲 cache timing 攻击：攻击者通过测量「访问某地址快还是慢」来推断被害进程碰过哪块内存。数据布局（AoS/SoA）、对齐、大页都改变了内存的物理分布，从而改变了侧信道的可观测粒度。做安全的人要能双向思考：<span class="key">大页把 2MB 映射成一条 TLB，既是性能优化，也可能改变攻击者能区分的地址分辨率</span>。</p>
+
+<p><strong>4. NUMA 与多租户隔离。</strong> 在共享 GPU/CPU 的多租户推理平台上，把不同租户的进程绑到不同 NUMA 节点，不仅是性能考虑，也是一种<span class="key">资源与故障隔离</span>：一个租户打满了本地内存带宽，不该拖垮另一个节点上的租户。NUMA 绑定 + cgroups（Day 57 会学）是构建「性能可预测的安全多租户」的基础工具。</p>
+
+<p><strong>5. 内存优化 = 缩小可被资源耗尽攻击的面。</strong> Agent 安全里有一类攻击是「资源耗尽 / 拒绝服务」：构造超长上下文、诱导巨大 KV cache，把显存和内存带宽榨干，让服务对所有人瘫痪。你对内存成本模型（昨天）和优化手段（今天）理解越深，越能设计出「优雅降级」而非「雪崩」的服务——比如按算术强度和 TLB 压力提前预估某个请求的真实开销，做准入控制，而不是等 OOM killer（Day 09）来收尸。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>15 分钟 · 动手题</strong></p>
+<p>用上面第 4 节的 numpy 脚本，实测 AoS（结构化数组取单列求和）和 SoA（独立连续列求和）在 <code>N=10_000_000</code> 下的耗时差异，记录各自秒数和倍率。然后把 <code>N</code> 依次改成 <code>1e5 / 1e6 / 1e7 / 5e7</code>，观察倍率随规模怎么变化。<strong>思考：为什么数据量越大、AoS 越吃亏？</strong>（提示：把它和「有效带宽利用率 = 你用的字节 / 搬进来的字节」联系起来。）</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>10 分钟 · 观察题</strong></p>
+<p>在你的 Linux 机器（或云主机）上依次运行 <code>cat /proc/meminfo | grep -i huge</code>、<code>cat /sys/kernel/mm/transparent_hugepage/enabled</code>、<code>numactl --hardware</code>（没有就 <code>sudo apt install numactl</code>）。记录：系统预留了多少显式大页？THP 当前是 always / madvise / never 哪一档？这台机器有几个 NUMA 节点、节点间距离矩阵是多少？<strong>如果这是一台要跑在线推理的机器，你会建议改哪一项？</strong></p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>5 分钟 · 思考题</strong></p>
+<p>今天七件工具，每一件都在优化「让想要的数据离计算更近」。请把它们归到「减少 TLB miss / 减少 cache miss / 减少远程访问 / 减少延迟毛刺」这四个目标下（有的工具可能同时服务多个目标）。<strong>进一步：这四个目标里，哪些是在优化「平均性能」，哪些是在优化「最坏情况」？</strong>THP 这个例子告诉你，一个「平均更快」的优化为什么可能被生产系统主动关掉？把这个取舍用一句话讲清楚——这是你以后做任何性能决策时都该先问自己的问题。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 40 · 内存性能动手（🔧 LAB）</strong>。今天讲的都是「为什么」，明天全是「怎么测」。我们会用 STREAM benchmark 亲手测出你这台机器的真实内存带宽、用 <code>mlock</code> 把关键数据锁在物理内存不让换出、用 <code>numactl</code> 对比同节点 vs 跨节点访问的性能损失、用 <code>perf</code> 数出一段代码到底触发了多少次 cache miss 和 TLB miss、用 <code>vmstat</code> 看内存与换页的实时动态。把这一整周的「内存层级 + NUMA」概念，全部落到能 copy-paste 跑出数字的命令上。</p>
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
