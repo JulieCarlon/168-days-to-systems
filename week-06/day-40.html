@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 40 · LAB 内存性能动手</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+    --lab-bg: #f0f9ff;
+    --lab-border: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--accent); border-radius: 6px; padding: 20px 24px; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .leadin { background: var(--callout-bg); border-left: 3px solid var(--accent-soft); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .lab-block {
+    background: var(--lab-bg);
+    border-left: 4px solid var(--lab-border);
+    padding: 14px 20px;
+    border-radius: 6px;
+    margin: 24px 0;
+  }
+  .lab-block h3 { margin-top: 8px; color: #0369a1; }
+  .lab-step { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+  .lab-step .label { display: inline-block; background: #0369a1; color: white; font-size: 11px; padding: 1px 8px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+  .expect { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 3px; }
+  .expect strong { color: #92400e; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .connect { background: var(--callout-bg); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent-soft); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+  .warn { background: #fee2e2; border-left: 4px solid #dc2626; padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: #991b1b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 40 · LAB 内存性能动手 🔧</h1>
+  <div class="meta">Week 06 · 周五（序号）· 2026-08-14 · 主线：内存层级 + NUMA · 预计 30min 阅读 + 1.5h 上机</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：本周前四天讲的全是"道理"——内存延迟带宽的数量级、NUMA 的本地/远程代价、为什么 LLM 推理是 memory-bound、huge page/prefetch/NUMA-aware 这些优化。今天<strong>把它们全部量成数字</strong>。我们会亲手测出你机器的<span class="key">内存带宽（STREAM）</span>、看 <code>perf</code> 报告的 cache miss 率、用 <code>numactl</code> 制造并测量一次"跨 NUMA 访问变慢"、用 <code>mlock</code> 把内存钉死在物理页上、用 <code>vmstat</code> 读系统级内存脉搏。所有实验都能 copy-paste 跑，输出预期我标在框里——和你看到的对比，才会真的记住。
+</div>
+
+<div class="toc">
+<strong>今日实验</strong>
+<ol>
+  <li><a href="#l1">LAB 1：STREAM —— 测出你机器的真实内存带宽</a></li>
+  <li><a href="#l2">LAB 2：遍历顺序对带宽的影响（cache line 实证）</a></li>
+  <li><a href="#l3">LAB 3：perf stat 读 cache miss 与 IPC</a></li>
+  <li><a href="#l4">LAB 4：vmstat / free —— 系统级内存脉搏</a></li>
+  <li><a href="#l5">LAB 5：numactl —— 制造并测量跨 NUMA 损失</a></li>
+  <li><a href="#l6">LAB 6：mlock —— 把内存钉死在物理页</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+</ol>
+</div>
+
+<div class="warn">
+<strong>平台说明</strong>：你在 mac 上。NUMA、<code>numactl</code>、<code>perf</code>、<code>vmstat</code> 这些是 <strong>Linux 概念/工具</strong>，mac（尤其 Apple Silicon 的统一内存）根本没有 NUMA，也没有 <code>perf</code>。<span class="key">今天强烈建议开一个 Linux 环境</span>：一台云上的多路服务器最理想（能看到真 NUMA），退而求其次用本地 Docker（能跑 STREAM / perf，但看不到跨 NUMA）。每个 LAB 我都标了 mac 近似方案，但真正的收获在 Linux 上。
+</div>
+
+<h3>0. 起一个 Linux 环境（5 分钟）</h3>
+<pre><code># 方案 A：本地 Docker（能做 LAB 1/2/3/4/6，NUMA 部分看不到多节点）
+docker run --rm -it --privileged ubuntu:22.04 bash
+# 进去后装工具：
+apt update && apt install -y build-essential linux-tools-common linux-tools-generic \
+    numactl util-linux procps stress-ng gcc
+
+# 方案 B：云上多路服务器（能看到真 NUMA，LAB 5 才有意义）
+# 挑一台 "2 socket" 的机型，SSH 进去装同样的包（用发行版对应的包管理器）</code></pre>
+<div class="expect"><strong>说明</strong>：Docker 里 <code>perf</code> 常因权限受限；如果 <code>perf stat</code> 报 <code>permission denied</code>，加 <code>--privileged</code> 重开容器，或在宿主 Linux 上直接跑。mac 上的 Docker Desktop 是跑在轻量 VM 里的，<code>perf</code> 硬件计数器多半拿不到——这类实验请用真 Linux 主机或云服务器。</div>
+
+<h2 id="l1">1. LAB 1：STREAM —— 测出你机器的真实内存带宽</h2>
+
+<p><span class="term">STREAM</span> 是内存带宽测试的"事实标准"，1990 年代由 John McCalpin 写的。它做四种极简操作，每种都<strong>刻意让 CPU 无事可做、只搬内存</strong>，于是测出来的就是纯粹的内存带宽（GB/s）。Day 36 讲的"DDR5 理论带宽几十 GB/s、HBM 几 TB/s"，今天用 STREAM 落到你自己的机器上。</p>
+
+<p>四个核心操作（<code>a/b/c</code> 是大数组，<code>q</code> 是标量）：</p>
+<table>
+<tr><th>操作</th><th>公式</th><th>每次迭代读写</th></tr>
+<tr><td>Copy</td><td>c[i] = a[i]</td><td>读 1 + 写 1</td></tr>
+<tr><td>Scale</td><td>b[i] = q * c[i]</td><td>读 1 + 写 1</td></tr>
+<tr><td>Add</td><td>c[i] = a[i] + b[i]</td><td>读 2 + 写 1</td></tr>
+<tr><td>Triad</td><td>a[i] = b[i] + q * c[i]</td><td>读 2 + 写 1</td></tr>
+</table>
+<p><strong>Triad</strong> 是最常被引用的那个数——因为它一次迭代做 2 读 1 写、乘加各一次，最贴近真实科学计算/张量运算的访存模式。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>下载并编译 STREAM（一个 C 文件，无依赖）。</div>
+<pre><code># 官方源码
+curl -O https://www.cs.virginia.edu/stream/FTP/Code/stream.c
+
+# 编译。关键：数组要远大于 L3 cache，否则测的是 cache 不是内存！
+# -DSTREAM_ARRAY_SIZE 设成 你的 L3 大小(字节)/8 的 4 倍以上
+# 例：L3=32MB，则 4M 个 double(32MB)*4=128MB，用 STREAM_ARRAY_SIZE=40000000
+gcc -O3 -fopenmp -DSTREAM_ARRAY_SIZE=40000000 -mcmodel=medium stream.c -o stream
+
+./stream</code></pre>
+
+<div class="expect"><strong>预期</strong>：输出四行，每行一个操作的 Best Rate (MB/s)。一台普通 DDR4 双通道桌面机 Triad 大约 <strong>15000–25000 MB/s（15–25 GB/s）</strong>；DDR5 或多通道服务器能到 <strong>40–200+ GB/s</strong>。记下你的 <span class="key">Triad</span> 数——它就是你机器"纯搬内存"的天花板。</div>
+
+<div class="lab-step"><span class="label">B</span>验证"数组够大"。如果 Triad 高得离谱（几百 GB/s 甚至上 TB），说明数组还在 cache 里。</div>
+<pre><code># 看你的 cache 大小
+lscpu | grep -i cache
+# 输出类似：
+# L1d cache: 32K   L1i cache: 32K
+# L2 cache: 256K
+# L3 cache: 32M      &lt;- 这个是关键，数组必须远大于它</code></pre>
+
+<div class="lab-step"><span class="label">C</span>用线程数变化观察带宽饱和。</div>
+<pre><code>for t in 1 2 4 8; do
+  echo "=== $t threads ==="
+  OMP_NUM_THREADS=$t ./stream | grep Triad
+done</code></pre>
+<div class="expect"><strong>解读</strong>：带宽<strong>不会随线程线性增长</strong>。1 线程往往就能吃掉单条内存通道的大部分带宽；加到 4/8 线程后曲线很快压平——因为瓶颈是<span class="key">内存控制器和通道数，不是核数</span>。这正是 Day 38 说的"memory-bound：加核没用，要么加带宽要么减访存"的直接证据。</div>
+</div>
+
+<div class="warn"><strong>mac 近似</strong>：mac 上也能 <code>gcc</code>（其实是 clang）编译 stream.c，但去掉 <code>-mcmodel=medium</code>，OpenMP 需要 <code>brew install libomp</code> 并加 <code>-Xpreprocessor -fopenmp -lomp</code>。Apple Silicon 的统一内存带宽极高（M 系列可达数百 GB/s），你会看到和 x86 完全不同的数量级——这本身就说明"内存带宽是架构级的差异"。</div>
+
+<h2 id="l2">2. LAB 2：遍历顺序对带宽的影响（cache line 实证）</h2>
+
+<p>Day 31 讲了 <span class="term">cache line</span>（通常 64 字节）：CPU 每次从内存搬的最小单位是一整条 line，不是一个字节。这意味着<strong>顺序访问几乎免费蹭到后续数据，跳着访问则每次都 miss</strong>。今天用一段 Python + numpy 亲手把这个差异测出来。</p>
+
+<div class="lab-block">
+<h3>步骤</h3>
+
+<div class="lab-step"><span class="label">A</span>行优先 vs 列优先遍历同一个大矩阵。</div>
+<pre><code>cat &gt; /tmp/stride.py &lt;&lt;'EOF'
+import numpy as np, time
+
+N = 8000                      # 8000x8000 float64 = 512MB，远超 L3
+a = np.ones((N, N), dtype=np.float64)
+
+def bench(fn, name):
+    t0 = time.perf_counter()
+    s = fn()
+    dt = time.perf_counter() - t0
+    print(f"{name:12s} {dt*1000:8.1f} ms   sum={s:.0f}")
+
+# 行优先：内存里连续 —— cache 友好
+bench(lambda: a.sum(axis=1).sum(), "row-major")
+# 列优先：每跨一列跳 N*8 字节 —— 每次几乎都 miss
+bench(lambda: a.sum(axis=0).sum(), "col-major")
+EOF
+python3 /tmp/stride.py</code></pre>
+<div class="expect"><strong>预期</strong>：<code>row-major</code> 明显快于 <code>col-major</code>，差 <strong>2–5 倍</strong>（数量取决于 CPU/prefetcher 聪明程度）。两者<strong>做的浮点加法完全一样多</strong>，唯一区别是访存顺序。这就是 Day 31/39 的核心结论：<span class="key">同样的算法，cache 友好的写法能快几倍</span>。numpy 底层是 C 连续（行优先），所以按行走顺着内存。</div>
+
+<div class="lab-step"><span class="label">B</span>手写一个"变步长"实验，看步长跨过 cache line 那一刻的跳变。</div>
+<pre><code>cat &gt; /tmp/cacheline.py &lt;&lt;'EOF'
+import numpy as np, time
+
+N = 64 * 1024 * 1024          # 64M 个 int8 = 64MB
+buf = np.zeros(N, dtype=np.int8)
+
+for stride in [1, 2, 4, 8, 16, 32, 64, 128, 256]:
+    t0 = time.perf_counter()
+    # 每隔 stride 个字节写一次，总写入次数随 stride 递减
+    buf[::stride] += 1
+    dt = (time.perf_counter() - t0) * 1000
+    touches = N // stride
+    print(f"stride={stride:4d}B  {dt:7.1f} ms  touched={touches//1000:6d}K elems")
+EOF
+python3 /tmp/cacheline.py</code></pre>
+<div class="expect"><strong>解读</strong>：当 <code>stride</code> 从 1 涨到 64（cache line 大小）时，<strong>访问的元素数在快速减少，但耗时下降得慢得多</strong>——因为 stride≤64 时每条 line 还是被完整搬进来（浪费）。跨过 64B 后，每次访问都命中一条全新的 line，"每字节有效利用率"最低。这就是 <span class="key">cache line 的物理边界在数据上留下的指纹</span>。</div>
+</div>
+
+<h2 id="l3">3. LAB 3：perf stat 读 cache miss 与 IPC</h2>
+
+<p><code>perf</code> 是 Linux 的性能计数器前端，直接读 CPU 里的<strong>硬件性能计数器（PMC）</strong>。Day 30/33 提过的 IPC、cache miss，之前只是名词，今天让 CPU 自己告诉你数字。</p>
+
+<div class="lab-block">
+<h3>步骤（Linux）</h3>
+
+<div class="lab-step"><span class="label">A</span>对 LAB 2 的两种遍历分别跑 perf，对比 cache miss。</div>
+<pre><code># 先把 row/col 拆成两个脚本，或用 -c 参数控制
+perf stat -e cycles,instructions,cache-references,cache-misses,L1-dcache-load-misses \
+    python3 -c "import numpy as np; a=np.ones((8000,8000)); a.sum(axis=1).sum()"
+
+echo "==== 现在换成列优先 ===="
+perf stat -e cycles,instructions,cache-references,cache-misses,L1-dcache-load-misses \
+    python3 -c "import numpy as np; a=np.ones((8000,8000)); a.sum(axis=0).sum()"</code></pre>
+<div class="expect"><strong>预期</strong>：列优先版本的 <code>cache-misses</code> 和 <code>L1-dcache-load-misses</code> 明显更高，<code>insn per cycle (IPC)</code> 更低。<span class="key">IPC 低 = CPU 大量周期在干等内存</span>，正是 memory-bound 的体温计。典型 memory-bound 负载 IPC 常低于 1，compute-bound 能到 2–4。</div>
+
+<div class="lab-step"><span class="label">B</span>读懂 perf 输出的关键行。</div>
+<pre><code># 输出里重点看这几行：
+#   12,345,678,901  cycles
+#    9,876,543,210  instructions   #  0.80  insn per cycle   &lt;- IPC
+#      500,000,000  cache-references
+#      120,000,000  cache-misses   #  24.00% of all cache refs  &lt;- miss 率
+# miss 率 = cache-misses / cache-references</code></pre>
+
+<div class="lab-step"><span class="label">C</span>用 <code>perf stat -d</code> 一键拿到更全的内存视角。</div>
+<pre><code>perf stat -d python3 /tmp/stride.py
+# -d 会自动附带 L1/LLC 的 load/miss，以及可能的 TLB 统计</code></pre>
+<div class="expect"><strong>观察</strong>：<code>LLC-load-misses</code>（Last Level Cache = L3 未命中）就是"真的要去主存拿数据"的次数。这些访问每一次都是 ~100ns 级别（Day 36 讲的内存延迟），是延迟的主要来源。TLB miss 高则提示你该考虑 huge page（Day 39）。</div>
+</div>
+
+<div class="warn"><strong>拿不到计数器？</strong> 云上/容器里常见 <code>&lt;not supported&gt;</code> 或 <code>Permission denied</code>。试：① 宿主机上执行 <code>sysctl kernel.perf_event_paranoid=1</code>（临时放宽）；② 容器加 <code>--privileged</code>；③ 虚拟机可能根本没暴露 PMC，换物理机。实在不行只看 <code>cycles/instructions/IPC</code>（软件也能估），cache 计数器可选。</div>
+
+<h2 id="l4">4. LAB 4：vmstat / free —— 系统级内存脉搏</h2>
+
+<p>前面测的是"某个程序"的访存。<code>vmstat</code> 和 <code>free</code> 让你看<strong>整台机器</strong>的内存/换页节奏——上线后诊断"内存到底去哪了"的第一梯队工具。</p>
+
+<div class="lab-block">
+<h3>步骤（Linux）</h3>
+
+<div class="lab-step"><span class="label">A</span>先看内存全景。</div>
+<pre><code>free -h
+# 关注这三列：
+#   used      真正被进程用掉的
+#   buff/cache  page cache（Day 10 讲的），可随时回收，别当成"内存不够"
+#   available   真正还能给新进程用的（≈ free + 可回收的 cache）</code></pre>
+<div class="expect"><strong>关键认知</strong>：Linux 会把空闲内存<strong>全拿去当 page cache</strong>，所以 <code>free</code> 那列常年很小是正常的——看 <span class="key">available</span> 才对。很多人误以为"内存快满了"其实是 cache，一 <code>echo 3 &gt; /proc/sys/vm/drop_caches</code> 就掉下来。</div>
+
+<div class="lab-step"><span class="label">B</span>每秒采样一次，制造内存压力观察变化。</div>
+<pre><code># 一个终端持续采样（每 1 秒，共 20 次）
+vmstat 1 20
+
+# 另一个终端制造压力：吃 2GB 内存并反复访问
+stress-ng --vm 2 --vm-bytes 1G --vm-keep -t 20s</code></pre>
+<div class="expect"><strong>读 vmstat 的列</strong>：<code>free</code> 掉、<code>cache</code> 变化；重点看 <code>si/so</code>（swap in/out，每秒换页 KB）——<span class="key">si/so 常年非 0 = 在换页 = 内存不够，性能灾难</span>。<code>bi/bo</code> 是块设备读写。<code>cs</code> 是每秒上下文切换，<code>in</code> 是中断。压力上来时 <code>us/sy</code>（用户/内核 CPU%）也会涨。</div>
+
+<div class="lab-step"><span class="label">C</span>看谁在吃内存 —— 按 RSS 排序。</div>
+<pre><code>ps -eo pid,user,rss,vsz,comm --sort=-rss | head -8
+# rss = 常驻物理内存（真占的）
+# vsz = 虚拟大小（预订的，通常虚高，别慌）</code></pre>
+</div>
+
+<div class="warn"><strong>mac 近似</strong>：mac 无 <code>vmstat</code>（有个同名但字段完全不同的 BSD 版 <code>vm_stat</code>，注意下划线）。看内存用 <code>vm_stat 1</code>（页为单位，页大小 <code>pagesize</code> 查）、活动监视器，或 <code>top -l 1 | head</code>。换页看 "Pageouts"。</div>
+
+<h2 id="l5">5. LAB 5：numactl —— 制造并测量跨 NUMA 损失</h2>
+
+<p>这是今天的重头戏，也是唯一<strong>必须真 NUMA 机器</strong>才有意义的实验（单 socket 机器只有 node0，看不到差异）。Day 37 讲了 NUMA：多路 CPU 每个 socket 挂自己的本地内存，访问<strong>别的 socket 的内存要绕互联总线（QPI/UPI/Infinity Fabric），慢 1.5–2 倍</strong>。今天亲手把这个"慢"量出来。</p>
+
+<div class="lab-block">
+<h3>步骤（Linux，需 2+ NUMA node）</h3>
+
+<div class="lab-step"><span class="label">A</span>先看拓扑，确认有几个 node。</div>
+<pre><code>numactl --hardware
+# 输出示例（2 node 机器）：
+# available: 2 nodes (0-1)
+# node 0 cpus: 0 1 2 3 ...
+# node 0 size: 128000 MB
+# node 1 cpus: 24 25 26 ...
+# node 1 size: 128000 MB
+# node distances:
+# node   0   1
+#   0:  10  21     &lt;- 本地=10，到 node1 的相对代价=21（约 2.1 倍）
+#   1:  21  10</code></pre>
+<div class="expect"><strong>读 distance 矩阵</strong>：对角线永远是 10（本地基准），非对角就是<span class="key">远程访问的相对代价</span>。21 意味着跨节点约慢 2.1 倍。只有 1 个 node？那这台机器不是 NUMA，跳到 mac/单节点说明。</div>
+
+<div class="lab-step"><span class="label">B</span>本地绑定 vs 强制远程，跑同一个 STREAM。</div>
+<pre><code># 本地：CPU 在 node0，内存也在 node0
+numactl --cpunodebind=0 --membind=0 ./stream | grep Triad
+
+# 远程：CPU 在 node0，但内存强制分配到 node1 —— 每次访问都走互联
+numactl --cpunodebind=0 --membind=1 ./stream | grep Triad</code></pre>
+<div class="expect"><strong>预期</strong>：远程版 Triad 带宽比本地<strong>低 30–50%</strong>，延迟相应变高。这就是"跨 NUMA 惩罚"的真身。如果你的多卡训练/推理进程被调度器随机撒在两个 node 上、内存又分配错节点，白白损失这么多带宽——而 LLM 推理本就是 memory-bound，损失直接变成 TPOT 上升。</div>
+
+<div class="lab-step"><span class="label">C</span>看默认分配策略，以及 interleave 的作用。</div>
+<pre><code># 交错分配：内存平均撒在所有 node，牺牲局部性换总带宽
+numactl --interleave=all ./stream | grep Triad
+
+# 查看某进程当前的 NUMA 内存分布
+numastat -p $(pgrep -n stream)     # 或指定 PID
+# 会显示这个进程在 node0/node1 各分了多少内存</code></pre>
+<div class="expect"><strong>解读</strong>：<code>--interleave=all</code> 适合"内存访问遍布、无明显局部性"的负载（如某些大 hash 表），用两个 node 的带宽之和。但对有局部性的负载会更慢。<span class="key">没有万能策略——绑定看访问模式</span>。这正是 Day 37/39 说的 NUMA-aware 的核心：知道数据在哪、让计算靠近它。</div>
+
+<div class="lab-step"><span class="label">D</span>观察"first-touch"策略的陷阱。</div>
+<pre><code># Linux 默认 first-touch：内存分配在"第一个写它的线程"所在的 node
+# 常见 bug：主线程初始化整个大数组 -> 全落 node0
+#           然后 fork 出 node1 的 worker 去处理 -> 全变远程访问！
+# 正解：让各 worker 自己初始化自己那块（并行 first-touch）</code></pre>
+</div>
+
+<div class="warn"><strong>没有 NUMA 机器怎么办</strong>：mac（尤其 Apple Silicon 统一内存）和单 socket 云主机都没有多 node，LAB 5 无法复现。<strong>请当作"知道有这回事"</strong>：面试/排障时能说出"跨 NUMA 访问慢约 2 倍、first-touch 策略、numactl --membind"就够了。真要动手，租一台 2-socket 云服务器跑一遍（几块钱一小时），值得。</div>
+
+<h2 id="l6">6. LAB 6：mlock —— 把内存钉死在物理页</h2>
+
+<p>Day 10 讲过：进程的内存页可能被换出（swap）到磁盘。对延迟敏感的服务（比如实时推理、密钥缓存），一次意外换页就是几毫秒的尖刺。<code>mlock</code>/<code>mlockall</code> 让你<strong>把指定内存钉在物理 RAM 里，永不换出</strong>。今天用 Python 试一次。</p>
+
+<div class="lab-block">
+<h3>步骤（Linux）</h3>
+
+<div class="lab-step"><span class="label">A</span>用 ctypes 调 mlock，锁住一块 buffer。</div>
+<pre><code>cat &gt; /tmp/mlock_demo.py &lt;&lt;'EOF'
+import ctypes, ctypes.util, mmap, os
+
+libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+
+SIZE = 64 * 1024 * 1024        # 锁 64MB
+# 用 mmap 拿一块匿名内存
+buf = mmap.mmap(-1, SIZE)
+addr = ctypes.addressof(ctypes.c_char.from_buffer(buf))
+
+# mlock(addr, len)：把这块钉进物理内存
+ret = libc.mlock(ctypes.c_void_p(addr), ctypes.c_size_t(SIZE))
+if ret != 0:
+    err = ctypes.get_errno()
+    print(f"mlock 失败 errno={err} ({os.strerror(err)})")
+    print("多半是 RLIMIT_MEMLOCK 太小，试 ulimit -l unlimited (需权限)")
+else:
+    print(f"已锁定 {SIZE//1024//1024}MB。查 /proc/self/status 的 VmLck")
+
+os.system(f"grep VmLck /proc/{os.getpid()}/status")
+input("按回车释放并退出...")
+libc.munlock(ctypes.c_void_p(addr), ctypes.c_size_t(SIZE))
+EOF
+python3 /tmp/mlock_demo.py</code></pre>
+<div class="expect"><strong>预期</strong>：成功时 <code>VmLck:</code> 显示约 65536 kB。如果报 <code>errno=1 (Operation not permitted)</code> 或 12，是 <span class="key">RLIMIT_MEMLOCK</span> 限制——非 root 默认只能锁很少（常见 64KB）。用 <code>ulimit -l</code> 查上限，容器里 <code>docker run --ulimit memlock=-1</code> 放开。</div>
+
+<div class="lab-step"><span class="label">B</span>看当前锁定上限。</div>
+<pre><code>ulimit -l          # 单位 KB，unlimited 表示无限
+cat /proc/self/status | grep VmLck</code></pre>
+
+<div class="lab-step"><span class="label">C</span>理解代价与适用场景。</div>
+<pre><code># mlockall(MCL_CURRENT | MCL_FUTURE) 锁住进程全部内存
+# 好处：消灭换页导致的延迟尖刺
+# 代价：这块内存对系统"消失"，不能被回收 -> 别人更容易 OOM
+# 谁在用：数据库(Redis/Oracle)、实时系统、HFT、密钥管理(防敏感数据写盘)</code></pre>
+<div class="expect"><strong>安全视角</strong>：<code>mlock</code> 的另一大用途是<span class="key">防止密钥/明文被换出到 swap 分区落盘</span>——否则攻击者拿到磁盘就能翻 swap 找密钥。Day 41（明天）讲内存安全会再碰这个主题。</div>
+</div>
+
+<div class="warn"><strong>mac 近似</strong>：mac 有 POSIX <code>mlock(2)</code>，上面的 ctypes 代码把 <code>find_library("c")</code> 保留即可尝试，但 mac 无 <code>/proc</code>，去掉那两行 grep。Apple Silicon 无 swap 压力时效果不明显。</div>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. STREAM 的 Triad 数就是你推理服务的物理天花板</strong>。Day 38 推导过 LLM decode 阶段是 memory-bound：每生成一个 token 要把整个模型权重从显存/内存流一遍。所以 <code>吞吐上限 ≈ 内存带宽 / 每 token 读的字节数</code>。你今天测的 Triad（内存版）和 <code>nvidia-smi</code> 里的 HBM 带宽（显存版）是同一逻辑。做容量规划时，先算这个理论上限，实测达到 60–80% 就算调优到位——盲目加 GPU 核数对 memory-bound 负载没用。</p>
+
+<p><strong>2. cache 友好 = 推理框架的隐形竞争力</strong>。LAB 2 里同样的算法因访存顺序差几倍。vLLM 的 PagedAttention、FlashAttention 的分块，本质都是<strong>把访存重排成 cache/显存友好的模式</strong>，减少来回搬运。你评估一个推理引擎快在哪，perf/nsight 里的 cache/HBM miss 率就是照妖镜——算法一样，访存效率决定生死。</p>
+
+<p><strong>3. 跨 NUMA 是"看不见的 P99 杀手"</strong>。LAB 5 测出的 30–50% 带宽损失，在生产里表现为：同样的模型、同样的卡，A 机器 TPOT 稳、B 机器忽高忽低——差别只是 B 的进程被调度器撒到两个 NUMA node、内存分配又错了节点。给推理进程做 <code>numactl --cpunodebind --membind</code> 绑定、让 GPU 挨着同 node 的 CPU/内存（<code>nvidia-smi topo -m</code> 看拓扑），是多卡机器的必修课。</p>
+
+<p><strong>4. mlock 是敏感数据不落盘的第一道锁</strong>。你的 Agent 安全产品里，API key、用户 prompt、中间明文一旦被换出到 swap，磁盘取证就能捞出来。对存密钥的内存区 <code>mlock</code>，配合退出前显式清零，是防"冷启动/磁盘取证"类攻击的标准手法。今天你亲手锁了一次，明天 Day 41 讲内存安全会把"敏感数据生命周期"补全。</p>
+
+<p><strong>5. vmstat 的 si/so 是"服务要挂"的最早信号</strong>。推理服务最怕 KV cache 撑爆物理内存后开始 swap——一旦 <code>vmstat</code> 的 si/so 常年非 0，延迟就从毫秒跳到秒级，比 OOM 直接杀掉还难查（因为进程还活着，只是慢得像死了）。把 si/so、available 内存做成监控告警，比等 OOM killer 出手要早得多。这也是为什么很多推理部署直接<strong>关掉 swap</strong>——宁可 OOM 快速失败，也不要 swap 拖着假活。</p>
+</div>
+
+<h2>📝 今日小结</h2>
+
+<p>今天动手接触的工具速查（建议存下来）：</p>
+<table>
+<tr><th>工具</th><th>测什么</th><th>关键指标</th></tr>
+<tr><td><code>STREAM</code></td><td>纯内存带宽</td><td>Triad (GB/s)</td></tr>
+<tr><td><code>perf stat</code></td><td>硬件计数器</td><td>IPC、cache-misses、LLC-misses</td></tr>
+<tr><td><code>vmstat</code></td><td>系统内存/换页脉搏</td><td>si/so、available、cs</td></tr>
+<tr><td><code>free -h</code></td><td>内存全景</td><td>available（不是 free！）</td></tr>
+<tr><td><code>numactl</code></td><td>NUMA 绑定/策略</td><td>--membind、--interleave</td></tr>
+<tr><td><code>numastat</code></td><td>进程 NUMA 分布</td><td>各 node 内存量</td></tr>
+<tr><td><code>mlock</code></td><td>钉死物理页</td><td>VmLck、RLIMIT_MEMLOCK</td></tr>
+</table>
+
+<h2>✍️ 今日小练习</h2>
+<ol>
+  <li><strong>【动手】</strong> 编译并跑 STREAM，把你的 Triad 带宽记下来。再用 <code>lscpu</code> 查内存通道数（或查你 CPU 的规格页），估算理论带宽，看你实测达到了理论的百分之多少。</li>
+  <li><strong>【观察】</strong> 一边 <code>vmstat 1</code>，一边用 <code>stress-ng --vm 4 --vm-bytes 2G</code> 逐步加压到超过物理内存。观察 <code>si/so</code> 从 0 变非 0 的那一刻——记下此时 <code>free -h</code> 的 available 是多少。这就是你机器"开始换页"的临界点。</li>
+  <li><strong>【思考】</strong> 一个 7B 模型 FP16 权重约 14GB。若你的机器内存带宽（Triad）是 20 GB/s，纯 CPU 做 decode，每秒最多能生成几个 token？（提示：每 token 至少读一遍全部权重。）再想：为什么同样的模型放到 HBM 带宽 3 TB/s 的 GPU 上会快约 150 倍——是算力变强了，还是带宽变强了？</li>
+</ol>
+
+<div class="next">
+<strong>明日预告 · Day 41 · 周六 🔐 · 内存安全攻防</strong>。本周安全主线专题，4 小时密集。从栈帧布局讲起，一路到经典栈溢出、shellcode、现代防护（Canary / NX / ASLR / PIE / CFI）、ROP/JOP 绕过、堆漏洞（UAF / double free），再看 Rust 的借用检查如何从语言层根治，最后动手用 fuzzing 找一个真实的栈溢出 PoC。今天你锁过内存、看过 RSS，明天就理解"内存里到底发生了什么坏事"——这是 Agent 沙箱、不可信代码执行防护的地基。</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
