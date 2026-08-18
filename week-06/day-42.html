@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 42 · 内存视角看 vLLM PagedAttention + 周复盘</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  .header .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    font-size: 16.5px;
+    margin-top: 24px;
+    color: #444;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key {
+    background: linear-gradient(transparent 60%, var(--accent-soft) 60%);
+    padding: 0 2px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 42 · 内存视角看 vLLM PagedAttention + 周复盘</h1>
+  <div class="meta">Week 06 · 周日 🌐 · 2026-08-18 · 综合：把一周内存知识落到推理引擎 + 下周预告 · 预计 4h</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：本周我们从 DDR 时序讲到 NUMA 节点，从 Roofline 讲到栈溢出。今天是收口日——我们要证明这一周不是白学的：<span class="key">vLLM 这个你天天用的推理引擎，它最核心的创新 PagedAttention，本质上就是把 Day 08 学的操作系统虚拟内存分页，原样搬到了 GPU 显存上</span>。今天你会回答四个问题：为什么在 PagedAttention 之前，一台 80GB 的 A100 有 60%~80% 的 KV cache 显存是被白白浪费的？block table 是怎么让「逻辑上连续、物理上零散」这件事在 attention kernel 里跑得通的？当显存真的不够时，引擎是把请求换出去（swap）还是干脆重算（recompute）？以及为什么多个 Agent 共享同一个长 system prompt 时，prefix caching 能把 TTFT 砍掉一大半——顺带地，它又怎么变成一条跨用户的时间侧信道。读完今天，你看 <code>nvidia-smi</code> 里那条显存曲线的眼神会不一样。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">本周复盘：把 Day 36–41 缝成一张图</a></li>
+  <li><a href="#s2">传统 KV cache 的原罪：预分配与三种碎片</a></li>
+  <li><a href="#s3">PagedAttention 的核心思想：把虚拟内存搬进显存</a></li>
+  <li><a href="#s4">Block table：逻辑块到物理块的翻译层</a></li>
+  <li><a href="#s5">Preemption：显存不够时的抢占、换出与重算</a></li>
+  <li><a href="#s6">Prefix caching：共享前缀、写时复制与 radix 树</a></li>
+  <li><a href="#s7">把本周知识算成数字：容量估算与调参 cheat sheet</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+  <li><a href="#next">下周预告</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. 本周复盘：把 Day 36–41 缝成一张图</h2>
+
+<p>先花 20 分钟把这一周串起来。本周六天讲的其实是<strong>同一个故事的六个侧面</strong>：现代计算机的算力早已远远超过它搬运数据的能力，于是「内存」成了一切性能与安全问题的中心。</p>
+
+<div class="ascii">Day 36  内存系统全貌       延迟/带宽数量级 · DDR4/5 · HBM · Roofline · 算术强度
+   │                         └─ 给出了度量工具：一个 kernel 到底 compute- 还是 memory-bound
+   ▼
+Day 37  NUMA 架构           本地 vs 远程访问 · numactl/lstopo · 分配策略 · GPU-CPU 拓扑
+   │                         └─ 告诉你「内存」不是均质的，物理位置决定延迟
+   ▼
+Day 38  为什么推理 memory-bound   prefill vs decode · decode 算术强度 ≈ 1 · KV cache 公式
+   │                         └─ 把 Roofline 用在 LLM 上，得到本周最重要的结论
+   ▼
+Day 39  内存优化技术         huge page · prefetch · 对齐 · AoS vs SoA · NUMA-aware 分配
+   │                         └─ 面对 memory-bound，工程上能拧的螺丝
+   ▼
+Day 40  LAB 内存性能         STREAM · numactl 策略对比 · perf 测 miss · 跨 NUMA 损失实测
+   │                         └─ 把上面四天的结论亲手量出来
+   ▼
+Day 41  内存安全攻防         栈帧 · 溢出 · canary/NX/ASLR/PIE · ROP · UAF · fuzzing
+   │                         └─ 同一个"线性地址空间"抽象，性能面和攻击面是一体两面
+   ▼
+Day 42（今天） vLLM PagedAttention  ← 上面所有东西在一个真实系统里的合流</div>
+
+<h3>本周三条主干结论</h3>
+
+<p><strong>结论一：算术强度决定你受什么限制。</strong> Day 36 定义的<span class="term">算术强度（arithmetic intensity）</span> = 浮点运算次数 ÷ 从内存搬运的字节数（FLOP/Byte）。Day 38 我们算过：LLM 的 decode 阶段每生成一个 token，要把整个模型权重（7B 模型 FP16 约 14 GB）从 HBM 读一遍，却只做了大约 2×7×10⁹ 次乘加。算术强度约等于 2 FLOP/Byte，而 A100 的「拐点」在 100+ FLOP/Byte。<span class="key">差了将近两个数量级——所以 decode 的 GPU 利用率经常只有 5%~15%，卡不是在算，是在等内存。</span></p>
+
+<p><strong>结论二：提升利用率的唯一正路是提高 batch size。</strong> 因为权重只读一次，batch 里有多少个序列，就摊薄多少次。batch=1 时算术强度 ≈2，batch=64 时 ≈128，直接把 decode 从 memory-bound 推到 compute-bound 附近。但 batch 大小卡在哪儿？<strong>卡在 KV cache 吃掉的显存上</strong>。这就是今天的入口：谁能把 KV cache 管得更省，谁就能开更大的 batch，谁的吞吐就更高。</p>
+
+<p><strong>结论三：内存管理是性能问题，也是隔离问题。</strong> Day 41 讲的所有二进制漏洞，根子都在「地址空间是一块可以随意越界读写的线性字节」。今天你会看到，PagedAttention 在 GPU 上重建了一层间接映射——它带来性能收益的同时，也天然带来了隔离边界（一个序列只能通过自己的 block table 触到自己的物理块）；而 prefix caching 又在这个边界上开了一道刻意的共享口子，于是安全问题从「越界」变成了「共享带来的信息泄露」。这条线今天走完。</p>
+
+<h2 id="s2">2. 传统 KV cache 的原罪：预分配与三种碎片</h2>
+
+<h3>2.1 先把 KV cache 讲清楚</h3>
+
+<p><span class="term">KV cache</span> 是自回归解码的核心加速手段。Transformer 每一层的注意力要用当前 token 的 query，去和<strong>历史所有 token</strong> 的 key、value 做计算。如果不缓存，生成第 n 个 token 时就要重算前 n−1 个 token 的 K 和 V，总代价是 O(n²) 的重复劳动。缓存下来之后，每步只需为新 token 计算一份 K/V 追加进去，代价降到 O(n)。</p>
+
+<p><strong>代价是显存。</strong> 单个 token 的 KV cache 大小（Day 38 推过，这里再写一遍，请务必记住这个公式）：</p>
+
+<pre><code>bytes_per_token = 2 (K 和 V 两份)
+                × num_layers            # 层数
+                × num_kv_heads          # 注意是 KV 头数，GQA/MQA 下远小于 query 头数
+                × head_dim              # 每头维度
+                × dtype_bytes           # FP16=2, FP8=1
+
+# Llama-2-7B: 32 层, 32 个 KV 头(MHA), head_dim=128, FP16
+# = 2 × 32 × 32 × 128 × 2 = 524288 B = 512 KB / token
+
+# Llama-3-8B: 32 层, 8 个 KV 头(GQA), head_dim=128, FP16
+# = 2 × 32 × 8 × 128 × 2 = 131072 B = 128 KB / token</code></pre>
+
+<div class="note">
+<strong>直觉锚点</strong>：Llama-2-7B 上，一条 2048 token 的对话，KV cache 就要 <code>2048 × 512 KB = 1 GB</code>。一张 80 GB 的 A100 放完 14 GB 权重后剩 66 GB，理论上只够 66 条这样的对话同时在线。<span class="key">KV cache 不是边角料，它是和模型权重同一量级、甚至更大的显存消费者。</span>
+</div>
+
+<h3>2.2 原罪：按「最大可能长度」预分配一整块连续显存</h3>
+
+<p>PagedAttention 出现之前（FasterTransformer、早期 HF <code>generate</code>、TGI 早期版本），KV cache 的管理方式简单粗暴：<strong>请求进来时，按 <code>max_seq_len</code> 预先申请一整块物理连续的显存</strong>，序列往里追加。</p>
+
+<p>为什么要连续？因为 attention kernel 是按张量写的：它假设第 i 个 token 的 K 就在 <code>base_ptr + i * stride</code>。连续布局让 kernel 能做高效的合并访存（Day 31 学的 memory coalescing）。这个设计对 kernel 友好，对内存管理是灾难。</p>
+
+<p>灾难长这样——假设 <code>max_seq_len = 2048</code>，但用户实际只聊了 30 个 token 就结束了：</p>
+
+<div class="ascii">请求 A 预留 2048 slot                            请求 B 预留 2048 slot
+┌────┬──────────────────────────────────┐  ┌────┬─────────────────────────────┐
+│ 30 │        2018 slot 全程空着         │  │ 12 │      2036 slot 全程空着      │
+└────┴──────────────────────────────────┘  └────┴─────────────────────────────┘
+ 已用            内部碎片 (internal)          已用          内部碎片
+
+                        ↓ 若干请求结束后，显存变成这样
+
+┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
+│ 占用 │ 空闲 │ 占用 │ 空闲 │ 占用 │ 空闲 │ 占用 │ 空闲 │
+└──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
+  空闲总量 = 20 GB，但最大连续空闲块只有 1.5 GB
+  → 新来的长请求需要 2 GB 连续空间，申请失败    外部碎片 (external)</div>
+
+<p>vLLM 论文（Kwon et al., SOSP 2023）实测了三种浪费，加起来惊人：</p>
+
+<table>
+<tr><th>浪费类型</th><th>成因</th><th>典型占比</th></tr>
+<tr><td><strong>内部碎片</strong><br>internal fragmentation</td><td>按 max_seq_len 预留，实际生成长度远小于上限；请求结束前这些 slot 一直空转</td><td>最大头，常见 60%~80%</td></tr>
+<tr><td><strong>外部碎片</strong><br>external fragmentation</td><td>不同请求预留块大小不一，回收后留下无法利用的空洞</td><td>约 10%~20%</td></tr>
+<tr><td><strong>预留浪费</strong><br>reservation</td><td>为「未来一定会生成」的 token 提前占位，这部分现在还没写入但已不可他用</td><td>随并发升高而升高</td></tr>
+</table>
+
+<p>论文里的一个数字值得记住：<span class="key">传统系统里，真正存放有效 KV 数据的显存只占 KV cache 总分配量的 20.4%~38.2%</span>。换句话说，你花几十万买的 A100，60%~80% 的 KV 显存在替空气占座。而 batch size 上不去 → 算术强度上不去 → 结论二里说的那个 GPU 利用率就永远起不来。</p>
+
+<h3>2.3 这个问题你其实见过</h3>
+
+<p>请回想 Day 09（内存分配器）和 Day 08（虚拟内存与页表）。<strong>「要求物理连续 + 按最大值预分配 = 严重碎片」这个困境，操作系统在 1960 年代就撞上过</strong>，当年的名字叫「分段式内存管理」（segmentation）。每个进程要一整块连续物理内存，进程来来去去之后物理内存被切得七零八落，只能靠代价高昂的「紧凑化」（把所有进程搬家）来整理。</p>
+
+<p>OS 的解法是<span class="term">分页（paging）</span>：把物理内存切成固定大小的页帧（4 KB），把进程地址空间切成同样大小的页，用页表做映射。于是进程眼里的地址空间是连续的，物理上却可以任意零散。内部碎片被压到「最后一页的半页」，外部碎片直接消失（所有块一样大，任何空闲页都能满足任何请求）。</p>
+
+<p>PagedAttention 的全部创意，就是<strong>把这套 1960 年代的答案，一比一搬到 GPU 显存里的 KV cache 上</strong>。</p>
+
+<h2 id="s3">3. PagedAttention 的核心思想：把虚拟内存搬进显存</h2>
+
+<h3>3.1 概念对应表</h3>
+
+<p>先把术语对齐。这张表是今天最值得截图的东西：</p>
+
+<table>
+<tr><th>操作系统（Day 08）</th><th>PagedAttention</th><th>说明</th></tr>
+<tr><td>进程</td><td>请求 / 序列（sequence）</td><td>拥有独立地址空间的调度单位</td></tr>
+<tr><td>虚拟页 virtual page</td><td>逻辑块 logical block</td><td>序列眼中「连续」的 KV 存储单元</td></tr>
+<tr><td>物理页帧 page frame</td><td>物理块 physical block</td><td>GPU 显存池里实际的一小块</td></tr>
+<tr><td>页大小 4 KB</td><td>block_size = 16 个 token（vLLM 默认）</td><td>固定粒度，是关键设计参数</td></tr>
+<tr><td>页表 page table</td><td>block table</td><td>逻辑 → 物理的映射数组</td></tr>
+<tr><td>MMU 硬件翻译</td><td>attention kernel 里的软件查表</td><td>GPU 没有为此设计的 MMU，所以在 kernel 里做</td></tr>
+<tr><td>缺页 page fault</td><td>分配新块（block allocation）</td><td>写满当前块时向 allocator 要下一块</td></tr>
+<tr><td>换出到 swap 分区</td><td>swap 到 CPU 内存</td><td>显存吃紧时的降级路径</td></tr>
+<tr><td>写时复制 COW</td><td>block 引用计数 + COW</td><td>prefix 共享、parallel sampling 的基础</td></tr>
+</table>
+
+<h3>3.2 具体怎么切</h3>
+
+<p><span class="term">block</span>（块）是 PagedAttention 的最小分配单位，装固定数量的 token 的 KV。默认 <code>block_size=16</code>。一个 block 占的显存 = <code>block_size × bytes_per_token</code>，对 Llama-2-7B 就是 <code>16 × 512 KB = 8 MB</code>。</p>
+
+<p>引擎启动时做一件事：<span class="key">把「总显存 − 模型权重 − 激活值峰值 − 预留量」剩下的全部显存，一次性切成等大的 block，编号 0..N−1，交给一个 block allocator 管理</span>。这就是你在 vLLM 启动日志里看到的那行：</p>
+
+<pre><code># vLLM 启动日志（版本不同措辞略有差异，含义一致）
+INFO ... # GPU blocks: 7752, # CPU blocks: 512
+INFO ... Maximum concurrency for 4096 tokens per request: 30.28x</code></pre>
+
+<p>7752 个 GPU block × 16 token/block = 124032 个 token 的 KV 容量。这个数字就是你这台机器的「KV 预算」，所有并发请求共享它。<code>gpu_memory_utilization</code> 参数（默认 0.9）直接决定了这个数字——它是「允许 vLLM 用掉整卡显存的比例」，剩下的留给 CUDA context、通信 buffer 和碎片。</p>
+
+<div class="ascii">物理显存池（启动时一次切好，之后不再向 CUDA 申请）
+┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│ b0 │ b1 │ b2 │ b3 │ b4 │ b5 │ b6 │ b7 │ b8 │ b9 │b10 │ ...│   每块 16 token
+└────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+   ▲         ▲              ▲    ▲         ▲
+   │         │              │    │         │
+序列 A 的逻辑视图（它以为自己是连续的）：
+   [ token 0-15 ][ token 16-31 ][ token 32-47 ]
+        ↓ block_table_A = [0, 3, 7]     ← 物理上完全不连续
+
+序列 B：
+   [ token 0-15 ][ token 16-31 ]
+        ↓ block_table_B = [2, 8]</div>
+
+<h3>3.3 收益立刻可算</h3>
+
+<p><strong>内部碎片</strong>：现在只发生在每个序列的<strong>最后一个 block</strong>，最多浪费 15 个 token 的空间。对一条 500 token 的序列，浪费率从「(2048−500)/2048 = 75.6%」降到「最多 15/512 ≈ 2.9%」。</p>
+
+<p><strong>外部碎片</strong>：彻底消失。所有 block 等大，任何空闲 block 都能满足任何请求——这正是分页相对分段的根本优势。</p>
+
+<p><strong>预留浪费</strong>：消失。<span class="key">按需分配（on-demand）</span>——序列生成到第 17 个 token 时才去要第二个 block，不再为「可能生成到 2048」提前占位。</p>
+
+<p>论文实测：显存浪费从 60%~80% 降到 <strong>4% 以下</strong>，同等显存下能容纳的并发序列数提升 2~4 倍，端到端吞吐相对 HF Transformers 提升 14~24 倍，相对当时的 TGI 提升 2.2~3.5 倍。<strong>注意这个提升的来源</strong>：不是 kernel 算得更快了（PagedAttention 的 kernel 因为多了查表，单次执行其实比连续版本略慢 20%~26%），而是<strong>省下的显存换来了更大的 batch，更大的 batch 提高了算术强度，把 memory-bound 的 decode 推向了 compute-bound</strong>。这就是本周结论一和结论二的直接兑现。</p>
+
+<h2 id="s4">4. Block table：逻辑块到物理块的翻译层</h2>
+
+<h3>4.1 数据结构</h3>
+
+<p><span class="term">block table</span> 就是页表的极简版：一个每序列一份的整数数组，下标是逻辑块号，值是物理块号。翻译逻辑和 Day 08 的页表完全同构：</p>
+
+<pre><code># 逻辑 token 位置 → 物理地址，全套翻译
+BLOCK_SIZE = 16
+
+def locate(token_idx, block_table):
+    logical_block = token_idx // BLOCK_SIZE      # 页号
+    offset        = token_idx %  BLOCK_SIZE      # 页内偏移
+    physical_block = block_table[logical_block]  # 查页表
+    return physical_block, offset
+
+# 序列 A 的第 35 个 token，block_table_A = [0, 3, 7]
+# logical_block = 35 // 16 = 2  → physical_block = 7
+# offset        = 35 %  16 = 3
+# 实际显存位置 = kv_cache_pool[7][3]</code></pre>
+
+<p>和 OS 页表的唯一区别是：<strong>没有 MMU 硬件替你做这件事</strong>。GPU 的 MMU 管的是 CUDA 虚拟地址，管不到「KV cache 内部的逻辑块」这层抽象。所以这次翻译必须写进 attention kernel 里，由线程自己算。这就是为什么 PagedAttention 需要一个定制 CUDA kernel，而不能直接用现成的 attention 实现。</p>
+
+<h3>4.2 kernel 里发生了什么</h3>
+
+<p>标准 attention kernel 的内层循环是「按顺序扫过一段连续显存」，PagedAttention kernel 的内层循环变成「按 block 分批，每批先查表拿到物理块地址，再扫这一块」。伪代码：</p>
+
+<pre><code># 概念示意（真实 CUDA kernel 涉及 warp 分工、共享内存、在线 softmax，这里只保留结构）
+def paged_attention(q, block_table, kv_pool, seq_len):
+    acc, running_max, running_sum = 0, -inf, 0
+    num_blocks = ceil(seq_len / BLOCK_SIZE)
+
+    for i in range(num_blocks):                 # 逐 block 迭代
+        phys = block_table[i]                   # ← 多出来的一次查表（放在共享内存里）
+        K_blk = kv_pool.K[phys]                 # 一次读 16 个 token 的 K，块内仍然连续
+        V_blk = kv_pool.V[phys]
+
+        scores = q @ K_blk.T / sqrt(head_dim)
+        # 在线 softmax（FlashAttention 风格）：边算边归一，不物化完整 attention 矩阵
+        acc, running_max, running_sum = online_softmax_update(
+            acc, running_max, running_sum, scores, V_blk)
+
+    return acc / running_sum</code></pre>
+
+<p>三个设计细节值得注意，它们都直接呼应本周学的内存知识：</p>
+
+<ul>
+<li><strong>为什么 block 内仍要连续</strong>：块内 16 个 token 是连续存放的，一个 warp 的 32 个线程读它时能形成合并访存（Day 45 会正式讲 memory coalescing，Day 31 的 cache line 是同一个道理）。如果粒度细到单 token，访存会退化成 gather，带宽利用率崩塌。<span class="key">block_size 的本质是「碎片浪费」和「访存效率」之间的旋钮</span>：太小→查表开销大、访存零散；太大→内部碎片回归。16 是实践出来的甜点，长序列场景有人调到 32。</li>
+<li><strong>block table 放哪</strong>：它本身很小（一条 4096 token 的序列只有 256 个 int），一次性拷进 GPU 的 shared memory 或常量区，查表几乎不产生额外 HBM 流量。这是「用一次极便宜的间接寻址，换掉一大堆昂贵的显存浪费」。</li>
+<li><strong>和 FlashAttention 的关系</strong>：两者正交，且在现代引擎里是叠加使用的。<strong>FlashAttention 优化的是「算的时候怎么不把 N×N 注意力矩阵写回 HBM」（Day 53 会细讲），PagedAttention 优化的是「KV 存在哪、怎么分配」</strong>。今天的 vLLM 用的是融合了两者的 kernel（FlashAttention 后端支持 paged KV），别把它们当成竞品。</li>
+</ul>
+
+<h3>4.3 亲手看一眼</h3>
+
+<p>vLLM 装好后，block 管理的代码就在你机器上，值得花 15 分钟翻一翻（不同版本路径略有差异）：</p>
+
+<pre><code># 找到 vLLM 的核心内存管理代码
+python -c "import vllm, os; print(os.path.dirname(vllm.__file__))"
+
+# 关键文件（v0.6~v0.8 附近的布局）
+#   core/block_manager.py       block 分配、释放、fork、swap 的总入口
+#   core/block/                 block allocator、引用计数、COW 实现
+#   core/scheduler.py           调度与抢占决策（下一节的主角）
+#   attention/ops/paged_attn.py PagedAttention kernel 的 Python 侧封装
+
+grep -rn "block_size" $(python -c "import vllm,os;print(os.path.dirname(vllm.__file__))")/core | head -20
+grep -rn "ref_count\|refcount" $(python -c "import vllm,os;print(os.path.dirname(vllm.__file__))")/core | head -20</code></pre>
+
+<h2 id="s5">5. Preemption：显存不够时的抢占、换出与重算</h2>
+
+<h3>5.1 为什么一定会不够</h3>
+
+<p>按需分配有个副作用：<strong>你无法预知一个请求最终要用多少 block</strong>。调度器接了 40 个请求进来时它们都很短，跑着跑着每个都要生成 2000 token，block 池就会见底。这时候必须有人让路——这就是<span class="term">抢占（preemption）</span>。</p>
+
+<p>这个场景在 OS 里也似曾相识：物理内存不够时，内核会把某些进程的页换出到 swap 分区（Day 10）。vLLM 的选择更丰富，因为它掌握着一个 OS 没有的信息：<strong>被换出的数据是可以重新算出来的</strong>。</p>
+
+<h3>5.2 两条策略</h3>
+
+<table>
+<tr><th></th><th>Swap（换出）</th><th>Recompute（重算）</th></tr>
+<tr><td>做什么</td><td>把该序列的 KV block 从 GPU 拷到 CPU pinned memory，释放 GPU block；恢复时拷回来</td><td>直接丢弃 KV block，恢复时把「原始 prompt + 已生成的 token」当成新 prompt 重跑一次 prefill</td></tr>
+<tr><td>代价</td><td>2 × PCIe 传输。Gen4 x16 单向约 25 GB/s，换出 1 GB KV 约 40 ms，来回 80 ms</td><td>一次 prefill 的算力。prefill 是 compute-bound，长 prompt 时代价高但可批处理</td></tr>
+<tr><td>额外资源</td><td>需要预留 CPU 内存（<code>swap_space</code>，默认 4 GB/GPU）</td><td>不需要额外内存</td></tr>
+<tr><td>适合</td><td>beam search、parallel sampling 等多序列共享 block 的场景（重算会重复多次，不划算）</td><td>单序列请求；vLLM 默认策略</td></tr>
+</table>
+
+<p>vLLM 默认用 recompute，理由很硬：Day 38 的结论说 decode 是 memory-bound、prefill 是 compute-bound，而 GPU 的算力是过剩的、PCIe 带宽是稀缺的。<span class="key">用过剩的算力去换稀缺的带宽，是这个系统里几乎总是正确的交易</span>。这个判断本身就是 Roofline 思维的直接应用。</p>
+
+<h3>5.3 抢占谁：调度策略</h3>
+
+<p>vLLM 的调度器维护三个队列：<code>waiting</code>（还没开始）、<code>running</code>（正在生成）、<code>swapped</code>（被换出的）。每一步调度时：</p>
+
+<pre><code>每个 step：
+  1. 尝试为 running 队列里的每个序列分配它下一个 token 需要的 block
+  2. 若 block 池耗尽：
+       按 FCFS 的逆序（最晚到达的先被牺牲）选一个 victim
+       → recompute 模式：释放它所有 block，把它踢回 waiting 队列头部
+       → swap 模式：拷贝它的 block 到 CPU，移入 swapped 队列
+       重复直到能装下当前 step
+  3. 若还有空闲 block：从 swapped / waiting 队列里拉新序列进来（admission control）
+  4. 执行一次前向</code></pre>
+
+<p>为什么牺牲「最晚到达的」？这是 FCFS 公平性的自然推论——先来的先做完，避免<span class="term">饥饿（starvation）</span>。如果反过来牺牲最早的，长请求可能永远做不完。这和 Day 04 学的调度目标（吞吐 / 延迟 / 公平性三者权衡）是同一套语言。</p>
+
+<div class="note">
+<strong>运维信号</strong>：日志里出现 <code>Sequence group ... is preempted by PreemptionMode.RECOMPUTE</code>，或者 metrics 里 <code>num_preemption_total</code> 持续增长，说明你的 KV 预算相对于并发压力不足。三条路：降 <code>max_num_seqs</code>、升 <code>gpu_memory_utilization</code>、或者上 KV cache 量化（Day 52 讲）。<strong>频繁抢占会让 P99 延迟剧烈抖动</strong>——被重算的请求 TTFT 直接翻倍，这是线上最常见的「吞吐很好看但尾延迟很难看」的成因之一。
+</div>
+
+<h2 id="s6">6. Prefix caching：共享前缀、写时复制与 radix 树</h2>
+
+<h3>6.1 动机：你的 Agent 每次都在重复同一段 prefill</h3>
+
+<p>做 Agent 的人对这个场景太熟悉了：一个 system prompt 里塞了角色设定、20 个工具的 JSON schema、安全规则、few-shot 示例，轻松 3000~8000 token。<strong>每个用户的每一轮对话，都要把这几千个 token 重新 prefill 一遍</strong>——算出来的 K/V 和上一次一模一样，因为 attention 是因果的，前缀的 KV 不依赖后面的内容。</p>
+
+<p>这是纯粹的浪费，而且是 TTFT（首 token 延迟）的主要成分。<span class="term">prefix caching</span>（vLLM 里叫 automatic prefix caching，APC；SGLang 里叫 RadixAttention）就是把这段共享前缀的 KV block 留在显存里复用。</p>
+
+<h3>6.2 机制：block 哈希 + 引用计数 + COW</h3>
+
+<p>实现优雅得让人想鼓掌，而且又是从 OS 抄来的：</p>
+
+<p><strong>第一步，给每个满 block 算一个哈希。</strong> 哈希的输入不只是本块的 token，而是<strong>从序列开头到本块结尾的全部 token</strong>（实现上是「前一块的哈希 + 本块 token」的链式哈希）。为什么必须包含前缀历史？因为 attention 的 K/V 值依赖于该 token 之前的所有上下文；两个 block 里 token 相同但前缀不同，KV 值完全不同，混用就是算错。</p>
+
+<pre><code>block_hash[i] = hash(block_hash[i-1], tokens[i*16 : (i+1)*16])
+# 只有"填满"的 block 才参与缓存；最后那个没填满的块不缓存（内容还会变）</code></pre>
+
+<p><strong>第二步，用哈希表查找可复用的物理块。</strong> 新请求进来，把 prompt 切块算哈希，逐个查表。命中的块直接把物理块号填进新序列的 block table，<strong>并把该物理块的引用计数 +1</strong>。命中前缀的部分完全跳过 prefill 计算。</p>
+
+<p><strong>第三步，写时复制（copy-on-write）。</strong> 两个序列共享同一个物理块，谁都不能直接往里写。当某个序列要写入一个 <code>ref_count &gt; 1</code> 的块时，allocator 分配一个新块、拷贝内容、把该序列的 block table 指向新块、旧块引用计数 −1。<strong>这和 Day 02 学的 fork() COW 是同一个机制，连术语都没改</strong>。</p>
+
+<p><strong>第四步，LRU 驱逐。</strong> 引用计数归零的块不立即回收，而是放进一个 LRU 空闲队列。若后续有请求命中它的哈希，直接「复活」；显存紧张时按最近最少使用逐出。vLLM 还做了一个细节：驱逐时优先逐出<strong>最长前缀链尾部</strong>的块，因为靠近根部的块（如 system prompt）被更多请求共享，价值更高。</p>
+
+<div class="ascii">共享一个 system prompt 的三个请求（block_size=16）
+
+              [B0]──[B1]──[B2]      ← system prompt，3 个块，ref_count = 3
+                            │
+              ┌─────────────┼─────────────┐
+              │             │             │
+            [B3]          [B7]          [B9]     ← 各自的用户输入，ref_count = 1
+              │             │             │
+            [B4]          [B8]         [B10]     ← 各自生成的 token
+
+这就是一棵 radix 树（SGLang 直接把它叫 RadixAttention）
+命中 = 从根往下走，走多远就省多少 prefill</div>
+
+<h3>6.3 实测收益与开启方式</h3>
+
+<pre><code># vLLM 开启（较新版本默认已开，老版本需显式指定）
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+  --enable-prefix-caching \
+  --gpu-memory-utilization 0.90 \
+  --max-model-len 8192
+
+# 验证命中率：抓 metrics
+curl -s localhost:8000/metrics | grep -i prefix
+# vllm:prefix_cache_queries_total / vllm:prefix_cache_hits_total
+
+# 手动对照实验：同一个长 system prompt 连发两次，比较 TTFT
+python - <<'PY'
+import time, requests
+SYS = "You are a security analyst. " * 400      # 约 2000+ token 的前缀
+def ask(q):
+    t = time.time()
+    r = requests.post("http://localhost:8000/v1/completions", json={
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "prompt": SYS + q, "max_tokens": 16, "temperature": 0})
+    return time.time() - t
+print("cold:", round(ask("What is CWE-787?"), 3), "s")
+print("warm:", round(ask("What is CWE-416?"), 3), "s")   # 前缀命中，应显著更快
+PY</code></pre>
+
+<p>典型场景收益：system prompt 占比越高、并发用户越多，收益越大。多轮对话中每一轮都能命中之前所有轮次的前缀，长会话的 TTFT 可以降到几十毫秒量级。<strong>代价</strong>：哈希计算和查表有 CPU 开销（在极短 prompt、无共享的场景下反而略微变慢），以及缓存块占着显存不还，会挤压可用 batch——所以它不是无脑开的银弹，要看你的流量形态。</p>
+
+<h2 id="s7">7. 把本周知识算成数字：容量估算与调参 cheat sheet</h2>
+
+<h3>7.1 一个能直接用的估算脚本</h3>
+
+<pre><code>#!/usr/bin/env python3
+"""估算某模型在某卡上的 KV 预算与最大并发。把本周的公式全串起来。"""
+
+def kv_bytes_per_token(layers, kv_heads, head_dim, dtype_bytes=2):
+    return 2 * layers * kv_heads * head_dim * dtype_bytes
+
+def plan(name, gpu_gb, weight_gb, layers, kv_heads, head_dim,
+         seq_len, dtype_bytes=2, util=0.90, block_size=16, act_gb=2.0):
+    total   = gpu_gb * util                         # vLLM 实际接管的显存
+    kv_gb   = total - weight_gb - act_gb            # 留给 KV cache 的
+    per_tok = kv_bytes_per_token(layers, kv_heads, head_dim, dtype_bytes)
+    n_tok   = int(kv_gb * 1024**3 / per_tok)
+    n_block = n_tok // block_size
+    concur  = n_tok / seq_len
+    print(f"{name}")
+    print(f"  KV/token      : {per_tok/1024:.0f} KB")
+    print(f"  KV 预算       : {kv_gb:.1f} GB → {n_tok:,} token → {n_block:,} blocks")
+    print(f"  seq_len={seq_len} 时最大并发 ≈ {concur:.0f}")
+    print(f"  单条 {seq_len} token 序列占 {seq_len*per_tok/1024**3:.2f} GB\n")
+
+# A100-80G
+plan("Llama-2-7B  (MHA, FP16 KV)", 80, 13.5, 32, 32, 128, 4096)
+plan("Llama-3-8B  (GQA, FP16 KV)", 80, 16.0, 32,  8, 128, 4096)
+plan("Llama-3-8B  (GQA, FP8  KV)", 80, 16.0, 32,  8, 128, 4096, dtype_bytes=1)
+plan("Llama-3-70B (GQA, FP16, TP=4，按单卡算)", 80, 35.0, 80, 8, 128, 4096)</code></pre>
+
+<p>跑一遍你会看到几件事：<strong>(1) GQA 的威力</strong>——Llama-3-8B 的 KV 只有 Llama-2-7B 的四分之一（8 个 KV 头 vs 32 个），并发能力直接翻几倍，这是近两年模型架构演进里对推理成本影响最大的单点改动；<strong>(2) KV 量化到 FP8 直接把并发再翻倍</strong>，代价是精度损失（Day 52 细讲）；<strong>(3) 70B 模型即使 TP=4 切开，单卡权重就吃掉 35 GB</strong>，KV 预算被严重挤压，这就是为什么大模型服务对显存容量（H200 的 141 GB vs H100 的 80 GB）如此敏感。</p>
+
+<h3>7.2 参数 cheat sheet</h3>
+
+<table>
+<tr><th>参数</th><th>含义</th><th>调整信号</th></tr>
+<tr><td><code>--gpu-memory-utilization</code></td><td>vLLM 可占用的整卡显存比例，默认 0.9</td><td>抢占频繁 → 往 0.94 试；但太高会在长请求或多模态激活峰值时 OOM，留 6%~10% 余量比较稳</td></tr>
+<tr><td><code>--max-model-len</code></td><td>单请求最大上下文</td><td>设得比业务实际需要大很多，会限制 <code>max_num_seqs</code> 且拉高单请求最坏占用；按 P99 真实长度设</td></tr>
+<tr><td><code>--max-num-seqs</code></td><td>一个 batch 里最多多少序列</td><td>吞吐不够且显存有余 → 调大；P99 抖动大、抢占多 → 调小</td></tr>
+<tr><td><code>--max-num-batched-tokens</code></td><td>单步最多处理的 token 数（含 prefill）</td><td>与 chunked prefill 配合，控制长 prompt 打断 decode 造成的卡顿</td></tr>
+<tr><td><code>--enable-prefix-caching</code></td><td>前缀缓存</td><td>system prompt 长、多轮对话、RAG 固定模板 → 必开；一次性无共享短请求 → 收益接近 0</td></tr>
+<tr><td><code>--block-size</code></td><td>每块 token 数，默认 16</td><td>极长序列可试 32 降低 block table 开销；一般不用动</td></tr>
+<tr><td><code>--swap-space</code></td><td>CPU 换出空间 GB</td><td>只在用 swap 抢占模式时有意义</td></tr>
+<tr><td><code>--kv-cache-dtype</code></td><td>KV 量化类型（fp8 等）</td><td>并发是瓶颈且能接受微小精度损失时，性价比最高的一招</td></tr>
+</table>
+
+<h3>7.3 一条完整的诊断流程</h3>
+
+<pre><code># 症状：吞吐上不去 / P99 抖动
+# 1. 先确认是不是 KV 不够（看抢占）
+curl -s localhost:8000/metrics | grep -E "preemption|running|waiting|gpu_cache_usage"
+#    gpu_cache_usage_perc 长期贴近 1.0 + preemption 增长 → KV 预算不足
+
+# 2. 确认 GPU 是不是真的在算（看利用率与显存带宽）
+nvidia-smi dmon -s pucm -c 20
+#    sm% 低、mem% 高 → 典型 memory-bound decode（Day 38 的结论）→ 该加 batch
+
+# 3. 确认 batch 有没有开起来
+curl -s localhost:8000/metrics | grep num_requests_running
+#    running 长期个位数而 waiting 很长 → 被 KV 预算或 max_num_seqs 卡住了
+
+# 4. 确认前缀有没有被浪费
+curl -s localhost:8000/metrics | grep prefix_cache
+#    queries 高但 hits 低 → 检查 prompt 是否每次都带了随机内容（时间戳、UUID）在最前面</code></pre>
+
+<div class="note">
+<strong>第 4 条是实战中最常见的坑</strong>：很多人把「当前时间」「request id」「用户名」拼在 system prompt 的<strong>最前面</strong>，导致每个请求的第一个 block 哈希都不同，整棵前缀树一次都命不中。<span class="key">规则很简单：把稳定的内容放最前，把变化的内容放最后</span>。这条规则的根源就是 attention 的因果性——前缀变了，后面所有 KV 都失效。
+</div>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>场景一：prefix caching 是一条实打实的跨用户时间侧信道。</strong> 这是本节最重要的一条。攻击者可以构造一个 prompt，测量它的 TTFT：如果显著偏低，说明这段前缀已经在缓存里，也就意味着<strong>近期有别的用户发过以它开头的请求</strong>。逐 block 二分探测，攻击者能一段一段地还原出别人的 system prompt、RAG 注入的文档片段，甚至用户输入的开头。这不是理论——2024 年以来已有多篇工作系统化地演示了对公有推理服务的 prompt 窃取。Day 34 讲的 cache timing 攻击范式（Prime+Probe、Flush+Reload）在这里以「语义层」的形式完整复现了：<strong>共享的缓存 + 可测量的时间差 = 侧信道</strong>，介质从 CPU L3 换成了 GPU 上的 KV block 而已。缓解措施：多租户服务应当按租户/会话隔离前缀缓存命名空间（把 tenant_id 混进 block hash），或对 TTFT 加入随机延迟；至少不要跨租户共享同一棵 radix 树。作为 Agent 安全工程师，这是你在给业务方做推理平台评审时必须问的第一个问题。</p>
+
+<p><strong>场景二：block table 是一道天然的隔离边界，也是一个值得审计的点。</strong> PagedAttention 的间接映射意味着一个序列<strong>只能触及自己 block table 里列出的物理块</strong>——这在结构上等价于 Day 08 讲的页表隔离。但这道边界是<strong>软件强制</strong>的（kernel 里的查表），不像 CPU 有 MMU 硬件兜底。一旦 block table 的下标计算、引用计数、COW 判断中有 off-by-one 或竞态，后果就是<strong>一个用户读到另一个用户的 KV</strong>——这在语义上等价于 Day 41 讲的越界读，只是泄露的不是内存字节，而是别人的对话内容。这类 bug 在推理引擎的 issue 里真实出现过（尤其是 beam search、多序列 fork、抢占恢复这些复杂路径）。对安全评审来说，<span class="key">引用计数的每一处 +1/−1 和每一处 COW 判断都是高危代码</span>，值得单独拉出来做 fuzzing（Day 41 的技能正好用上）。</p>
+
+<p><strong>场景三：KV cache 是残留敏感数据的载体。</strong> 一次对话里的所有内容——用户上传的合同、API key、内部文档——都以 K/V 张量的形式躺在显存 block 里。请求结束后，block 被放回空闲池，<strong>但内容通常不清零</strong>（清零要写 GB 级显存，代价太高）。如果分配逻辑有缺陷、或者新序列读到了尚未覆写的区域，就是显存版的 use-after-free 信息泄露。更现实的风险是<strong>进程外</strong>：同一张卡上的另一个容器若能通过 GPU 驱动漏洞读取显存（Day 48 会讲 GPU 多租户与 MIG 隔离），KV cache 就是最肥的目标——它比模型权重值钱得多，因为权重是公开的，对话内容不是。防御方向：敏感场景禁用跨请求 block 复用、按会话结束显式 zero-fill 高敏感块、依赖 MIG 做硬件级显存隔离。</p>
+
+<p><strong>场景四：抢占机制是一条低成本 DoS 路径。</strong> 攻击者不需要打满你的带宽，只要构造一批「prompt 极长 + max_tokens 极大」的请求，就能迅速吃光 block 池，触发持续抢占。被重算的正常用户请求 TTFT 翻倍甚至更差，整个服务的 P99 崩掉，而攻击者的请求量可能只有几十 QPS——<strong>这是典型的算法复杂度攻击（algorithmic complexity attack），成本极不对称</strong>。防御要点：网关层按 <code>prompt_tokens + max_tokens</code> 加权限流（而不是按请求数限流，那毫无意义）、对单请求设 <code>max_model_len</code> 硬上限、按租户设 KV 配额。Day 104 和 Day 107 会系统讲限流算法，但今天你要先建立这个直觉：<span class="key">对 LLM 服务来说，「一个请求」不是一个有意义的计量单位，token 和显存占用时长才是</span>。</p>
+
+<p><strong>场景五：Agent 系统的长上下文让 KV 管理成为架构主约束。</strong> 一个真实的 Agent 循环——system prompt + 工具 schema + 历史轮次 + RAG 检索到的文档 + 工具返回结果——上下文轻松突破 32K，且随着轮次单调增长。按今天的公式算：Llama-3-8B 上一条 32K 的会话就要 4 GB KV。<strong>这意味着一张 80 GB 的卡最多同时服务十几个活跃 Agent 会话</strong>，容量规划完全由 KV 决定而非算力。所以做 Agent 平台时，上下文压缩、会话状态的换出与恢复、以及「哪些历史该丢」的策略，都不是产品优化项，而是<strong>系统能不能跑起来的前提</strong>。同时它还是攻击面：memory poisoning（Day 160 的主题）之所以危险，正是因为被污染的内容会长期驻留在这条越来越长、且被反复复用的上下文里——而 prefix caching 会让这段被污染的前缀在缓存中持续存活，影响后续所有命中它的请求。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手：实测 prefix caching 的收益，并制造一次「缓存失效」</strong></p>
+<p>启动一个开启 prefix caching 的 vLLM 服务（没有 GPU 的话，用 CPU 后端跑 0.5B 的小模型也能观察到趋势）。构造一个约 2000 token 的固定 system prompt，做三组实验并记录 TTFT：</p>
+<ul>
+<li>(a) 同一前缀连发 5 次，只改最后的用户问题 —— 记录第 1 次与第 2~5 次的 TTFT 差；</li>
+<li>(b) 把一个变化的 <code>request_id</code> 拼在 system prompt 的<strong>最前面</strong>，重复 5 次；</li>
+<li>(c) 把同一个 <code>request_id</code> 拼在<strong>最后面</strong>，重复 5 次。</li>
+</ul>
+<p>用 <code>curl -s localhost:8000/metrics | grep prefix_cache</code> 记录每组前后的 hits/queries 变化。请解释为什么 (b) 的命中率接近 0 而 (c) 接近满——答案要落在「attention 的因果性」和「block 链式哈希」上。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察：把服务压到抢占，看四个指标一起变化</strong></p>
+<p>用 <code>--max-num-seqs 256 --gpu-memory-utilization 0.85</code> 启服务，然后用 vLLM 自带的 benchmark 脚本（或自己写个并发脚本）逐步加压：并发从 4 → 16 → 64 → 128。每一档记录四个数：</p>
+<pre><code>curl -s localhost:8000/metrics | grep -E \
+  "gpu_cache_usage_perc|num_requests_running|num_requests_waiting|preemption"
+nvidia-smi dmon -s um -c 5     # 同时看 sm% 和 mem%</code></pre>
+<p>把四条曲线画在一张图上。请找出<strong>拐点</strong>：吞吐随并发线性上升的阶段，到 <code>gpu_cache_usage_perc</code> 触顶、preemption 开始增长、P99 突然劣化的那一刻。这个拐点就是你这台机器的实际容量上限。再回答：拐点之前系统是 memory-bound 还是 compute-bound？拐点之后瓶颈变成了什么？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考：设计一个「多租户安全」的 prefix cache</strong></p>
+<p>假设你要为公司的 Agent 平台设计推理网关，有 200 个租户共用一个 vLLM 集群，每个租户有自己的长 system prompt，同时平台自己也有一段所有租户共用的安全规则前缀。请写一份不超过 800 字的设计说明，回答：</p>
+<ul>
+<li>缓存的 key 里除了 token 内容还应该混入什么？平台级共享前缀和租户级私有前缀能否用不同的隔离策略？</li>
+<li>如果完全按租户隔离，你损失了多少缓存收益？有没有办法既共享平台前缀又不泄露租户前缀（提示：考虑「只允许共享全局白名单内容的哈希」）？</li>
+<li>攻击者能通过 TTFT 测量得到的信息量上界是多少？加入随机延迟能把它压到什么程度，代价是什么？</li>
+<li>额外思考：如果某个租户的 system prompt 被 indirect prompt injection 污染了，prefix caching 会让污染的影响范围扩大还是缩小？为什么？</li>
+</ul>
+</div>
+
+<div class="next" id="next">
+<strong>下周预告 · Week 07：GPU 架构</strong><br>
+这一周我们一直站在「内存」这一侧看问题，反复得出「GPU 在等数据」的结论。下周我们走到河的另一岸，正面拆开 GPU 本身：<strong>Day 43</strong> 从 GPU 与 CPU 的设计哲学分野讲起，走一遍 V100 → A100 → H100 → H200 → B200 的演进，把 SM、CUDA core、Tensor core、SIMT、warp 这些名词一次性讲透；<strong>Day 44</strong> 进 CUDA 编程模型，thread/warp/block/grid 四级层次、GPU 内存层级、以及你人生第一个 kernel；<strong>Day 45</strong> 讲性能要点——occupancy、memory coalescing（今天 block_size 那段的正式版）、bank conflict、warp divergence、kernel fusion；<strong>Day 46</strong> 讲互联，PCIe / NVLink / NVSwitch / GPUDirect RDMA / NCCL 集合通信；<strong>Day 47 🔧</strong> 动手玩 nvidia-smi 全字段、nsight systems timeline；<strong>Day 48 🔐</strong> 是本周安全日，讲 GPU 多租户隔离——MIG、MPS、显存残留、CUDA context 隔离，正好接上今天场景三留下的问题；<strong>Day 49 🌐</strong> 收在 GPU 选型与成本。<br><br>
+今天讲的 KV block、显存预算、带宽瓶颈，下周会从硬件那一侧被重新解释一遍。两侧接上之后，Week 08 的 LLM 推理工程你会读得非常轻松。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+</body>
+</html>
