@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 43 · GPU 基础：为什么显卡能跑动大模型</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 43 · GPU 基础：为什么一块显卡能跑动大模型</h1>
+  <div class="meta">Week 07 · 周一 · 2026-08-20 · 主线：GPU 架构 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：从今天起我们进入 Phase 2 的核心地带——GPU。你可能天天写 <code>model.to("cuda")</code>、天天在 <code>nvidia-smi</code> 里看显存，但很可能从没认真回答过一个问题：<span class="key">GPU 和 CPU 到底哪里不一样，为什么偏偏是它扛起了整个深度学习时代？</span>今天我们不碰 CUDA 代码（那是明天的事），只把 GPU 的「世界观」讲透。我们会回答：为什么一块 CPU 只有几十个核、GPU 却有上万个「核」；为什么 GPU 的核那么弱却总量取胜；SM、warp、CUDA core、Tensor core 这些名词各自指什么；以及从 V100 到 B200 这七年里，NVIDIA 到底在堆什么。读完你应该能跟同事说清楚「为什么大模型推理是 GPU 的活，而不是 CPU 的活」。</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">GPU vs CPU 的设计哲学：延迟机器 vs 吞吐机器</a></li>
+  <li><a href="#s2">SIMT 执行模型与 warp：GPU 的调度单位</a></li>
+  <li><a href="#s3">SM 结构：GPU 内部的「小工厂」</a></li>
+  <li><a href="#s4">CUDA core vs Tensor core：两种算力单元</a></li>
+  <li><a href="#s5">数值单元家族：FP32 / TF32 / FP16 / BF16 / FP8 / INT8</a></li>
+  <li><a href="#s6">代际演进：V100 → A100 → H100 → H200 → B200</a></li>
+  <li><a href="#s7">显存与带宽：为什么 HBM 才是主角</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. GPU vs CPU 的设计哲学：延迟机器 vs 吞吐机器</h2>
+
+<p>要理解 GPU，最有效的方式不是先看它的参数表，而是先理解它和 CPU 在「设计目标」上的根本分歧。这两种芯片是为完全不同的问题优化的。</p>
+
+<p><span class="term">CPU 是一台「延迟优化」机器（latency-oriented）</span>。它的假设是：任务之间高度相关、有大量分支、下一步要干什么取决于上一步的结果。所以 CPU 要让<strong>单个任务尽快跑完</strong>。为了这个目标，它在一小撮强大的核心里塞满了「加速单个线程」的硬件：庞大的多级缓存（L1/L2/L3 常常占掉芯片一半以上的面积）、复杂的分支预测器、乱序执行引擎、深流水线。这些电路本身不做任何算术——它们的全部工作就是「猜」和「等」，让那几个 ALU 尽量不空闲。</p>
+
+<p><span class="term">GPU 是一台「吞吐优化」机器（throughput-oriented）</span>。它的假设正好相反：我有海量的、彼此独立的、做着同一件事的小任务（比如给一百万个像素各算一次光照，或者给一个 4096×4096 矩阵的每个元素做一次乘加）。GPU 不在乎「单个任务多快跑完」，它在乎「单位时间内总共完成多少任务」。于是它做了一个截然不同的取舍：<span class="key">把省下来的缓存和控制逻辑的晶体管，全部换成算术单元</span>。</p>
+
+<div class="ascii">CPU（延迟机器）                 GPU（吞吐机器）
+┌───────┬───────┐             ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐
+│ Core  │ Core  │             │·│·│·│·│·│·│·│·│·│·│  上千个
+├───────┼───────┤             ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤  小而弱的
+│ Core  │ Core  │             │·│·│·│·│·│·│·│·│·│·│  算术核心
+├───────┴───────┤             ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
+│   巨大的 L3    │             │·│·│·│·│·│·│·│·│·│·│
+│   Cache        │             ├─┴─┴─┴─┴─┴─┴─┴─┴─┴─┤
+│  分支预测/乱序 │             │  小 cache + 高带宽显存  │
+└───────────────┘             └───────────────────┘
+几个强核 + 大量控制逻辑        海量弱核 + 极简控制逻辑</div>
+
+<p>一个日常类比：CPU 像一支由几位<strong>米其林主厨</strong>组成的团队——每人技艺高超、能独立处理复杂的宴席，但总共就那么几个人。GPU 像一个有一万名<strong>流水线工人</strong>的工厂——每个人只会拧一种螺丝、干得也不算快，但一万人同时拧,总产量碾压主厨团队。让主厨去拧十万颗螺丝是浪费；让流水线工人去做一道需要临场发挥的分子料理，他们又会集体懵掉（这就是 GPU 遇到分支时的性能塌陷，第 2 节会讲）。</p>
+
+<p>深度学习的计算恰好是 GPU 的完美负载：<span class="key">矩阵乘法（GEMM）本质上就是海量独立的乘加运算</span>。一个 Transformer 的前向传播，说到底就是一连串大矩阵相乘。这种「同一个操作、施加在海量数据上、彼此独立」的模式，正是 GPU 生来要吃的。这也是为什么 2012 年 AlexNet 用两块 GTX 580 训练出来后，整个领域一夜之间转向了 GPU。</p>
+
+<div class="note">
+<strong>关键数字感</strong>：一块 CPU（如 64 核的 EPYC）峰值双精度算力约 2–4 TFLOPS；一块 H100 的 FP16 Tensor core 算力超过 <strong>1000 TFLOPS（1 PFLOPS）</strong>。差了 300 倍以上。但代价是 GPU 几乎不能独立跑操作系统、处理复杂分支逻辑——它是 CPU 的「协处理器」，永远需要 CPU 来喂数据、发指令。
+</div>
+
+<h2 id="s2">2. SIMT 执行模型与 warp：GPU 的调度单位</h2>
+
+<p>GPU 有上万个核心，难道每个核心都独立取指、译码、各干各的？如果那样，光是「控制逻辑」的开销就会把省下来的晶体管吃回去。NVIDIA 的答案是 <span class="term">SIMT（Single Instruction, Multiple Threads，单指令多线程）</span>。</p>
+
+<p>你可能听过 CPU 里的 <strong>SIMD</strong>（单指令多数据，比如 AVX 指令一次处理 8 个 float）。SIMT 是它的「线程化」升级版：GPU 把线程<strong>每 32 个打成一捆</strong>，这一捆叫一个 <span class="term">warp（线程束）</span>。一个 warp 里的 32 个线程<span class="key">共享同一个程序计数器，在同一时刻执行同一条指令</span>，只是各自作用在不同的数据上。</p>
+
+<p>为什么是 32？这是 NVIDIA 的硬件设计常数（AMD 的对应概念叫 wavefront，历史上是 64）。你写 CUDA 时看似在写「单个线程的代码」，但硬件永远以 warp 为最小调度单位。这带来一个极其重要的性能陷阱——<span class="term">warp divergence（线程束分歧）</span>：</p>
+
+<pre><code>// CUDA kernel 里的一段代码，tid 是线程编号
+if (tid % 2 == 0) {
+    do_A();   // 偶数线程走这条
+} else {
+    do_B();   // 奇数线程走这条
+}</code></pre>
+
+<p>因为 warp 里 32 个线程必须执行同一条指令，遇到这个 <code>if/else</code>，硬件只能<strong>串行化</strong>：先让 16 个偶数线程执行 <code>do_A()</code>（此时 16 个奇数线程被「掩码」屏蔽、空转），再让 16 个奇数线程执行 <code>do_B()</code>（此时偶数线程空转）。<span class="key">本该并行的两条路径变成了串行，性能直接腰斩。</span>这就是前面「让流水线工人做临场发挥的料理会集体懵掉」的技术版本——GPU 讨厌分支。</p>
+
+<p>SIMT 还带来一个天才的设计：<span class="term">用并行度来掩盖内存延迟（latency hiding）</span>。CPU 靠大缓存来避免等内存（等一次内存要几百个时钟周期）；GPU 缓存很小，它的策略是——当一个 warp 因为等待显存数据而停顿时，硬件<strong>立刻切换到另一个已就绪的 warp</strong> 继续算，几乎零成本切换。只要在飞的 warp 足够多，GPU 的算术单元就能一直忙碌，内存延迟被彻底「藏」在计算背后。这就是为什么 GPU 需要「喂给它成千上万个线程」才能跑满——线程太少，延迟藏不住，算力就浪费了。</p>
+
+<h2 id="s3">3. SM 结构：GPU 内部的「小工厂」</h2>
+
+<p>一块 GPU 不是「一万个核心的大杂烩」，而是由几十上百个相对独立的<span class="term">流式多处理器（SM，Streaming Multiprocessor）</span>拼起来的。SM 是 GPU 真正的「基本组织单位」——你可以把整块 GPU 想成一座工业园区，每个 SM 是园区里一座独立的小工厂。H100 有 132 个 SM，A100 有 108 个。</p>
+
+<p>每个 SM 内部大致包含这些东西：</p>
+
+<ul>
+  <li><span class="term">若干 CUDA core</span>：做整数和浮点标量运算的基本算术单元（第 4 节详述）。</li>
+  <li><span class="term">若干 Tensor core</span>：专门做矩阵乘加的「大杀器」（第 4 节详述）。</li>
+  <li><span class="term">Warp scheduler（warp 调度器）</span>：负责在众多就绪的 warp 之间挑选下一个执行——这就是第 2 节说的「延迟掩盖」的执行者。</li>
+  <li><span class="term">寄存器文件（Register File）</span>：极快、极大（每个 SM 有 64K 个 32 位寄存器），线程私有数据放这里。</li>
+  <li><span class="term">共享内存 / L1 缓存（Shared Memory）</span>：SM 内所有线程可见的一块高速片上内存，是手动优化的关键（明天讲 CUDA 时会大量用到）。</li>
+  <li><span class="term">LD/ST 单元、SFU</span>：负责访存（Load/Store）和特殊函数（sin/exp/sqrt 等）。</li>
+</ul>
+
+<div class="ascii">        整块 GPU (以 H100 为例)
+┌────────────────────────────────────────────┐
+│  SM ×132  ← 每个 SM 是一座独立小工厂         │
+│  ┌──────────────────────────────────────┐  │
+│  │ 一个 SM 内部：                         │  │
+│  │  Warp Scheduler ×4                     │  │
+│  │  CUDA core ×128  Tensor core ×4        │  │
+│  │  Register File (256KB)                 │  │
+│  │  Shared Memory / L1 (up to 228KB)      │  │
+│  └──────────────────────────────────────┘  │
+│                                              │
+│  L2 Cache (全 SM 共享, ~50MB)                │
+│  ─────────────────────────────────────────  │
+│  HBM 显存 (80GB, ~3.35 TB/s 带宽)            │
+└────────────────────────────────────────────┘</div>
+
+<p>这张图给你一个重要的<span class="key">内存层级直觉</span>：越靠近算术单元的存储越快越小（寄存器 → 共享内存 → L2 → HBM 显存）。写高性能 CUDA 的核心思想，就是尽量让数据在快的层级（寄存器、共享内存）里多停留、少往慢的 HBM 跑。这个思想会在整个 Week 07、Week 08 反复出现，是 FlashAttention、量化、算子融合等所有优化的底层逻辑。</p>
+
+<h2 id="s4">4. CUDA core vs Tensor core：两种算力单元</h2>
+
+<p>初学者最容易混淆的两个词。它们都是 SM 里的算术单元，但干的活完全不同。</p>
+
+<h3>CUDA core：通用的标量算术单元</h3>
+<p><span class="term">CUDA core</span> 是最基础的算术单元，一个 CUDA core 在一个时钟周期里做一次<strong>标量</strong>的浮点乘加（FMA：<code>a = a + b*c</code>）。「一万个核心」通常指的就是 CUDA core 的数量（H100 有约 16896 个 FP32 CUDA core）。它通用、灵活，你写的绝大部分逐元素操作（加法、激活函数、归一化）都跑在 CUDA core 上。但它一次只处理一个数，做大矩阵乘法时效率有限。</p>
+
+<h3>Tensor core：专用的矩阵乘加引擎</h3>
+<p><span class="term">Tensor core</span> 是 Volta 架构（2017，V100）首次引入的专用单元。它不做标量运算，而是<span class="key">一条指令直接完成一个小矩阵块的乘加</span>——比如一次算 <code>D = A×B + C</code>，其中 A、B 是 4×4 或更大的小矩阵。一个 Tensor core 一个周期能顶几十上百个 CUDA core 的矩阵运算吞吐。</p>
+
+<p>为什么专门为矩阵造一个单元？因为深度学习 90% 以上的算力都花在矩阵乘法（GEMM）上。与其用一万个通用 core 笨拙地拼矩阵乘，不如造一批「矩阵专用电路」。这就是<strong>领域专用架构（DSA）</strong>的思想：牺牲通用性，换特定负载的极致效率。Tensor core 的代价是它只擅长矩阵乘加、且偏好低精度（FP16/BF16/FP8），但这恰好是深度学习需要的。</p>
+
+<table>
+<tr><th>维度</th><th>CUDA core</th><th>Tensor core</th></tr>
+<tr><td>处理粒度</td><td>标量（一次一个数的 FMA）</td><td>矩阵块（一次一个小矩阵乘加）</td></tr>
+<tr><td>擅长</td><td>逐元素运算、控制流、通用计算</td><td>GEMM / 卷积 / attention</td></tr>
+<tr><td>精度偏好</td><td>FP32/FP64 全精度</td><td>FP16/BF16/TF32/FP8/INT8 低精度</td></tr>
+<tr><td>数量（H100）</td><td>~16896 个 FP32</td><td>528 个（每 SM 4 个）</td></tr>
+<tr><td>贡献的算力占比</td><td>小头</td><td>绝大头（大模型算力几乎全靠它）</td></tr>
+</table>
+
+<p><span class="key">记住这句话：当你看到「H100 有 1000 TFLOPS」这种夸张数字时，指的几乎都是 Tensor core 的低精度算力，不是 CUDA core 的 FP32 算力（后者只有约 67 TFLOPS）。</span>宣传数字和你实际能用到的算力之间的差距，往往就藏在「是不是 Tensor core、什么精度、稠密还是稀疏」这几个限定词里。</p>
+
+<h2 id="s5">5. 数值单元家族：FP32 / TF32 / FP16 / BF16 / FP8 / INT8</h2>
+
+<p>GPU 支持多种数值格式，这不是花架子——<span class="key">精度越低，同样的芯片面积能塞下越多的算术单元、显存能装下越多的参数、带宽能搬越多的数据</span>，于是算力和容量成倍增长。这是大模型能跑起来的关键之一。理解这几种格式的构成很重要：</p>
+
+<table>
+<tr><th>格式</th><th>总位数</th><th>符号/指数/尾数</th><th>特点与用途</th></tr>
+<tr><td>FP64</td><td>64</td><td>1/11/52</td><td>双精度，科学计算用；深度学习几乎不用</td></tr>
+<tr><td>FP32</td><td>32</td><td>1/8/23</td><td>单精度，训练的传统「标准精度」</td></tr>
+<tr><td>TF32</td><td>19*</td><td>1/8/10</td><td>NVIDIA 专有：FP32 的指数 + FP16 的尾数，A100 起 Tensor core 默认用，几乎无损换 8 倍吞吐</td></tr>
+<tr><td>FP16</td><td>16</td><td>1/5/10</td><td>半精度，动态范围小（易溢出），需配 loss scaling</td></tr>
+<tr><td>BF16</td><td>16</td><td>1/8/7</td><td>指数和 FP32 一样宽 → 动态范围大、训练更稳，尾数少 → 精度略低。现代大模型训练主力</td></tr>
+<tr><td>FP8 (E4M3/E5M2)</td><td>8</td><td>1/4/3 或 1/5/2</td><td>H100 起支持，推理和部分训练用，需精细校准</td></tr>
+<tr><td>INT8</td><td>8</td><td>整数</td><td>推理量化主力，配合缩放因子，吞吐极高</td></tr>
+</table>
+
+<p>这里最值得记住的对比是 <span class="term">FP16 vs BF16</span>。两者都是 16 位，但分配方式不同：FP16 把更多位给了尾数（精度），BF16 把更多位给了指数（范围）。深度学习里「数值范围」比「小数点后的精度」更重要——梯度可能非常大或非常小，一旦超出 FP16 的表示范围就变成 inf 或 0，训练直接崩。BF16 的指数位和 FP32 一样宽，几乎不会溢出，所以现在训练大模型基本都用 BF16。<span class="key">一句话记忆：BF16 = 「FP32 的范围 + 更粗的精度」，用范围换稳定。</span></p>
+
+<p>而 <span class="term">TF32</span> 是个聪明的过渡产物：它在硬件内部用 19 位表示，指数照抄 FP32（范围一致）、尾数只留 10 位（够用）。好处是——你的 PyTorch 代码一行不用改，Tensor core 就能把 FP32 矩阵乘自动加速好几倍，几乎无感知精度损失。A100 起默认开启（可用 <code>torch.backends.cuda.matmul.allow_tf32</code> 控制）。</p>
+
+<h2 id="s6">6. 代际演进：V100 → A100 → H100 → H200 → B200</h2>
+
+<p>把 NVIDIA 数据中心 GPU 这几代串起来看，你能清楚地看到「每一代在补什么短板」，这对做选型和理解成本极有帮助。</p>
+
+<table>
+<tr><th>代号</th><th>架构</th><th>年份</th><th>显存</th><th>带宽</th><th>标志性能力</th></tr>
+<tr><td>V100</td><td>Volta</td><td>2017</td><td>16/32GB HBM2</td><td>~900 GB/s</td><td>首次引入 <strong>Tensor core</strong>，FP16 训练起飞</td></tr>
+<tr><td>A100</td><td>Ampere</td><td>2020</td><td>40/80GB HBM2e</td><td>~2 TB/s</td><td><strong>TF32</strong>、<strong>MIG</strong> 多实例、结构化稀疏</td></tr>
+<tr><td>H100</td><td>Hopper</td><td>2022</td><td>80GB HBM3</td><td>~3.35 TB/s</td><td><strong>FP8</strong>、Transformer Engine、更快 NVLink</td></tr>
+<tr><td>H200</td><td>Hopper</td><td>2024</td><td>141GB HBM3e</td><td>~4.8 TB/s</td><td>同 H100 算力，<strong>显存和带宽大幅增加</strong>（专为大模型推理）</td></tr>
+<tr><td>B200</td><td>Blackwell</td><td>2024–25</td><td>192GB HBM3e</td><td>~8 TB/s</td><td>双 die 设计、<strong>FP4</strong>、算力再翻倍</td></tr>
+</table>
+
+<p>从这张表能读出两条主线：</p>
+
+<ul>
+  <li><span class="key">精度不断向下探</span>：Volta 引入 FP16 → Ampere 加 TF32 → Hopper 加 FP8 → Blackwell 加 FP4。每降一档精度，同芯片的算力和显存有效容量就翻倍。这是「用精度换规模」的持续下注。</li>
+  <li><span class="key">显存和带宽越来越被当成主角</span>：注意 H200 相对 H100，算力几乎没变，但显存从 80GB 涨到 141GB、带宽从 3.35 涨到 4.8 TB/s。NVIDIA 很清楚——大模型推理的瓶颈不是算力，而是「装不下」和「搬得慢」（这正是 Day 38 会深入的 memory-bound 问题）。</li>
+</ul>
+
+<p>对做 Agent 安全 / LLM 服务的你，选型直觉可以简化为：<strong>训练大模型</strong>看算力和 NVLink 互联（H100/B200）；<strong>推理大模型</strong>看显存容量和带宽（H200 常常比 H100 更划算，因为能塞下更长的上下文和更大的 KV cache）。Day 49 会专门做成本与选型分析。</p>
+
+<h2 id="s7">7. 显存与带宽：为什么 HBM 才是主角</h2>
+
+<p>最后一节戳破一个新手的常见误解：<span class="key">GPU 性能的天花板，很多时候不是算力（TFLOPS），而是显存带宽（TB/s）。</span></p>
+
+<p>GPU 的显存用的是 <span class="term">HBM（High Bandwidth Memory，高带宽内存）</span>——一种堆叠在 GPU 芯片旁边、通过超宽总线连接的特殊 DRAM。相比 CPU 用的 DDR5（带宽约 50–100 GB/s），H100 的 HBM3 带宽高达 3350 GB/s，是几十倍的差距。这么高的带宽，就是为了「喂饱」那上万个嗷嗷待哺的算术单元。</p>
+
+<p>但即便这么快，它相对算力仍然「不够快」。有一个关键概念叫 <span class="term">算术强度（arithmetic intensity）</span>：一个操作「每从显存搬 1 字节数据，能做多少次浮点运算」。</p>
+
+<ul>
+  <li>如果算术强度<strong>高</strong>（比如大矩阵乘法，搬一次数据能反复复用做很多次乘加）→ 瓶颈在算力，叫 <span class="term">compute-bound（计算受限）</span>。这时 Tensor core 满负荷，是理想状态。</li>
+  <li>如果算术强度<strong>低</strong>（比如逐元素加法、或者大模型推理的 decode 阶段——每生成一个 token 都要把整个模型权重从显存读一遍，却只做很少的计算）→ 瓶颈在带宽，叫 <span class="term">memory-bound（内存受限）</span>。这时算术单元大量空转，等着数据从 HBM 慢慢搬过来。</li>
+</ul>
+
+<p><span class="key">大模型推理的 decode 阶段是典型的 memory-bound</span>——这就是为什么 H200 只加显存带宽、不加算力，就能显著提升推理速度。也是为什么「量化」如此有效：把权重从 FP16 压到 INT8，搬运的数据量直接减半,memory-bound 的场景速度近乎翻倍。这个「算力 vs 带宽」的张力，是理解一切 LLM 推理优化的总纲，Week 06 的 Roofline 模型会把它讲成一套完整的分析框架。今天你只需要牢牢记住一句话：<strong>看一块 GPU 强不强，别只看 TFLOPS，一定要同时看它的显存容量和带宽。</strong></p>
+
+<div class="connect" id="connect">
+<h2>🔗 与 AI / Agent 安全的连结</h2>
+
+<p><strong>1. 多租户 GPU 的隔离风险。</strong>你做 Agent 安全，很可能面对「多个租户 / 多个 Agent 共享同一块 GPU」的场景。A100 引入的 MIG（多实例 GPU）能把一块卡切成硬件隔离的多份，但更常见的 MPS（时间片共享）隔离要弱得多。理解 SM、显存的物理结构，是评估「租户 A 能否通过显存残留读到租户 B 数据」这类风险的前提。周六（Day 48）会专门做 GPU 多租户安全。</p>
+
+<p><strong>2. 显存残留与数据泄露。</strong>GPU 显存（HBM）在一个 CUDA context 释放后，并不保证被清零。如果一个恶意 Agent 能在受害者进程结束后立刻申请同一块显存，就可能读到上一个进程遗留的模型权重、用户输入或中间激活。理解「显存是一块物理资源、由驱动分配复用」这件事，才能意识到这个攻击面。</p>
+
+<p><strong>3. 侧信道计时攻击。</strong>SIMT 的 warp divergence、缓存命中/未命中会造成可观测的执行时间差异。攻击者可能通过精心构造输入、测量 GPU kernel 的执行时间，反推出模型结构或部分权重信息。理解 GPU 的执行模型，是判断你的推理服务是否存在计时侧信道的基础。</p>
+
+<p><strong>4. 资源耗尽型 DoS。</strong>知道「GPU 要靠海量并行 warp 才能跑满、显存是硬上限」后，你就能设计针对性的防护：一个恶意请求如果构造超长上下文，会撑爆 KV cache 显存，导致整机 OOM、拖垮所有租户。带宽和显存是比 CPU 更脆弱的耗尽点，速率限制和显存配额要专门为 GPU 设计。</p>
+
+<p><strong>5. 精度与对抗鲁棒性。</strong>FP8/INT8 量化在提升吞吐的同时会引入数值误差。这层误差可能改变模型对对抗样本的响应边界——同一个 jailbreak 输入，在 FP16 和 INT8 部署上的行为可能不同。做 red team 评测时，必须在实际部署精度下测试，而不是只在 FP32 训练精度下测。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手</strong>：如果你手边有 NVIDIA GPU（本地或云服务器），运行 <code>nvidia-smi</code>，找出这几项并抄下来：GPU 型号、显存总量、当前显存占用、GPU 利用率（GPU-Util）。然后运行 <code>nvidia-smi -q | grep -A3 "FB Memory"</code> 看更详细的显存信息。如果没有 GPU，去 NVIDIA 官网找 H100 的 datasheet，抄下它的 FP16 Tensor core 算力、FP32 CUDA core 算力、显存带宽三个数字，感受它们的数量级差距。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察</strong>：查一下你常用的模型（比如 Llama-3-8B）如果用 FP16 精度加载，需要多少显存？（提示：粗算公式 = 参数量 × 每参数字节数，FP16 是 2 字节/参数）。再算一下换成 INT8（1 字节/参数）后是多少。想一想：为什么「量化」几乎是显存受限场景的第一优化手段？</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考</strong>：本文说「GPU 讨厌分支」。假设你要在 GPU 上实现一个 Agent 的工具路由逻辑——根据用户输入的不同，走十几条完全不同的处理分支。为什么这种「充满数据依赖分支」的逻辑不适合直接放在 GPU kernel 里跑？在一个真实的 LLM 推理服务里，这类「控制流密集」的工作通常交给谁（CPU 还是 GPU）来做？这对你设计推理网关的架构有什么启示？</p>
+</div>
+
+<div class="next">
+<strong>明日预告</strong>：Day 44 我们从「看 GPU」进到「用 GPU」——正式进入 <strong>CUDA 编程模型</strong>。你会亲手写第一个 CUDA kernel（一个向量加法），理解 thread / warp / block / grid 这套四级线程层次是怎么映射到今天讲的 SM 和 warp 上的，搞清楚 <code>&lt;&lt;&lt;blocks, threads&gt;&gt;&gt;</code> 这个奇怪语法到底在说什么，以及 <code>cudaMalloc</code> / <code>cudaMemcpy</code> 是如何在 CPU 内存和 GPU 显存之间搬数据的。今天建立的「SM、warp、显存层级」直觉，明天全都会用上。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+</body>
+</html>
