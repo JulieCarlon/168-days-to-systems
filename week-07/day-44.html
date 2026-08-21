@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Day 44 · CUDA 编程模型</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #2a2a2a;
+    --muted: #6b6b6b;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --line: #e7e5e0;
+    --card: #ffffff;
+    --code-bg: #f4f1ec;
+    --callout-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.78;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .header {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .header h1 { font-size: 22px; margin: 0 0 8px; color: var(--accent); }
+  .header .meta { font-size: 13px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin: 0 0 32px;
+    font-size: 13.5px;
+  }
+  .toc ol { margin: 4px 0; padding-left: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .leadin {
+    background: var(--callout-bg);
+    border-left: 3px solid var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0 0 36px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: 48px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { font-size: 16.5px; margin-top: 24px; color: #444; }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 18px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .note {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent-soft);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  .connect {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    margin: 36px 0;
+  }
+  .connect h2 { margin-top: 0; border-left: none; padding-left: 0; }
+  .exercise {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .exercise-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 8px;
+  }
+  .next {
+    margin-top: 48px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px dashed var(--accent-soft);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .next strong { color: var(--accent); }
+  .key { background: linear-gradient(transparent 60%, var(--accent-soft) 60%); padding: 0 2px; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  .term { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Day 44 · CUDA 编程模型</h1>
+  <div class="meta">Week 07 · 周二 · 2026-08-21 · 主线：GPU 架构 · 预计 1.5h 阅读 + 30min 实操</div>
+</div>
+
+<div class="leadin">
+<strong>今日导读</strong>：昨天我们从硬件视角拆开了一块 GPU——SM、CUDA core、Tensor core、SIMT、warp。今天换一个视角：<strong>作为一个写程序的人，你怎么把活派到这几万个核心上？</strong> 答案是 CUDA 的编程模型。它的核心只有一句话——你写一段串行的、只描述「一个线程干什么」的代码（叫 kernel），然后告诉 GPU「同时开几万份这段代码去跑」。今天我们把这套模型彻底讲透：<span class="key">线程如何组织成 thread/warp/block/grid 四级层次、kernel 怎么启动、GPU 有哪几层内存、数据怎么在 CPU 和 GPU 之间搬、怎么写第一个向量加 kernel、cooperative groups 和 stream 是什么</span>。今天结束时，你应该能读懂任何一段 CUDA C 代码的骨架，也能解释「为什么 <code>blockDim</code>、<code>threadIdx</code> 这些神秘变量到处出现」。
+</div>
+
+<div class="toc">
+<strong>今日目录</strong>
+<ol>
+  <li><a href="#s1">CUDA 是什么：一层薄薄的并行抽象</a></li>
+  <li><a href="#s2">线程层次：thread / warp / block / grid</a></li>
+  <li><a href="#s3">kernel 启动语法：&lt;&lt;&lt;grid, block&gt;&gt;&gt;</a></li>
+  <li><a href="#s4">GPU 内存层级：register / shared / global</a></li>
+  <li><a href="#s5">cudaMalloc / cudaMemcpy：数据的两地穿梭</a></li>
+  <li><a href="#s6">写一个完整的向量加 kernel</a></li>
+  <li><a href="#s7">cooperative groups 与 stream：进阶两件事</a></li>
+  <li><a href="#connect">与 AI / Agent 安全的连结</a></li>
+  <li><a href="#exercise">今日小练习（3 道）</a></li>
+</ol>
+</div>
+
+<h2 id="s1">1. CUDA 是什么：一层薄薄的并行抽象</h2>
+
+<p><span class="term">CUDA</span>（Compute Unified Device Architecture）是 NVIDIA 2007 年推出的、让你用类 C/C++ 语言给 GPU 编程的平台。在 CUDA 之前，想用 GPU 做通用计算，得把你的问题伪装成「画三角形」骗着图形 API（OpenGL）去算——极其反人类。CUDA 的贡献是：<span class="key">把 GPU 从「只会画画的专用硬件」变成「可以被普通程序员编程的并行计算机」</span>。</p>
+
+<p>理解 CUDA 的第一件事，是分清两个角色：</p>
+
+<ul>
+  <li><span class="term">Host（主机）</span>：CPU + 它的内存（DRAM）。你的主程序、<code>main()</code> 函数跑在这里。它是「指挥官」。</li>
+  <li><span class="term">Device（设备）</span>：GPU + 它的显存（HBM/GDDR）。真正的大规模并行计算发生在这里。它是「工兵连」。</li>
+</ul>
+
+<p>一个 CUDA 程序的典型骨架永远是这三步循环，务必背下来：</p>
+
+<div class="ascii">┌──────────── Host (CPU) ────────────┐        ┌──────── Device (GPU) ────────┐
+│  1. 在 GPU 显存上分配空间          │        │                              │
+│     cudaMalloc(&d_x, N)  ──────────┼───────>│  [ 一块空显存 d_x ]          │
+│                                    │        │                              │
+│  2. 把输入数据从内存拷到显存        │        │                              │
+│     cudaMemcpy(d_x, h_x, H2D) ─────┼───────>│  [ d_x 里装好了数据 ]        │
+│                                    │        │                              │
+│  3. 启动 kernel，几万线程同时算    │        │  add<<<blocks,threads>>>()   │
+│     add<<<...>>>(d_x, d_y) ────────┼───────>│  ▓▓▓▓▓▓▓▓▓▓ 并行执行 ▓▓▓▓▓▓  │
+│                                    │        │                              │
+│  4. 把结果从显存拷回内存           │        │                              │
+│     cudaMemcpy(h_y, d_y, D2H) <────┼────────│  [ 结果算好了 ]              │
+└────────────────────────────────────┘        └──────────────────────────────┘</div>
+
+<p>这里有个关键的心智模型：<span class="key">CPU 和 GPU 有各自独立的内存，它们不能直接读对方的地址</span>。CPU 上的指针 <code>h_x</code> 指向主机内存，GPU 上的指针 <code>d_x</code> 指向显存，两者不能混用。数据必须显式地「搬」过去、「搬」回来。这就是为什么 CUDA 程序里到处是 <code>cudaMemcpy</code>——它是横跨 PCIe 总线（回顾昨天：Gen4/Gen5 的那根线）的搬运工。</p>
+
+<div class="note">
+<strong>类比</strong>：把 Host 想成一个坐在办公室里的项目经理（CPU：单核很聪明，擅长复杂决策但人手少），Device 想成一个远在工厂车间的上万人流水线（GPU：每个工人很笨只会做简单重复动作，但人多）。经理不能直接把脑子里的想法塞进工人手里，必须把「原料」（数据）用卡车（PCIe）运到车间仓库（显存），下达统一的「作业指令」（kernel），等工人们一起干完，再用卡车把「成品」拉回办公室。今天所有的语法，本质都是在描述这条运输+作业流水线。
+</div>
+
+<h2 id="s2">2. 线程层次：thread / warp / block / grid</h2>
+
+<p>CUDA 最精妙、也最容易让初学者晕的地方，是它把线程组织成了<span class="term">四级层次</span>。你必须理解这个层次，因为几乎所有 CUDA 代码都在跟这四个层次的索引打交道。从小到大：</p>
+
+<div class="ascii">grid（整个 kernel 启动的所有线程）
+ └── block（线程块，一群能协作的线程，最多 1024 个）
+      └── warp（32 个线程，硬件真正的调度单位，你写代码时"看不见"但要懂）
+           └── thread（单个线程，执行你 kernel 里那段代码的一份拷贝）</div>
+
+<h3>thread（线程）</h3>
+<p>最小单位。一个 thread 就是你 kernel 函数体的「一份实例」。如果你启动了 100 万个线程，就是这段代码被同时跑了 100 万遍，每一遍处理数据的不同部分。区分它们靠内建变量 <code>threadIdx</code>。</p>
+
+<h3>warp（线程束）</h3>
+<p>硬件层面的真正调度单位，<span class="key">固定 32 个线程</span>（这是 NVIDIA 的硬件常数，从 2007 年到今天没变过）。回顾昨天的 SIMT：一个 warp 里的 32 个线程<strong>共用一个指令流</strong>，锁步执行同一条指令，只是各自作用在不同数据上。warp 在你的源码里没有显式关键字，但它无处不在地影响性能——比如 <span class="term">warp divergence</span>（一个 warp 里的线程走了不同 if 分支，导致串行化），我们明天讲性能时会深入。今天记住：block 里的线程数最好是 32 的倍数。</p>
+
+<h3>block（线程块）</h3>
+<p>一群能<strong>互相协作</strong>的线程，上限 1024 个。为什么要有 block 这一层？因为一个 block 的所有线程被保证调度到<span class="key">同一个 SM（流多处理器）</span>上，因此它们可以：(1) 共享一块高速的 <code>shared memory</code>；(2) 用 <code>__syncthreads()</code> 做栅栏同步（大家等到都到齐了再往下走）。不同 block 之间则<strong>不能</strong>直接同步或共享 shared memory——这是 CUDA 可扩展性的根基：block 之间互相独立，所以 GPU 可以按自己有多少 SM，灵活地并行或串行地跑这些 block。</p>
+
+<h3>grid（网格）</h3>
+<p>一次 kernel 启动产生的<strong>所有 block 的集合</strong>。你启动 kernel 时，就是在说「给我开一个 grid，里面有 M 个 block，每个 block 有 T 个线程」，总线程数 = M × T。</p>
+
+<p>block 和 grid 都可以是 1D/2D/3D 的（用 <code>dim3</code> 类型表示），方便你映射到 1 维数组、2 维图像、3 维体数据。每个线程通过下面这套内建变量算出「我是谁、我该处理哪个数据」：</p>
+
+<table>
+<tr><th>内建变量</th><th>含义</th><th>类比</th></tr>
+<tr><td><code>threadIdx.x/y/z</code></td><td>线程在其 block 内的局部编号</td><td>你在班里的座位号</td></tr>
+<tr><td><code>blockIdx.x/y/z</code></td><td>block 在 grid 内的编号</td><td>你是几班</td></tr>
+<tr><td><code>blockDim.x/y/z</code></td><td>每个 block 有多少线程</td><td>每个班多少人</td></tr>
+<tr><td><code>gridDim.x/y/z</code></td><td>grid 有多少 block</td><td>一共几个班</td></tr>
+</table>
+
+<p>于是那句 CUDA 里最经典的「全局索引」公式就顺理成章了——把「几班 × 每班人数 + 座位号」拼成全校唯一的学号：</p>
+
+<pre><code>int i = blockIdx.x * blockDim.x + threadIdx.x;   // 我在全局数组里的下标</code></pre>
+
+<h2 id="s3">3. kernel 启动语法：&lt;&lt;&lt;grid, block&gt;&gt;&gt;</h2>
+
+<p><span class="term">kernel</span> 就是「要在 GPU 上跑、且会被成千上万个线程同时执行」的那个函数。它有三个语法标记你必须认识：</p>
+
+<ul>
+  <li><code>__global__</code>：函数修饰符，声明「这是一个 kernel，从 Host 调用、在 Device 执行」。返回类型必须是 <code>void</code>。</li>
+  <li><code>__device__</code>：声明「这个函数在 Device 上执行、也只能被 Device 上的代码调用」（kernel 里调用的辅助函数）。</li>
+  <li><code>__host__</code>：普通 CPU 函数（默认就是，通常不写）。</li>
+</ul>
+
+<p>启动 kernel 用一个 C++ 里不存在的、CUDA 独有的<span class="key">三尖括号语法 <code>&lt;&lt;&lt;...&gt;&gt;&gt;</code></span>（执行配置，execution configuration）：</p>
+
+<pre><code>// 声明一个 kernel
+__global__ void myKernel(float* data) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    data[i] = data[i] * 2.0f;
+}
+
+// 从 Host 启动它：512 个 block，每 block 256 个线程 => 共 131072 个线程
+myKernel&lt;&lt;&lt;512, 256&gt;&gt;&gt;(d_data);</code></pre>
+
+<p>三尖括号里最少两个参数：<code>&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;</code>，即「多少个 block」和「每 block 多少线程」。它们可以是整数（1D），也可以是 <code>dim3</code>（多维）：</p>
+
+<pre><code>dim3 threads(16, 16);              // 每 block 16×16 = 256 线程（适合处理 2D 图像）
+dim3 blocks(width/16, height/16);  // grid 尺寸按数据大小算
+imgKernel&lt;&lt;&lt;blocks, threads&gt;&gt;&gt;(d_img);</code></pre>
+
+<div class="note">
+<strong>三个必须记住的坑</strong>：
+<ol>
+<li><strong>kernel 启动是异步的</strong>。<code>myKernel&lt;&lt;&lt;...&gt;&gt;&gt;()</code> 这行代码几乎立刻返回，CPU 继续往下跑，GPU 在后台算。想等它算完，要显式调用 <code>cudaDeviceSynchronize()</code>。这个异步特性是性能优化的基础，也是 bug 的重灾区。</li>
+<li><strong>线程数几乎总是多于数据</strong>。你通常向上取整开线程（<code>blocks = (N + 255) / 256</code>），于是最后一个 block 会有些线程的 <code>i >= N</code>，越界。所以 kernel 里第一行几乎永远是边界检查 <code>if (i < N)</code>。</li>
+<li><strong>启动本身不报错</strong>。kernel 内部的错误（越界、非法访问）不会让 <code>&lt;&lt;&lt;&gt;&gt;&gt;</code> 抛异常，得靠 <code>cudaGetLastError()</code> / <code>cudaDeviceSynchronize()</code> 的返回值捕获。</li>
+</ol>
+</div>
+
+<h2 id="s4">4. GPU 内存层级：register / shared / global</h2>
+
+<p>写 CPU 程序时你几乎不用管内存在哪一层（缓存对程序员透明）。但在 GPU 上，<span class="key">内存层级是显式的、由你手动管理的</span>，而且用对内存层级是 CUDA 性能的头号杠杆。从快到慢、从私有到共享：</p>
+
+<table>
+<tr><th>层级</th><th>作用域</th><th>速度</th><th>典型大小</th><th>谁能访问</th></tr>
+<tr><td><span class="term">寄存器 register</span></td><td>单线程私有</td><td>最快（~1 周期）</td><td>每线程几十~255 个</td><td>只有该线程自己</td></tr>
+<tr><td><span class="term">共享内存 shared</span></td><td>block 内共享</td><td>很快（~20 周期）</td><td>每 SM 最多 ~228 KB（H100）</td><td>同一 block 的所有线程</td></tr>
+<tr><td><span class="term">全局内存 global</span></td><td>整个 grid 共享</td><td>慢（~400 周期）</td><td>几十 GB（就是显存 HBM）</td><td>所有线程 + Host</td></tr>
+<tr><td>常量/纹理内存</td><td>只读、带缓存</td><td>缓存命中很快</td><td>64 KB 常量</td><td>所有线程只读</td></tr>
+<tr><td>本地内存 local</td><td>单线程私有</td><td>慢（其实在 global 里）</td><td>寄存器溢出时用</td><td>只有该线程自己</td></tr>
+</table>
+
+<p>关键的三层，用一个「工厂」类比串起来：</p>
+
+<ul>
+  <li><span class="term">register</span> = 每个工人手里正在操作的零件。私有、极快，但数量有限。用 CUDA C 声明的普通局部变量（<code>int i; float tmp;</code>）默认就在寄存器里。</li>
+  <li><span class="term">shared memory</span> = 一个班组共用的工作台。同一 block 的线程可以往上面放数据、互相拿。用 <code>__shared__</code> 关键字声明。它是你手动把 global 里的热数据「缓存」到片上、给 block 内复用的利器，能把慢 400 周期的访问变成快 20 周期。</li>
+  <li><span class="term">global memory</span> = 车间外的大仓库（显存）。所有人都能存取，但每次跑一趟很慢。<code>cudaMalloc</code> 分配的、kernel 参数里传的指针，指的都是这里。<span class="key">LLM 推理里的权重、KV cache，全都住在 global memory</span>——所以昨天说「推理是 memory-bound」，指的就是 global memory 的带宽跟不上算力。</li>
+</ul>
+
+<div class="note">
+<strong>为什么这决定性能？</strong> 一次 global memory 访问 ~400 周期，一次 shared memory 访问 ~20 周期，差 20 倍。矩阵乘法之类的算法，如果每个数据从 global 反复读，带宽会成为瓶颈；把一小块数据先搬进 shared memory、让 block 内的线程反复复用，就能把访存次数砍掉一个数量级。这正是 <span class="term">FlashAttention</span>（Week 08 会讲）的核心思想——把注意力计算切成能塞进 shared memory 的小块（tiling），避免把巨大的中间注意力矩阵写回 global memory。
+</div>
+
+<h2 id="s5">5. cudaMalloc / cudaMemcpy：数据的两地穿梭</h2>
+
+<p>因为 Host 和 Device 内存分离，CUDA 提供了一套镜像标准 C 的内存 API。核心四个：</p>
+
+<pre><code>// 1. 在 GPU 显存上分配 N 个 float（对应 CPU 的 malloc）
+float* d_x;
+cudaMalloc(&d_x, N * sizeof(float));     // 注意：传的是 &d_x，因为它要写指针本身
+
+// 2. Host -> Device：把 CPU 内存 h_x 的内容拷进显存 d_x
+cudaMemcpy(d_x, h_x, N * sizeof(float), cudaMemcpyHostToDevice);
+
+// 3. Device -> Host：把结果从显存拷回 CPU 内存
+cudaMemcpy(h_y, d_y, N * sizeof(float), cudaMemcpyDeviceToHost);
+
+// 4. 释放显存（对应 CPU 的 free）
+cudaFree(d_x);</code></pre>
+
+<p><code>cudaMemcpy</code> 的第四个参数指明方向：<code>cudaMemcpyHostToDevice</code>（H2D）、<code>cudaMemcpyDeviceToHost</code>（D2H）、还有 <code>DeviceToDevice</code>（显存内部）。</p>
+
+<p>几个初学者必踩的点：</p>
+<ul>
+  <li>命名约定：习惯上给主机指针加前缀 <code>h_</code>、设备指针加 <code>d_</code>，防止把两个世界的指针搞混。编译器不会帮你查——把 <code>d_x</code> 当 CPU 数组去 <code>d_x[0]</code> 解引用会直接段错误。</li>
+  <li><code>cudaMemcpy</code> 是<span class="key">同步阻塞</span>的：它会等 GPU 之前排队的活干完、拷贝完成才返回。它天然是 CPU 和 GPU 之间的一道同步点。</li>
+  <li>PCIe 拷贝是有代价的（几 GB/s ~ 几十 GB/s，远慢于显存内部的几 TB/s）。所以优化的一大原则是<strong>尽量减少 H2D/D2H 次数</strong>，让数据尽量长时间待在 GPU 上——这也解释了为什么大模型训练要把整个 batch、整个权重都常驻显存。</li>
+</ul>
+
+<p>现代 CUDA 还提供 <span class="term">Unified Memory</span>（<code>cudaMallocManaged</code>），让一个指针在 Host 和 Device 两边都能用，底层自动按需搬页——写起来方便，但性能不一定最优，学习期建议先用显式的 <code>cudaMalloc + cudaMemcpy</code> 把机制搞清楚。</p>
+
+<h2 id="s6">6. 写一个完整的向量加 kernel</h2>
+
+<p>把前面所有零件拼起来，就是 CUDA 世界的「hello world」——两个长度 N 的向量逐元素相加 <code>C = A + B</code>。请逐行读懂它，它是所有 CUDA 程序的基因：</p>
+
+<pre><code>#include &lt;cuda_runtime.h&gt;
+#include &lt;stdio.h&gt;
+
+// ===== kernel：描述"一个线程"干什么 =====
+__global__ void vecAdd(const float* A, const float* B, float* C, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;  // 我负责第 i 个元素
+    if (i &lt; N) {                                     // 边界检查，防越界
+        C[i] = A[i] + B[i];
+    }
+}
+
+int main() {
+    int N = 1 &lt;&lt; 20;                 // 约 100 万个元素
+    size_t bytes = N * sizeof(float);
+
+    // 1) 主机内存分配并初始化
+    float *h_A = (float*)malloc(bytes);
+    float *h_B = (float*)malloc(bytes);
+    float *h_C = (float*)malloc(bytes);
+    for (int i = 0; i &lt; N; i++) { h_A[i] = 1.0f; h_B[i] = 2.0f; }
+
+    // 2) 设备显存分配
+    float *d_A, *d_B, *d_C;
+    cudaMalloc(&d_A, bytes);
+    cudaMalloc(&d_B, bytes);
+    cudaMalloc(&d_C, bytes);
+
+    // 3) 拷数据 Host -> Device
+    cudaMemcpy(d_A, h_A, bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, h_B, bytes, cudaMemcpyHostToDevice);
+
+    // 4) 配置并启动 kernel（向上取整开够线程）
+    int threads = 256;
+    int blocks  = (N + threads - 1) / threads;
+    vecAdd&lt;&lt;&lt;blocks, threads&gt;&gt;&gt;(d_A, d_B, d_C, N);
+    cudaDeviceSynchronize();        // 等 GPU 算完
+
+    // 5) 拷结果 Device -> Host
+    cudaMemcpy(h_C, d_C, bytes, cudaMemcpyDeviceToHost);
+    printf("C[0] = %f (应为 3.0)\n", h_C[0]);
+
+    // 6) 清理
+    cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
+    free(h_A); free(h_B); free(h_C);
+    return 0;
+}</code></pre>
+
+<p>编译运行（需要装了 CUDA Toolkit 和 NVIDIA 显卡的机器）：</p>
+<pre><code>nvcc vecadd.cu -o vecadd    # nvcc 是 NVIDIA 的 CUDA 编译器
+./vecadd                    # 输出 C[0] = 3.000000</code></pre>
+
+<p>回味一下这段代码的哲学：<span class="key">你从头到尾只写了「一个线程怎么算一个元素」，从没写过 for 循环去遍历 100 万个元素</span>。那个「循环」被 <code>&lt;&lt;&lt;blocks, threads&gt;&gt;&gt;</code> 隐式地、并行地展开成了硬件上的几十万个线程。这就是数据并行（data parallelism）的思维方式——从「我怎么遍历所有数据」切换到「单个数据点怎么处理，剩下的交给硬件复制」。你做 AI 时用的 PyTorch，每一个 <code>torch.add</code>、每一次矩阵乘，底层展开后都是这样一个（或一串融合的）kernel。</p>
+
+<div class="note">
+<strong>Python 视角</strong>：你不必写裸 CUDA C 才能碰到这些概念。<code>Numba</code> 的 <code>@cuda.jit</code>、<code>CuPy</code> 的自定义 kernel、乃至 <code>Triton</code>（OpenAI 出的、写 GPU kernel 的 Python DSL，vLLM/FlashAttention 大量用它），暴露的都是同一套 thread/block/grid + 显式内存层级的模型。今天理解了 CUDA C 的骨架，读 Triton kernel 时那些 <code>tl.program_id(0)</code>、<code>BLOCK_SIZE</code> 就都能对上号。</p>
+</div>
+
+<h2 id="s7">7. cooperative groups 与 stream：进阶两件事</h2>
+
+<h3>cooperative groups（协作组）</h3>
+<p>传统 CUDA 里，线程同步的粒度很死板：<code>__syncthreads()</code> 只能同步「整个 block」，而 block 之间根本无法同步。<span class="term">Cooperative Groups</span>（CUDA 9 引入）是一套更灵活的 API，让你把「一组协作的线程」显式地表达成一个对象，粒度可以是：warp 内的一部分线程（tile）、整个 block、甚至<strong>整个 grid</strong>（grid-wide sync，需要特殊启动方式）。</p>
+<pre><code>#include &lt;cooperative_groups.h&gt;
+namespace cg = cooperative_groups;
+
+__global__ void reduce(float* data) {
+    cg::thread_block block = cg::this_thread_block();
+    // ... 每个线程算局部值 ...
+    block.sync();                       // 等价 __syncthreads()，但更显式、可组合
+    cg::thread_block_tile&lt;32&gt; warp = cg::tiled_partition&lt;32&gt;(block);
+    float v = cg::reduce(warp, my_val, cg::plus&lt;float&gt;());  // warp 内高效归约
+}</code></pre>
+<p>好处：让 warp 级别的优化（如 warp shuffle 归约，做 reduction/softmax 时极常用）写起来更安全清晰。你以后读 vLLM、FlashAttention 的 CUDA 源码，会频繁看到 cooperative groups 和 warp-level primitives。</p>
+
+<h3>stream（流）</h3>
+<p><span class="term">CUDA Stream</span> 是一条「GPU 操作的有序队列」。默认所有操作都进「默认流（stream 0）」，严格按提交顺序串行执行。但真实场景里，你希望<span class="key">拷贝数据和计算能重叠起来</span>——比如一边把下一批数据 H2D 拷进去，一边 GPU 还在算上一批。多个 stream 就是干这个的：不同 stream 里的操作可以并发/重叠执行。</p>
+<pre><code>cudaStream_t s1, s2;
+cudaStreamCreate(&s1);
+cudaStreamCreate(&s2);
+
+// 异步拷贝 + kernel 都挂到指定 stream 上
+cudaMemcpyAsync(d_A, h_A, bytes, cudaMemcpyHostToDevice, s1);
+vecAdd&lt;&lt;&lt;blocks, threads, 0, s2&gt;&gt;&gt;(d_A, d_B, d_C, N);  // 第4个参数是 stream
+
+cudaStreamSynchronize(s1);   // 只等 s1 里的活干完</code></pre>
+<p>Stream 是「计算与传输重叠」「多 kernel 并发」这类吞吐优化的基础设施。推理引擎里，不同请求的 kernel、prefill 和 decode 的调度，背后都在用 stream 编排 GPU 上的并发。今天了解它「是一条命令队列、用来做重叠」即可，Week 08 讲推理调度时会再遇到。</p>
+
+<div class="connect" id="connect">
+<h2>与 AI / Agent 安全的连结</h2>
+
+<p><strong>1）自定义 kernel 是攻击面，也是审计难点。</strong> vLLM、FlashAttention、各种量化库都带自己手写的 CUDA/Triton kernel。一个 kernel 里的边界检查写错（少了那句 <code>if (i &lt; N)</code>），就是一个 GPU 上的越界读写——可能读到相邻请求残留在显存里的数据（跨请求信息泄露），或直接让服务崩溃。审计一个推理框架的安全性，读它的自定义 kernel 是绕不开的一环，而这需要你今天学的这套 thread/index/memory 模型才能读懂。</p>
+
+<p><strong>2）显存不像内存那样被自动清零。</strong> <code>cudaMalloc</code> 拿到的显存<strong>不保证归零</strong>，里面可能是上一个进程/上一个请求留下的数据。在多租户 GPU 或长期运行的推理服务里，如果新分配的 KV cache 缓冲区没被显式清空就参与计算，理论上存在<span class="key">跨租户显存残留泄露</span>的风险。理解 global memory 的生命周期，是评估这类风险的前提（周六 Day 48「GPU 多租户安全」会专门展开）。</p>
+
+<p><strong>3）kernel 的异步性制造了竞态与检测盲区。</strong> kernel 启动异步、stream 之间并发——如果同步点（<code>cudaDeviceSynchronize</code>、stream 依赖）设置错误，就会出现数据竞态：读到还没算完的中间结果。对 Agent 系统而言，这种非确定性缺陷极难复现、极难在测试里抓到，却可能在生产中导致输出错误。写/审推理服务时，把「哪些操作在哪个 stream、哪里有同步」画清楚，是可靠性和安全性的共同前提。</p>
+
+<p><strong>4）资源耗尽型 DoS。</strong> 攻击者若能影响 kernel 的启动配置或输入规模（比如一个超长的 prompt 撑爆 KV cache 显存），可以触发 <code>cudaMalloc</code> 失败、OOM、甚至拖垮整卡。理解 grid/block 规模与显存占用如何随输入增长，才能在网关层设计正确的输入上限和配额（回顾 Week 04 的限流）。</p>
+
+<p><strong>5）侧信道的物理基础。</strong> 周六将讲的 GPU 侧信道攻击，很多都建立在「共享的内存层级 + 可测量的时序」之上——比如通过观测 shared memory bank conflict 或 global memory 访问延迟推断另一个租户的数据模式。你今天建立的「哪层内存被谁共享、访问代价多大」的地图，正是理解这些侧信道为什么可能存在的物理基础。</p>
+</div>
+
+<h2 id="exercise">今日小练习（3 道）</h2>
+
+<div class="exercise">
+<p><span class="exercise-num">1</span><strong>动手</strong>：如果你手边有带 NVIDIA 显卡的机器（或云上租一台），把第 6 节的 <code>vecadd.cu</code> 完整敲下来，用 <code>nvcc vecadd.cu -o vecadd</code> 编译运行，确认输出 <code>C[0] = 3.0</code>。没有显卡也没关系——用 Python 的 <code>Numba</code> 写等价版本：<code>@cuda.jit</code> 装饰一个 kernel，用 <code>cuda.grid(1)</code> 拿全局索引，在 Google Colab（免费送 GPU）上跑通。对照体会：<code>cuda.grid(1)</code> 其实就是 <code>blockIdx.x*blockDim.x+threadIdx.x</code> 的封装。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">2</span><strong>观察</strong>：在向量加 kernel 里，故意把边界检查 <code>if (i &lt; N)</code> 删掉，同时把 N 改成一个不是 256 整数倍的数（比如 <code>N = 1000000 + 7</code>）。编译运行，用 <code>cuda-memcheck ./vecadd</code>（或新版 <code>compute-sanitizer</code>）观察它报出的越界访问错误。体会「线程数多于数据 → 必须边界检查」这条铁律，以及为什么少写一行 if 就是一个真实漏洞。</p>
+</div>
+
+<div class="exercise">
+<p><span class="exercise-num">3</span><strong>思考</strong>：假设一个推理服务给每个用户请求都做「<code>cudaMalloc</code> 一块 KV cache 缓冲 → 计算 → <code>cudaFree</code>」。从今天学的 global memory 生命周期出发，论证：为什么「新分配的显存不保证清零」会成为跨用户信息泄露的隐患？作为设计者，你会在这条链路的哪一步、用什么代价最小的方式堵住它？（提示：对比「每次 <code>cudaMemset</code> 清零」和「缓冲池复用 + 使用前初始化」两种方案的性能与安全权衡。）</p>
+</div>
+
+<div class="next">
+<strong>明日预告 · Day 45（周三）GPU 性能要点</strong>：今天你学会了「怎么把活派到 GPU 上」，明天回答「怎么让 GPU 别偷懒」。我们会讲 occupancy（占用率）、memory coalescing（访存合并）、bank conflict（共享内存冲突）、warp divergence（分支发散）、kernel fusion（核融合），以及怎么用 Nsight Compute/Systems 这两把性能剖析利器看出「SM 利用率 vs HBM 利用率」到底卡在哪。今天的 thread/warp/memory 模型，正是明天所有优化技巧的地基。
+</div>
+
+<!-- nav-injected v1 -->
+<nav id="page-nav" style="display:flex;justify-content:space-between;align-items:center;margin:48px 0 16px;padding-top:20px;border-top:1px solid #e7e5e0;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;"></nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var m = path.match(/(day|article)-(\d+)\.html$/i);
+  if (!m) return;
+  var type = m[1].toLowerCase();
+  var n = parseInt(m[2], 10);
+  var isDay = type === 'day';
+  var perWeek = isDay ? 7 : 3;
+  var total = 168, accent='#c2410c', soft='#fed7aa';
+  if (path.indexOf('security-plan') !== -1) { total=154; accent='#b91c1c'; soft='#fecaca'; }
+  if (path.indexOf('posttraining-plan') !== -1) { total=48; accent='#1e40af'; soft='#bfdbfe'; }
+  function urlFor(k){
+    var week = Math.ceil(k/perWeek);
+    return '../week-'+String(week).padStart(2,'0')+'/'+type+'-'+(isDay?String(k).padStart(2,'0'):String(k))+'.html';
+  }
+  var label = isDay ? '天' : '篇';
+  var prefix = isDay ? 'Day' : 'Article';
+  var linkS = 'color:'+accent+';text-decoration:none;padding:8px 18px;border:1px solid '+soft+';border-radius:6px;background:#fff;font-weight:500;';
+  var disS = 'color:#cbd5e1;padding:8px 18px;';
+  var prev = n>1 ? '<a href="'+urlFor(n-1)+'" style="'+linkS+'">← 上一'+label+'（'+prefix+' '+(n-1)+'）</a>' : '<span style="'+disS+'">← 上一'+label+'</span>';
+  var next = n<total ? '<a href="'+urlFor(n+1)+'" style="'+linkS+'">下一'+label+'（'+prefix+' '+(n+1)+'） →</a>' : '<span style="'+disS+'">下一'+label+' →</span>';
+  document.getElementById('page-nav').innerHTML = prev + next;
+})();
+</script>
+</body>
+</html>
